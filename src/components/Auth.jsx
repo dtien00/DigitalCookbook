@@ -1,0 +1,112 @@
+import { useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
+
+export default function Auth() {
+    const [loading, setLoading] = useState(false)
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [view, setView] = useState('login') // login, signup, forgot_password
+
+    const handleAuth = async (e) => {
+        e.preventDefault()
+        setLoading(true)
+
+        try {
+            if (view === 'signup') {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            username: email.split('@')[0], // Default username
+                        }
+                    }
+                })
+                if (error) throw error
+                alert('Check your email for the confirmation link!')
+            } else if (view === 'login') {
+                const { error } = await supabase.auth.signInWithPassword({ email, password })
+                if (error) throw error
+            } else if (view === 'forgot_password') {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.origin,
+                })
+                if (error) throw error
+                alert('Password reset link sent to your email!')
+                setView('login')
+            }
+        } catch (error) {
+            alert(error.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="auth-container">
+            <div className="auth-card">
+                <h2>
+                    {view === 'signup' && 'Create Account'}
+                    {view === 'login' && 'Welcome Back'}
+                    {view === 'forgot_password' && 'Reset Password'}
+                </h2>
+                <form onSubmit={handleAuth}>
+                    <div className="form-group">
+                        <label>Email</label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                        />
+                    </div>
+
+                    {view !== 'forgot_password' && (
+                        <div className="form-group">
+                            <label>Password</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+                    )}
+
+                    <button type="submit" disabled={loading} className="btn-primary">
+                        {loading ? 'Processing...' :
+                            (view === 'signup' ? 'Sign Up' :
+                                view === 'login' ? 'Login' : 'Send Reset Link')}
+                    </button>
+                </form>
+
+                <div className="auth-toggle">
+                    {view === 'login' && (
+                        <>
+                            <p>
+                                Don't have an account?{' '}
+                                <button onClick={() => setView('signup')} className="btn-link">Sign Up</button>
+                            </p>
+                            <p>
+                                <button onClick={() => setView('forgot_password')} className="btn-link">Forgot Password?</button>
+                            </p>
+                        </>
+                    )}
+
+                    {view === 'signup' && (
+                        <p>
+                            Already have an account?{' '}
+                            <button onClick={() => setView('login')} className="btn-link">Login</button>
+                        </p>
+                    )}
+
+                    {view === 'forgot_password' && (
+                        <p>
+                            <button onClick={() => setView('login')} className="btn-link">Back to Login</button>
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
