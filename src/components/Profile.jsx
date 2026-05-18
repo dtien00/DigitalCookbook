@@ -102,7 +102,7 @@ export default function Profile({ session, onBack, onRecipeClick }) {
     return (
         <div className="profile-container">
             <header className="profile-header">
-                <button onClick={onBack} className="btn-secondary">← Back to Feed</button>
+                <button onClick={onBack} className="btn-secondary">← Back to List</button>
                 <h1>User Profile</h1>
             </header>
 

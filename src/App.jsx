@@ -146,7 +146,6 @@ function App() {
                                 key={recipe.id}
                                 className="recipe-card"
                                 onClick={() => handleRecipeClick(recipe)}
-                                onMouseOver={() => handleRecipeClick(recipe)}
                             >
                                 {recipe.image_url ? (
                                     <div className="card-image-wrapper">
