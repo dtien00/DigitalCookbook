@@ -87,7 +87,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration.sql` — initial schema (all tables, RLS, indexes, auto-profile trigger).
 - `supabase_migration_002_tags.sql` — adds `tags TEXT[] NOT NULL DEFAULT '{}'` to `recipes` + GIN index `idx_recipes_tags`. Idempotent (`IF NOT EXISTS` on both column and index).
 - `supabase_migration_003_favorites.sql` — adds `created_at TIMESTAMPTZ` + covering index to `favorites`, *and* attaches the three RLS policies that migration 001 forgot. Idempotent (`IF NOT EXISTS` for column/index, `DROP POLICY IF EXISTS` + `CREATE POLICY` for policies).
-- Future migrations: `supabase_migration_004_*.sql`, etc.
+- `supabase_migration_004_likes.sql` — adds `created_at TIMESTAMPTZ` to `likes` and tightens the INSERT policy (was `auth.role() = 'authenticated'`, now `auth.uid() = user_id`). Idempotent.
+- Future migrations: `supabase_migration_005_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -126,6 +127,24 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 **Tradeoffs:**
 - **No "popularity" signal exposed.** With own-only SELECT, we can't show "this recipe has been bookmarked 47 times" without a different mechanism (likely a materialized view or a counter column updated by a trigger). Will revisit when we want that surface.
 - **One write per toggle** (Insert or Delete). An UPSERT-style toggle would be cleaner but requires a different schema (a `favorited boolean` column with a unique constraint, or a stored procedure). Two-statement logic in the hook is fine at this scale.
+
+## Likes: INSERT policy hardening + count strategy (migration 004)
+
+**Decision (policy):** Replace the migration-001 INSERT policy `WITH CHECK (auth.role() = 'authenticated')` with `WITH CHECK (auth.uid() = user_id)`.
+
+**Why:**
+- The original policy only verified that the request came from a *logged-in* user — it didn't verify the `user_id` column matched the authenticated user. A crafted client could `INSERT INTO likes (user_id, recipe_id) VALUES ('<other-user-uuid>', '<recipe-uuid>')` to like a recipe on someone else's behalf. The new policy closes that gap.
+- The DELETE policy (`USING (auth.uid() = user_id)`) and SELECT policy (`USING (true)` — likes are public information) were already correct and don't change.
+
+**Decision (count strategy):** Bulk-fetch all likes once into a client-side `Map<recipe_id, count>` rather than a Postgres view or a counter column with triggers.
+
+**Why:**
+- **Scale.** At 50 recipes × low single-digit likes each = ~150 rows total. A single `SELECT recipe_id, user_id FROM likes` returns in <100ms and gives us both the per-recipe count *and* the current user's liked set (one query, two derived data structures).
+- **Reversibility.** The `useLikes` hook's public API (`likeCount(id)`, `userLiked(id)`, `toggleLike(id)`) is independent of how the data is sourced. If the table grows past ~5k rows, the implementation can swap to a Postgres view (left join + `COUNT`) or a denormalized counter column + AFTER INSERT/DELETE trigger without touching any consumer. We don't pay the complexity cost until we benefit from it.
+
+**Tradeoffs:**
+- **Privacy.** Bulk-fetching includes every like row's `user_id`. The migration-001 public SELECT policy on `likes` explicitly allows this — likes are designed as public information. If a future requirement wants likes to be private (e.g., "anonymous likes"), the SELECT policy needs to flip to own-only + a separate aggregate view for counts.
+- **created_at column added but unused** in this stage. Defensive — when Stage 7's "trending" / "recently liked" features land, the timestamp is already there. The cost of an `IF NOT EXISTS` column add now is negligible.
 
 ## Test-account seeding (`scripts/seed-test-accounts.js`)
 

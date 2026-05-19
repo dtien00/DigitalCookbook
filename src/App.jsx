@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
+import { useLikes } from './hooks/useLikes'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -22,6 +23,7 @@ function App() {
     const [searchTerm, setSearchTerm] = useState('')
 
     const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
+    const { likeCount, userLiked, toggleLike } = useLikes(session?.user.id)
 
     useEffect(() => {
         // Check initial session
@@ -102,6 +104,15 @@ function App() {
         toggleFavorite(recipeId)
     }
 
+    // Like click handler — same anonymous-prompt-vs-toggle dispatch as bookmarks.
+    const handleLikeClick = (recipeId) => {
+        if (!session) {
+            setShowAuth(true)
+            return
+        }
+        toggleLike(recipeId)
+    }
+
     if (showAuth) {
         return <Auth onBack={() => setShowAuth(false)} />
     }
@@ -113,6 +124,9 @@ function App() {
             onRecipeClick={handleRecipeClick}
             isFavorited={isFavorited}
             onToggleFavorite={handleBookmarkClick}
+            likeCount={likeCount}
+            userLiked={userLiked}
+            onToggleLike={handleLikeClick}
         />
     }
 
@@ -123,6 +137,9 @@ function App() {
             onRecipeClick={handleRecipeClick}
             isFavorited={isFavorited}
             onToggleFavorite={handleBookmarkClick}
+            likeCount={likeCount}
+            userLiked={userLiked}
+            onToggleLike={handleLikeClick}
         />
     }
 
@@ -147,6 +164,9 @@ function App() {
             onDelete={handleRecipeDeleted}
             favorited={isFavorited(selectedRecipe.id)}
             onToggleFavorite={() => handleBookmarkClick(selectedRecipe.id)}
+            liked={userLiked(selectedRecipe.id)}
+            likeCount={likeCount(selectedRecipe.id)}
+            onToggleLike={() => handleLikeClick(selectedRecipe.id)}
         />
     }
 
@@ -211,6 +231,9 @@ function App() {
                             onClick={() => handleRecipeClick(recipe)}
                             favorited={isFavorited(recipe.id)}
                             onToggleFavorite={() => handleBookmarkClick(recipe.id)}
+                            liked={userLiked(recipe.id)}
+                            likeCount={likeCount(recipe.id)}
+                            onToggleLike={() => handleLikeClick(recipe.id)}
                         />
                     ))}
                 </div>

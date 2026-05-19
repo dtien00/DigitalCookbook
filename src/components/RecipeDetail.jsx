@@ -1,8 +1,20 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
+import LikeButton from './LikeButton'
 
-export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete, favorited, onToggleFavorite }) {
+export default function RecipeDetail({
+    recipe,
+    userId,
+    onBack,
+    onEdit,
+    onDelete,
+    favorited,
+    onToggleFavorite,
+    liked,
+    likeCount = 0,
+    onToggleLike,
+}) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
     const [loading, setLoading] = useState(true)
@@ -64,9 +76,14 @@ export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete,
         <div className="recipe-detail-container">
             <div className="flex justify-between items-center mb-4">
                 <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
-                {onToggleFavorite && (
-                    <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
-                )}
+                <div className="flex items-center gap-3">
+                    {onToggleLike && (
+                        <LikeButton liked={liked} count={likeCount} onClick={onToggleLike} size="lg" />
+                    )}
+                    {onToggleFavorite && (
+                        <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
+                    )}
+                </div>
             </div>
 
             <div className="recipe-detail-header">

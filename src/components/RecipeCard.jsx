@@ -1,19 +1,40 @@
 import BookmarkButton from './BookmarkButton'
+import LikeButton from './LikeButton'
 
 // Shared recipe card used by the home grid (App.jsx), the Profile
-// "My Recipes" section, and the new My Bookmarks view. Two layouts:
+// "My Recipes" section, and the My Bookmarks view. Two layouts:
 // image cards use a bottom-gradient overlay with hover-revealed
 // description + tags; image-less cards show everything in the body.
 //
-// The bookmark button is always rendered when onToggleFavorite is
-// provided — anonymous viewers see it too, with the parent wiring
-// the click to open the auth view instead of toggling.
-export default function RecipeCard({ recipe, onClick, favorited, onToggleFavorite }) {
+// Bookmark and like buttons render whenever their handlers are
+// provided — anonymous viewers see both (with counts), and the
+// parent wires the click to open the auth view instead of toggling
+// the state. The bookmark icon sits top-right; the like pill sits
+// top-left, so the corners are visually balanced and both are
+// reachable without obscuring the title/overlay area.
+export default function RecipeCard({
+    recipe,
+    onClick,
+    favorited,
+    onToggleFavorite,
+    liked,
+    likeCount = 0,
+    onToggleLike,
+}) {
     return (
         <div
             onClick={onClick}
             className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-shadow duration-300 relative"
         >
+            {onToggleLike && (
+                <LikeButton
+                    liked={liked}
+                    count={likeCount}
+                    onClick={onToggleLike}
+                    size="sm"
+                    className="absolute top-3 left-3 z-10"
+                />
+            )}
             {onToggleFavorite && (
                 <BookmarkButton
                     favorited={favorited}
