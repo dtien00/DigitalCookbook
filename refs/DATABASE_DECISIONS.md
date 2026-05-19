@@ -95,6 +95,21 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 
 ---
 
+## Test-account seeding (`scripts/seed-test-accounts.js`)
+
+**Decision:** Seed test data via a Node script that uses the regular Supabase signup flow (anon key + `auth.signUp`), not the `service_role` key. Seeded recipes are marked `is_public = false`.
+
+**Why:**
+- **Anon key only:** Keeps the `service_role` key out of the project entirely — one less highly-privileged credential to manage for a side project. The cost is that "Confirm email" must be temporarily disabled in Supabase Auth settings while seeding (signup needs to return a session immediately).
+- **Private recipes (`is_public = false`):** Each test account needs to see a *different* recipe count to exercise the [[refs/COSMETICS.md]] density tiers. If recipes were public, every account would see the union of all seeded recipes (~50) and every account would land in the densest tier. Private-per-account makes each tier observable when logging in as that account.
+- **Idempotent re-seed:** The script deletes existing recipes scoped to `author_id = test_account.id` before inserting, so it's safe to re-run. The scoping means the user's real account is never touched even if they re-run by accident.
+- **Picsum.photos for images:** No external API key, no Storage upload, varied heights to actually exercise the masonry layout. Real food photos can replace these later via the in-app create flow.
+
+**Tradeoffs:**
+- Temporary auth-policy change required. Re-enable "Confirm email" after seeding.
+- Test accounts use a known shared password (`TestPass123!`) — fine for local/dev Supabase projects, not for any project that touches real users.
+- Profile bios are written via a separate `UPDATE` on `profiles` because the `handle_new_user` trigger only handles username/full_name/avatar_url from `raw_user_meta_data`.
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
