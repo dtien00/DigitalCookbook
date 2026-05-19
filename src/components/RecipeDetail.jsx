@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import BookmarkButton from './BookmarkButton'
 
-export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete }) {
+export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete, favorited, onToggleFavorite }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
     const [loading, setLoading] = useState(true)
@@ -61,7 +62,12 @@ export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete 
 
     return (
         <div className="recipe-detail-container">
-            <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
+            <div className="flex justify-between items-center mb-4">
+                <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
+                {onToggleFavorite && (
+                    <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
+                )}
+            </div>
 
             <div className="recipe-detail-header">
                 {recipe.image_url && (
@@ -69,6 +75,15 @@ export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete 
                 )}
                 <h1>{recipe.title}</h1>
                 <p className="description">{recipe.description}</p>
+                {recipe.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 justify-center mt-3 mb-2">
+                        {recipe.tags.map(tag => (
+                            <span key={tag} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full">
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+                )}
                 <div className="recipe-meta">
                     <span>Servings: {recipe.servings}</span>
                 </div>

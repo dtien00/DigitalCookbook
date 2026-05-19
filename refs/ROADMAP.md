@@ -66,19 +66,24 @@ Goal: anonymous visitors can browse public recipes without an account, the way t
 
 ---
 
-## Stage 3 — Bookmarks (Favorites)
+## Stage 3 — Bookmarks (Favorites)  *(done)*
 
 Goal: signed-in users can save recipes to a personal collection.
 
 **Tasks**
-- New hook: `src/hooks/useFavorite.js` — `{ isFavorited, toggle, loading }` for a given `(userId, recipeId)`. Reads + writes the `favorites` table.
-- Add a bookmark icon button (top-right corner of each recipe card and on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx)). Filled state when favorited.
-- New view: "My Bookmarks" — link from header (next to "Profile"). Reuses the existing recipe card component, fetches `favorites JOIN recipes` for the current user.
-- Optimistic UI: flip the icon immediately, roll back on error.
+- [x] New hook for favorites. *Done as `src/hooks/useFavorites.js` (plural) — instead of one hook per card (which would N+1 on a grid of 30+), it bulk-fetches the user's favorited recipe IDs once at the App level into a `Set`. The hook exposes `isFavorited(recipeId)` for O(1) membership and `toggleFavorite(recipeId)` with optimistic UI + rollback on error.*
+- [x] Bookmark icon button on each card and on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx). *Done as a shared `<BookmarkButton>` component. Position on cards: `absolute top-3 right-3 z-10` over the image. The card markup was simultaneously extracted into `src/components/RecipeCard.jsx` since it's now reused across the home grid, Profile's "My Recipes", and My Bookmarks. Filled (indigo) when favorited, outline (gray) when not. Click stops propagation so card-click navigation still works.*
+- [x] "My Bookmarks" view. *New `src/components/MyBookmarks.jsx`, linked from the header (Bookmarks button next to Profile). Fetches `favorites` joined to `recipes` ordered by `created_at DESC`. Empty state copy: "No bookmarks yet. Save recipes you love by tapping the bookmark icon on any card."*
+- [x] Optimistic UI. *Toggle flips the local `Set` immediately, fires the Supabase write, rolls back if the write fails. No spinner — feels instant.*
 
-**Schema**: no change — `favorites` already exists.
+**Schema**: technically `favorites` already existed, **but** migration 001 enabled RLS without writing any policies — currently no one can read or write it. Migration 003 (`supabase_migration_003_favorites.sql`) adds:
+- Three RLS policies (own-only SELECT / INSERT / DELETE — bookmarks are private to each user)
+- A `created_at TIMESTAMPTZ DEFAULT NOW()` column so the My Bookmarks view can sort by recency
+- A covering `(user_id, created_at DESC)` index for that query
 
-**Exit criteria**: bookmarking from a card persists across reloads; "My Bookmarks" lists everything the user has saved.
+**Anonymous behavior**: bookmark button is still rendered on cards for anonymous viewers — clicking it opens the Auth view instead of toggling. Pinterest's pattern.
+
+**Exit criteria**: bookmarking from a card persists across reloads; "My Bookmarks" lists everything the user has saved. *Met.*
 
 ---
 

@@ -86,7 +86,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 **Current state:**
 - `supabase_migration.sql` — initial schema (all tables, RLS, indexes, auto-profile trigger).
 - `supabase_migration_002_tags.sql` — adds `tags TEXT[] NOT NULL DEFAULT '{}'` to `recipes` + GIN index `idx_recipes_tags`. Idempotent (`IF NOT EXISTS` on both column and index).
-- Future migrations: `supabase_migration_003_*.sql`, etc.
+- `supabase_migration_003_favorites.sql` — adds `created_at TIMESTAMPTZ` + covering index to `favorites`, *and* attaches the three RLS policies that migration 001 forgot. Idempotent (`IF NOT EXISTS` for column/index, `DROP POLICY IF EXISTS` + `CREATE POLICY` for policies).
+- Future migrations: `supabase_migration_004_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -110,6 +111,21 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - No referential integrity on tags. A typo creates a new "tag." This is fine for a personal cookbook; a tag-cloud UI later can surface canonical tags via aggregation. If the project ever wants strict tag governance, migrate to a join table at that point.
 - Tag-renaming or merging is harder than with a tags table (need to `UPDATE recipes SET tags = array_replace(tags, 'old', 'new')`). Acceptable for current scale.
 - No RLS policy changes needed: the existing recipes-read policy (`is_public OR auth.uid() = author_id`) covers tag visibility automatically since tags live on the recipe row.
+
+## Favorites RLS + created_at (migration 003)
+
+**Decision:** Add `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` and a `(user_id, created_at DESC)` index to `public.favorites`, plus three RLS policies (own-only SELECT / INSERT / DELETE). Bookmarks are private — no one but the user can see what they've saved.
+
+**Why:**
+- **Migration 001 forgot the policies.** `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` was applied but no `CREATE POLICY` statements followed, meaning no one — not even the row's own user — could read or write `favorites`. The feature was inert. This migration fixes that.
+- **Own-only SELECT (not public):** A user's bookmark list is personal — closer to a private notes folder than a public profile. A "trending bookmarks" or "X also saved this" feature is conceivable later (Stage 7 territory) and would need a different aggregate-only view that doesn't expose the raw user→recipe pairs. Until then, default to private.
+- **Insert policy uses `WITH CHECK (auth.uid() = user_id)`:** Prevents a user from inserting a favorite row claiming to be someone else.
+- **`created_at` for sortability:** The original favorites table was just a `(user_id, recipe_id)` composite primary key with no timestamp. "My Bookmarks" needs to show most-recent first, so we add the column with a `NOW()` default. Existing rows (none expected in a fresh dev project, but possible) get the migration time as their timestamp — acceptable.
+- **Covering index `(user_id, created_at DESC)`:** The dominant query is `WHERE user_id = $1 ORDER BY created_at DESC`. This index serves both the filter and the sort with no extra sort step.
+
+**Tradeoffs:**
+- **No "popularity" signal exposed.** With own-only SELECT, we can't show "this recipe has been bookmarked 47 times" without a different mechanism (likely a materialized view or a counter column updated by a trigger). Will revisit when we want that surface.
+- **One write per toggle** (Insert or Delete). An UPSERT-style toggle would be cleaner but requires a different schema (a `favorited boolean` column with a unique constraint, or a stored procedure). Two-statement logic in the hook is fine at this scale.
 
 ## Test-account seeding (`scripts/seed-test-accounts.js`)
 
