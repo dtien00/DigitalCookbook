@@ -53,21 +53,21 @@ const ACCOUNTS = [
 ]
 
 const RECIPE_TEMPLATES = [
-  { title: 'Lemon Herb Roast Chicken',     description: 'Crispy-skinned whole chicken roasted with thyme, garlic, and a bright lemon glaze.' },
-  { title: 'Spicy Tomato Pasta',           description: 'A quick weeknight pasta with garlic, chili flakes, and a deep slow-roasted tomato sauce.' },
-  { title: 'Chocolate Tahini Cookies',     description: 'Fudgy cookies with a nutty edge from toasted tahini and a sprinkle of flaky salt.' },
-  { title: 'Miso-Glazed Salmon',           description: 'Sweet-savory glaze on flaky salmon, broiled until caramelized and served over rice.' },
-  { title: 'Mushroom Risotto',             description: 'Slow-stirred arborio rice with mixed mushrooms, white wine, and parmesan.' },
-  { title: 'Caramelized Onion Tart',       description: 'Buttery puff pastry topped with deeply caramelized onions and a drizzle of balsamic.' },
-  { title: 'Thai Basil Stir Fry',          description: 'Quick stir fry with ground chicken, holy basil, garlic, chili, and a fried egg on top.' },
-  { title: 'Roasted Sweet Potato Tacos',   description: 'Warm corn tortillas, smoky roasted sweet potato, lime crema, and pickled onions.' },
-  { title: 'Olive Oil Cake',               description: 'Tender single-layer cake with a citrus zing — surprisingly simple, deeply satisfying.' },
-  { title: 'Cucumber Smash Salad',         description: 'Smashed Persian cucumbers tossed with sesame, garlic, soy, and a kick of chili crisp.' },
-  { title: 'Shakshuka',                    description: 'Eggs poached in a spiced tomato-pepper sauce with feta and crusty bread for dipping.' },
-  { title: 'Brown Butter Pancakes',        description: 'Fluffy buttermilk pancakes deepened with the nutty notes of browned butter.' },
-  { title: 'Garlic Confit',                description: 'Whole garlic cloves slowly cooked in olive oil until jammy and spreadable.' },
-  { title: 'Lemon Bars',                   description: 'Tangy lemon curd over a shortbread crust, with a thick dusting of powdered sugar.' },
-  { title: 'Korean Beef Bowls',            description: 'Sweet-soy ground beef over rice with cucumber, scrambled egg, and gochujang.' },
+  { title: 'Lemon Herb Roast Chicken',     description: 'Crispy-skinned whole chicken roasted with thyme, garlic, and a bright lemon glaze.',     tags: ['dinner', 'chicken', 'weeknight'] },
+  { title: 'Spicy Tomato Pasta',           description: 'A quick weeknight pasta with garlic, chili flakes, and a deep slow-roasted tomato sauce.', tags: ['pasta', 'weeknight', 'spicy'] },
+  { title: 'Chocolate Tahini Cookies',     description: 'Fudgy cookies with a nutty edge from toasted tahini and a sprinkle of flaky salt.',     tags: ['dessert', 'cookies', 'chocolate'] },
+  { title: 'Miso-Glazed Salmon',           description: 'Sweet-savory glaze on flaky salmon, broiled until caramelized and served over rice.',    tags: ['dinner', 'fish', 'asian'] },
+  { title: 'Mushroom Risotto',             description: 'Slow-stirred arborio rice with mixed mushrooms, white wine, and parmesan.',              tags: ['dinner', 'vegetarian', 'italian'] },
+  { title: 'Caramelized Onion Tart',       description: 'Buttery puff pastry topped with deeply caramelized onions and a drizzle of balsamic.',   tags: ['appetizer', 'vegetarian', 'french'] },
+  { title: 'Thai Basil Stir Fry',          description: 'Quick stir fry with ground chicken, holy basil, garlic, chili, and a fried egg on top.', tags: ['dinner', 'asian', 'spicy', 'weeknight'] },
+  { title: 'Roasted Sweet Potato Tacos',   description: 'Warm corn tortillas, smoky roasted sweet potato, lime crema, and pickled onions.',      tags: ['dinner', 'vegetarian', 'mexican'] },
+  { title: 'Olive Oil Cake',               description: 'Tender single-layer cake with a citrus zing — surprisingly simple, deeply satisfying.',  tags: ['dessert', 'cake', 'italian'] },
+  { title: 'Cucumber Smash Salad',         description: 'Smashed Persian cucumbers tossed with sesame, garlic, soy, and a kick of chili crisp.',  tags: ['side', 'salad', 'asian'] },
+  { title: 'Shakshuka',                    description: 'Eggs poached in a spiced tomato-pepper sauce with feta and crusty bread for dipping.',   tags: ['breakfast', 'vegetarian', 'middle-eastern'] },
+  { title: 'Brown Butter Pancakes',        description: 'Fluffy buttermilk pancakes deepened with the nutty notes of browned butter.',           tags: ['breakfast', 'sweet'] },
+  { title: 'Garlic Confit',                description: 'Whole garlic cloves slowly cooked in olive oil until jammy and spreadable.',             tags: ['pantry', 'condiment'] },
+  { title: 'Lemon Bars',                   description: 'Tangy lemon curd over a shortbread crust, with a thick dusting of powdered sugar.',     tags: ['dessert', 'baking'] },
+  { title: 'Korean Beef Bowls',            description: 'Sweet-soy ground beef over rice with cucumber, scrambled egg, and gochujang.',           tags: ['dinner', 'asian', 'beef', 'weeknight'] },
 ]
 
 // Heights vary so the masonry layout actually looks masonry-ish in tests
@@ -85,6 +85,7 @@ function makeRecipes(account) {
     return {
       title: repeat === 0 ? template.title : `${template.title} (v${repeat + 1})`,
       description: template.description,
+      tags: template.tags,
       image_url: makeImageUrl(account.username, i),
       servings: 2 + (i % 6),
       is_public: false,
