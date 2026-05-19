@@ -67,7 +67,19 @@ The persistent UI scaffolding around every screen — page wrapper, top header, 
 ## Top header bar
 - `flex justify-between items-center mb-10` — title on the left, action group on the right.
 - Title: `text-2xl font-semibold text-gray-900` — substantial but not heroic.
-- Action group: `flex gap-3` — small horizontal cluster of secondary buttons (Profile, Logout).
+- Action group: `flex gap-3` — small horizontal cluster.
+
+### Logged-in vs anonymous header
+| State | Title | Right side |
+|---|---|---|
+| **Signed in** | `{email}'s Cookbook` — personal-feeling | Two secondary buttons: Profile, Logout |
+| **Anonymous** | `Digital Cookbook` — brand-level | Single primary "Sign In" button (visual emphasis pulls the eye to the conversion action) |
+
+The asymmetry is intentional: the anonymous header has one obvious next-step (sign in), so the button gets the primary-button treatment instead of being one of several secondary options. Logged-in users have a richer set of actions, none of which is the "main" action, so secondary styling for all is appropriate.
+
+### Action row (search + create)
+- Search input always shown — anonymous users can filter the public grid.
+- "+ New Recipe" button only renders when signed in. The grid quietly collapses to just a full-width search bar when anonymous.
 
 ## Search + primary action row
 - `flex gap-4 items-center mb-8` — search input grows (`flex-1`), primary button stays content-width.
