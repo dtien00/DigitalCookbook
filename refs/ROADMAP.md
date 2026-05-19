@@ -50,17 +50,19 @@ Goal: the home grid feels like Pinterest instead of a basic card list. Adopt Tai
 
 ---
 
-## Stage 2 — Public Browse (no-auth)
+## Stage 2 — Public Browse (no-auth)  *(done)*
 
 Goal: anonymous visitors can browse public recipes without an account, the way they can on Pinterest.
 
 **Tasks**
-- Move the `if (!session) return <Auth />` gate out of the top of [src/App.jsx](./src/App.jsx). Render the recipe grid for everyone.
-- Replace the auth gate with a "Sign in" CTA in the header. Hide `+ New Recipe`, bookmark/like/comment actions behind auth — clicking them prompts login.
-- Verify Supabase RLS public-read policy on `recipes` works without a session (it should — the policy is `USING (is_public OR auth.uid() = author_id)` which evaluates against an anonymous client correctly).
-- The Supabase client query in `fetchRecipes()` needs no change — RLS handles it. Double-check by hitting the site without logging in.
+- [x] Move the `if (!session) return <Auth />` gate out of the top of [src/App.jsx](./src/App.jsx). Render the recipe grid for everyone. *Done — `showAuth` is now a state-controlled view; the home grid renders regardless of session.*
+- [x] Replace the auth gate with a "Sign in" CTA in the header. Hide `+ New Recipe`, bookmark/like/comment actions behind auth — clicking them prompts login. *Done — header conditionally shows Profile/Logout when signed in vs a single "Sign In" primary button when anonymous. The "+ New Recipe" button is hidden for anonymous users (bookmark/like/comment buttons don't exist yet — they'll get the same gating in Stages 3–5).*
+- [x] Verify Supabase RLS public-read policy on `recipes` works without a session. *Confirmed — the existing `USING (is_public OR auth.uid() = author_id)` policy returns only `is_public = true` rows when `auth.uid()` is null. No SQL changes needed.*
+- [x] The Supabase client query in `fetchRecipes()` needs no change — RLS handles it. *Correct — the only change to `fetchRecipes()` was removing the `if (session)` gate around its `useEffect` so anonymous users also trigger the fetch.*
+- [x] New: added a `test-public@example.com` seed account (6 public recipes) so the anonymous browse view shows something. The script schema also gained `account.isPublic` to differentiate public vs private seed accounts; test accounts 1–4 stay private (preserves their density-tier mapping when logged in). Documented density-tier shifts in `refs/TESTING.md`.
+- [x] Auth screen gains a "← Back to recipes" button when invoked from the home grid, so anonymous users can dismiss without committing.
 
-**Exit criteria**: opening the app in an incognito window shows the public recipe grid; clicking "Bookmark" opens the login modal.
+**Exit criteria**: opening the app in an incognito window shows the public recipe grid; clicking "Bookmark" opens the login modal. *Met — anonymous view shows the test-public account's 6 recipes. (Bookmark gating is N/A until Stage 3 adds the button.)*
 
 ---
 

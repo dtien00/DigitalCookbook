@@ -12,6 +12,7 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showProfile, setShowProfile] = useState(false)
+    const [showAuth, setShowAuth] = useState(false)
     const [selectedRecipe, setSelectedRecipe] = useState(null)
     const [editingRecipe, setEditingRecipe] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
@@ -28,13 +29,21 @@ function App() {
             if (event === 'PASSWORD_RECOVERY') {
                 setShowProfile(true)
             }
+            // Close the auth view once a session is established
+            if (session) {
+                setShowAuth(false)
+            }
         })
 
         return () => subscription.unsubscribe()
     }, [])
 
+    // Fetch recipes for everyone, including anonymous visitors.
+    // RLS filters: `is_public OR auth.uid() = author_id`, so anon users
+    // see only public recipes; logged-in users see public + their own.
+    // Refetch on session change so private recipes appear/disappear.
     useEffect(() => {
-        if (session) fetchRecipes()
+        fetchRecipes()
     }, [session])
 
     async function fetchRecipes() {
@@ -76,11 +85,11 @@ function App() {
         setShowCreate(false)
     }
 
-    if (!session) {
-        return <Auth />
+    if (showAuth) {
+        return <Auth onBack={() => setShowAuth(false)} />
     }
 
-    if (showProfile) {
+    if (showProfile && session) {
         return <Profile
             session={session}
             onBack={() => setShowProfile(false)}
@@ -88,7 +97,7 @@ function App() {
         />
     }
 
-    if (showCreate) {
+    if (showCreate && session) {
         return <CreateRecipe
             userId={session.user.id}
             recipeToEdit={editingRecipe}
@@ -103,7 +112,7 @@ function App() {
     if (selectedRecipe) {
         return <RecipeDetail
             recipe={selectedRecipe}
-            userId={session.user.id}
+            userId={session?.user.id}
             onBack={() => setSelectedRecipe(null)}
             onEdit={handleEditRecipe}
             onDelete={handleRecipeDeleted}
@@ -127,10 +136,18 @@ function App() {
     return (
         <div className="max-w-7xl mx-auto px-5 py-5">
             <header className="flex justify-between items-center mb-10">
-                <h1 className="text-2xl font-semibold text-gray-900">{session.user.email}'s Cookbook</h1>
+                <h1 className="text-2xl font-semibold text-gray-900">
+                    {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
+                </h1>
                 <div className="flex gap-3">
-                    <button onClick={() => setShowProfile(true)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Profile</button>
-                    <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Logout</button>
+                    {session ? (
+                        <>
+                            <button onClick={() => setShowProfile(true)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Profile</button>
+                            <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Logout</button>
+                        </>
+                    ) : (
+                        <button onClick={() => setShowAuth(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors">Sign In</button>
+                    )}
                 </div>
             </header>
 
@@ -144,7 +161,9 @@ function App() {
                         className="w-full px-4 py-3 border border-slate-200 rounded-full text-base bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
                     />
                 </div>
-                <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors">+ New Recipe</button>
+                {session && (
+                    <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors">+ New Recipe</button>
+                )}
             </div>
 
             {loading ? (
