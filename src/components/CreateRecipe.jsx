@@ -9,10 +9,17 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [description, setDescription] = useState(recipeToEdit?.description || '')
     const [servings, setServings] = useState(recipeToEdit?.servings || 1)
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
+    const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
     const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '' }])
     const [steps, setSteps] = useState([{ instruction: '', step_number: 1 }])
     const [imageFile, setImageFile] = useState(null)
     const [imagePreview, setImagePreview] = useState(recipeToEdit?.image_url || null)
+
+    // Parse the comma-separated tag input into a clean, deduped, lowercase array.
+    // Lowercase keeps "Vegan", "vegan", "VEGAN" from creating three buckets.
+    const parsedTags = [...new Set(
+        tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+    )]
 
     useEffect(() => {
         if (isEditMode) {
@@ -118,7 +125,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                         description,
                         servings,
                         is_public: isPublic,
-                        image_url: imageUrl
+                        image_url: imageUrl,
+                        tags: parsedTags
                     })
                     .eq('id', recipeId)
 
@@ -137,7 +145,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                         description,
                         servings,
                         is_public: isPublic,
-                        image_url: imageUrl
+                        image_url: imageUrl,
+                        tags: parsedTags
                     }])
                     .select()
                     .single()
@@ -226,6 +235,24 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     Make Public
                                 </label>
                             </div>
+                        </div>
+                        <div className="form-group">
+                            <label>Tags <span className="text-sm text-gray-500 font-normal">(comma-separated)</span></label>
+                            <input
+                                type="text"
+                                value={tagsInput}
+                                onChange={e => setTagsInput(e.target.value)}
+                                placeholder="vegan, weeknight, asian"
+                            />
+                            {parsedTags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {parsedTags.map(tag => (
+                                        <span key={tag} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </section>
 
