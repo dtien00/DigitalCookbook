@@ -102,7 +102,7 @@ export default function Profile({ session, onBack, onRecipeClick }) {
     return (
         <div className="profile-container">
             <header className="profile-header">
-                <button onClick={onBack} className="btn-secondary">← Back to List</button>
+                <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
                 <h1>User Profile</h1>
             </header>
 
@@ -132,7 +132,7 @@ export default function Profile({ session, onBack, onRecipeClick }) {
                                     placeholder="Tell us about your cooking..."
                                 />
                             </div>
-                            <button className="btn-primary" disabled={loading}>
+                            <button className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
                                 {loading ? 'Loading ...' : 'Update Profile'}
                             </button>
                         </form>
@@ -151,7 +151,7 @@ export default function Profile({ session, onBack, onRecipeClick }) {
                                     minLength={6}
                                 />
                             </div>
-                            <button className="btn-primary" disabled={passwordLoading || !newPassword}>
+                            <button className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={passwordLoading || !newPassword}>
                                 {passwordLoading ? 'Updating...' : 'Update Password'}
                             </button>
                         </form>
@@ -160,19 +160,28 @@ export default function Profile({ session, onBack, onRecipeClick }) {
 
                 <section className="user-recipes-section">
                     <h3>My Recipes ({userRecipes.length})</h3>
-                    <div className="recipe-grid">
+                    <div className="columns-1 sm:columns-2 md:columns-3 gap-4 mt-4">
                         {userRecipes.map(recipe => (
-                            <div key={recipe.id} className="recipe-card" onClick={() => onRecipeClick(recipe)}>
+                            <div
+                                key={recipe.id}
+                                onClick={() => onRecipeClick(recipe)}
+                                className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-shadow duration-300"
+                            >
                                 {recipe.image_url ? (
-                                    <div className="card-image-wrapper">
-                                        <img src={recipe.image_url} alt={recipe.title} className="card-image" />
-                                        <div className="card-overlay">
-                                            <h4>{recipe.title}</h4>
+                                    <div className="relative overflow-hidden">
+                                        <img
+                                            src={recipe.image_url}
+                                            alt={recipe.title}
+                                            loading="lazy"
+                                            className="block w-full h-auto transition-transform duration-500 ease-out group-hover:scale-105"
+                                        />
+                                        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-4">
+                                            <h4 className="m-0 text-white text-base font-semibold drop-shadow-md leading-tight">{recipe.title}</h4>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="card-content">
-                                        <h4>{recipe.title}</h4>
+                                    <div className="p-5">
+                                        <h4 className="m-0 text-lg font-semibold text-gray-900">{recipe.title}</h4>
                                     </div>
                                 )}
                             </div>
