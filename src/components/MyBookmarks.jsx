@@ -10,7 +10,16 @@ import RecipeCard from './RecipeCard'
 // so a card disappears immediately when the user toggles it off
 // (optimistic). If the toggle fails server-side it rolls back and the
 // card reappears.
-export default function MyBookmarks({ session, onBack, onRecipeClick, isFavorited, onToggleFavorite }) {
+export default function MyBookmarks({
+    session,
+    onBack,
+    onRecipeClick,
+    isFavorited,
+    onToggleFavorite,
+    likeCount,
+    userLiked,
+    onToggleLike,
+}) {
     const [recipes, setRecipes] = useState([])
     const [loading, setLoading] = useState(true)
 
@@ -80,6 +89,9 @@ export default function MyBookmarks({ session, onBack, onRecipeClick, isFavorite
                             onClick={() => onRecipeClick(recipe)}
                             favorited={isFavorited(recipe.id)}
                             onToggleFavorite={() => onToggleFavorite(recipe.id)}
+                            liked={userLiked ? userLiked(recipe.id) : false}
+                            likeCount={likeCount ? likeCount(recipe.id) : 0}
+                            onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                         />
                     ))}
                 </div>
