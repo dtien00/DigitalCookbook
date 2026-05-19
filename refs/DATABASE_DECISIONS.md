@@ -85,7 +85,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 
 **Current state:**
 - `supabase_migration.sql` — initial schema (all tables, RLS, indexes, auto-profile trigger).
-- Future migrations should be numbered: `supabase_migration_002_tags.sql`, `supabase_migration_003_*.sql`, etc.
+- `supabase_migration_002_tags.sql` — adds `tags TEXT[] NOT NULL DEFAULT '{}'` to `recipes` + GIN index `idx_recipes_tags`. Idempotent (`IF NOT EXISTS` on both column and index).
+- Future migrations: `supabase_migration_003_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -94,6 +95,21 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 **Tradeoff:** No automatic ordering or rollback. If the project gets a second contributor or a staging environment, adopt the Supabase CLI (`supabase db push`) instead.
 
 ---
+
+## Tags column on `recipes` (migration 002)
+
+**Decision:** Add `tags TEXT[] NOT NULL DEFAULT '{}'` to `public.recipes` and a `GIN` index on it.
+
+**Why:**
+- **`TEXT[]` instead of a join table:** Tags are simple labels with no metadata of their own. A `tag_id`/`recipe_tags` two-table model would add joins for every recipe read with no benefit at this scale. Postgres arrays + GIN are first-class and stay fast for containment queries (`WHERE tags @> ARRAY['vegan']`) up to millions of rows.
+- **`NOT NULL DEFAULT '{}'`:** Avoids `null`-vs-empty-array branching in the frontend. Every recipe always has a `.tags` property; it's either populated or empty.
+- **GIN index, not B-tree:** B-tree on an array is useless for "contains tag X" queries. GIN is the standard index type for array membership and Postgres `@>`, `&&`, `<@` operators.
+- **Lowercase, deduped at the app layer (CreateRecipe.jsx):** Keeps `"Vegan"`, `"vegan"`, `"VEGAN"` from spawning three buckets. The DB doesn't enforce this — a future API client could insert mixed-case tags — but the app's only insert path normalizes.
+
+**Tradeoffs:**
+- No referential integrity on tags. A typo creates a new "tag." This is fine for a personal cookbook; a tag-cloud UI later can surface canonical tags via aggregation. If the project ever wants strict tag governance, migrate to a join table at that point.
+- Tag-renaming or merging is harder than with a tags table (need to `UPDATE recipes SET tags = array_replace(tags, 'old', 'new')`). Acceptable for current scale.
+- No RLS policy changes needed: the existing recipes-read policy (`is_public OR auth.uid() = author_id`) covers tag visibility automatically since tags live on the recipe row.
 
 ## Test-account seeding (`scripts/seed-test-accounts.js`)
 

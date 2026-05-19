@@ -173,6 +173,15 @@ function App() {
                                                 {recipe.description}
                                             </p>
                                         )}
+                                        {recipe.tags?.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 max-h-0 opacity-0 mb-0 group-hover:max-h-12 group-hover:opacity-100 group-hover:mb-2 overflow-hidden transition-all duration-300 ease-out">
+                                                {recipe.tags.slice(0, 3).map(tag => (
+                                                    <span key={tag} className="px-2 py-0.5 bg-white/25 backdrop-blur-sm text-white text-[11px] font-medium rounded-full">
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                         <h3 className="m-0 text-white text-base font-semibold drop-shadow-md leading-tight">
                                             {recipe.title}
                                         </h3>
@@ -182,6 +191,15 @@ function App() {
                                 <div className="p-5">
                                     <h3 className="m-0 mb-2 text-lg font-semibold text-gray-900">{recipe.title}</h3>
                                     <p className="m-0 text-sm text-gray-600 line-clamp-2">{recipe.description}</p>
+                                    {recipe.tags?.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-3">
+                                            {recipe.tags.slice(0, 3).map(tag => (
+                                                <span key={tag} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-medium rounded-full">
+                                                    {tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
