@@ -107,7 +107,7 @@ The persistent UI scaffolding around every screen — page wrapper, top header, 
 ### Logged-in vs anonymous header
 | State | Title | Right side |
 |---|---|---|
-| **Signed in** | `{email}'s Cookbook` — personal-feeling | Two secondary buttons: Profile, Logout |
+| **Signed in** | `{email}'s Cookbook` — personal-feeling | Three secondary buttons: Bookmarks, Profile, Logout |
 | **Anonymous** | `Digital Cookbook` — brand-level | Single primary "Sign In" button (visual emphasis pulls the eye to the conversion action) |
 
 The asymmetry is intentional: the anonymous header has one obvious next-step (sign in), so the button gets the primary-button treatment instead of being one of several secondary options. Logged-in users have a richer set of actions, none of which is the "main" action, so secondary styling for all is appropriate.
@@ -163,4 +163,43 @@ Stage 6 replaces every `alert(...)` call with `react-hot-toast`. The library is 
 **Why not `window.confirm` replacement?** Toasts are *non-blocking* — they can't gate a destructive action. The "Delete recipe?" `window.confirm` calls in [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) and [Comments.jsx](../src/components/Comments.jsx) (the latter on `stage-5-comments`) stay as native confirms for now. A real modal-confirm component is a separate Stage 6 sub-task; it doesn't have to ship with the toast change.
 
 **Accessibility hook.** `react-hot-toast` announces success/error toasts via `role="status"` (success) and `role="alert"` (error) automatically — screen readers will hear them without us doing anything. That's a bonus pickup we get for swapping out `alert()`, which was technically accessible but completely interrupting.
+
+---
+
+# Navigation IA — proposed *(not implemented)*
+
+A directional sketch of where the app's navigation could evolve. Currently top-level navigation is a flat row of buttons in the header (Bookmarks · Profile · Logout for signed-in users); the proposal here reframes those around two top-level spaces — **Public Hub** and **Personal Hub** — to give the app a clearer mental model.
+
+## The mental model
+
+| Hub | What it contains | Who sees it |
+|---|---|---|
+| **Public Hub** | All public recipes, browsable Pinterest-style. The home grid as it exists today. | Everyone — anonymous and signed-in. |
+| **Personal Hub** | The signed-in user's own recipes, bookmarks, and profile info. The "mine" space. | Signed-in users only. |
+
+The home view stays Public — anonymous-by-default browsing is preserved (Stage 2 philosophy; see also the discarded Landing-screen pivot — the user explicitly preferred public-grid-on-arrival over an interstitial choice). Personal Hub is what signed-in users *navigate to* when they want to see their own stuff, then navigate back from when they want to browse again.
+
+## Three flavors to choose between
+
+1. **Rename only.** Keep the current two screens (My Recipes inside Profile + My Bookmarks), just relabel the header buttons under a "My Hub" framing — e.g. "My Hub: Recipes" and "My Hub: Bookmarks." Smallest change, mostly verbal. Doesn't actually reduce the number of top-level destinations.
+
+2. **Consolidated Personal Hub.** Replace the three separate buttons (Bookmarks / Profile / Logout) with a single "My Hub" button. The Personal Hub page has the user's profile info up top (avatar, username, bio) and tabs/sections below: **My Recipes** · **Bookmarks**. Logout moves to a small icon or menu. One destination, three views inside.
+
+3. **Two-mode top-level toggle.** A persistent "Public Hub / My Hub" toggle in the header — the whole page swaps mode when the user clicks. Bigger conceptual shift but the most explicit mapping of the mental model. Adds a navigation pattern not yet present in the app.
+
+## How to choose
+
+- If the goal is just clearer labeling: **flavor 1**.
+- If the goal is to reduce header clutter and give "mine" a clear home: **flavor 2** (likely the recommended starting point — modest scope, clear payoff, and Profile-as-a-section instead of Profile-as-a-screen aligns with most modern apps).
+- If the goal is to make the hub-vs-hub distinction the dominant organizing principle of the whole app: **flavor 3**, but probably only worth it once Personal Hub gains more depth (comments thread, follows feed, etc. in later stages) to justify the toggle's persistent screen real estate.
+
+## What this doesn't change
+
+- Anonymous browsing stays the default arrival experience — no forced auth.
+- The bookmark/like-clicks-prompt-login pattern (Stages 3–4) is unaffected.
+- RLS policies, URL/routing model, and the Pinterest-style grid all carry forward as-is.
+
+## Open question for later
+
+The book-opening login metaphor in the [Login Experience](#login-experience) section above implicitly assumes auth is the user's first contact with the app. That assumption is in tension with anonymous-by-default arrival. If we keep the book metaphor, it likely applies *only* when a user actively chooses to sign in (clicks the header CTA), not as a forced landing — worth resolving when either the book metaphor or this nav IA moves from proposed to implemented.
 
