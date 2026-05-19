@@ -54,6 +54,28 @@ A small circular icon button in the **top-right corner of every card** (`absolut
 ### Anonymous behavior
 The bookmark button renders identically for anonymous viewers — *clicking* it opens the Auth view instead of toggling state. The visual affordance is the conversion incentive: "you can save this if you sign in." Hiding the button entirely would remove the prompt to convert; showing it grayed-out would feel like a denied action.
 
+## Like button (heart + count)
+
+Pill-shaped button: heart icon + count number. Sits in the **top-left corner** of every card (`absolute top-3 left-3 z-10`), mirroring the bookmark's top-right placement — the corners are visually balanced and neither button overlaps the title/overlay area at the bottom.
+
+- **Visual at rest:** `h-8 px-2.5 rounded-full bg-white/90 backdrop-blur-sm` — same frosted-glass treatment as the bookmark, but pill-shaped (not circular) to make room for the count.
+- **Heart icon:** Lucide-style outline by default (`fill-none stroke-gray-800`); switches to `fill-rose-500 stroke-rose-500` when the **current user** has liked the recipe. The fill color is rose, not indigo, so the like and bookmark states are visually distinguishable at a glance (indigo = saved, rose = liked).
+- **Count display:** rendered only when count > 0. A `0` would be visual clutter on every card — empty space carries the same information.
+- **Hover/active:** `hover:bg-white hover:scale-105 active:scale-95` — same micro-press as the bookmark.
+
+### Likes vs bookmarks — why two icons?
+Different mental models:
+- **Bookmark (indigo, top-right):** *I want to find this again.* Personal, intent-based. Saved into a private collection.
+- **Like (rose, top-left):** *I appreciate this.* Public signal. Aggregated into a visible count.
+
+Pinterest itself distinguishes "save to board" from a quick reaction — we follow the same separation.
+
+### Anonymous behavior
+The like pill renders for anonymous viewers too, with the count visible (likes are public information). Clicking it opens the Auth view. The count is the social proof that hopefully nudges sign-up; the click being gated behind auth is the conversion point.
+
+### Detail page placement
+On [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) both buttons sit in the top-right header row (the "← Back to List" button is top-left), at `size="lg"` for finger-target generosity. Like comes first, then bookmark — left-to-right reading order mirrors the cards' top-left/top-right placement.
+
 ## Tags
 
 Tag chips appear on cards as a categorical signal — "vegan", "weeknight", "asian", etc.

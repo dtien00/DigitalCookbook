@@ -87,19 +87,21 @@ Goal: signed-in users can save recipes to a personal collection.
 
 ---
 
-## Stage 4 — Likes
+## Stage 4 — Likes  *(done)*
 
 Goal: lightweight "I appreciate this" signal, separate from bookmarks (Pinterest distinguishes "save to board" from a quick like).
 
 **Tasks**
-- New hook: `src/hooks/useLike.js` — same shape as `useFavorite`. Writes to `likes`.
-- Heart icon with like-count on recipe cards and on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx).
-- Counts: either an aggregate query per recipe (cheap at this scale) or a Postgres view that left-joins `recipes` with `COUNT(likes)` to avoid N+1.
-- Optimistic UI on toggle.
+- [x] New hook for likes. *Done as `src/hooks/useLikes.js` (plural). Bulk-fetches all like rows in a single query, then builds two derived structures: a `Map<recipe_id, count>` for the public counts and a `Set<recipe_id>` for the current user's liked recipes. One query, two outputs — cheaper than two separate fetches.*
+- [x] Heart icon with like-count on cards + RecipeDetail. *New `<LikeButton>` component, pill-shaped (heart icon + count number). Three sizes (sm on cards, lg on the detail page). Count rendered only when > 0 to keep zero-state visually quiet. Rose-500 fill when the current user has liked; outline otherwise. Placed top-left on cards (mirroring the bookmark top-right), and inline with the bookmark on the detail page header.*
+- [x] Counts strategy. *Chose bulk-fetch-and-aggregate over a Postgres view. At ~50 recipes × low single-digit likes = ~150 rows, this is well under the threshold where a view's compile/maintenance cost pays off. The hook's API is stable — if the data outgrows the bulk-fetch approach, the implementation can swap to a view (or a counter column with trigger) without touching consumers. Captured in `refs/DATABASE_DECISIONS.md` so the decision is explicit.*
+- [x] Optimistic UI on toggle. *Same pattern as useFavorites: flip both the userLiked set AND the likeCount map immediately, fire the Supabase write, roll back both on error.*
 
-**Schema**: no change — `likes` already exists.
+**Schema**: `likes` already existed, **but** its INSERT policy had a real gap — `WITH CHECK (auth.role() = 'authenticated')` only required the request to be from a logged-in user; nothing stopped a crafted request from inserting a like row claiming to be someone else. Migration 004 replaces it with `WITH CHECK (auth.uid() = user_id)`. Also adds `created_at TIMESTAMPTZ DEFAULT NOW()` for future trending/recently-liked queries (Stage 7) — additive, no read-path changes.
 
-**Exit criteria**: heart toggles, count updates, persists across reloads, scales reasonably on a grid of 30+ recipes.
+**Anonymous behavior**: like pill renders for anonymous viewers too, with the public count visible and an outline heart. Clicking the heart opens the Auth view (same pattern as bookmarks). The count itself is the social proof that hopefully nudges conversion.
+
+**Exit criteria**: heart toggles, count updates, persists across reloads, scales reasonably on a grid of 30+ recipes. *Met. Toggle is optimistic so the count updates ~0ms; the underlying write completes in the background. The one-query bulk fetch keeps the home grid O(1) Supabase round-trips for likes regardless of card count.*
 
 ---
 

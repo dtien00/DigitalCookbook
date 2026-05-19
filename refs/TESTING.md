@@ -82,6 +82,20 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Anonymous click "← Back to recipes" returns to grid** with anonymous header unchanged
 - [ ] **Bookmark state syncs across views** — bookmark from home grid, navigate to Profile (My Recipes), the same recipe's icon there is filled too
 
+## Likes checklist
+
+- [ ] **Like pill visible top-left of every card** — heart icon, outline state initially (rose-filled if you've already liked it from a prior session)
+- [ ] **Count rendered only when > 0** — a recipe with zero likes shows just the heart, no `0`
+- [ ] **Click heart, fill flips to rose-500 immediately + count increments** — no spinner (optimistic UI)
+- [ ] **Click again, fill reverts to outline + count decrements** — toggle off works the same way
+- [ ] **Like click does NOT open the detail view** (e.stopPropagation working)
+- [ ] **Reload page, like state persists** — proves the Supabase write succeeded
+- [ ] **Like button on RecipeDetail page** (larger variant top-right, alongside bookmark) — same behavior, same persistence
+- [ ] **Counts are public** — log in as account A, like a recipe; log out → the anonymous view of that recipe shows the incremented count
+- [ ] **Anonymous like click → Auth view opens** (heart visible, but tap prompts sign-in)
+- [ ] **Like state per-user** — A likes a recipe; B logs in, the heart shows outline for B (the count is shared but the fill state is per-user)
+- [ ] **Counts and bookmarks are independent** — liking does NOT bookmark, and vice versa; both can be active simultaneously
+
 ---
 
 ## Future testing notes
