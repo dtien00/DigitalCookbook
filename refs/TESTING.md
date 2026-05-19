@@ -58,7 +58,7 @@ Re-enable it after seeding if you want real signups to require email verificatio
 Run through this after any change to the recipe grid, card layout, or hover behavior. Open browser tabs for each scenario:
 
 - [ ] **Anonymous (logged out)** — verify the home grid shows test-public's 6 recipes; header shows "Sign In" button (not Profile/Logout); "+ New Recipe" button is hidden; clicking a card opens the detail view without Edit/Delete buttons
-- [ ] **Anonymous → Sign In flow** — click "Sign In", click "← Back to recipes" to dismiss; click Sign In again, log in successfully, header switches to Profile/Logout, "+ New Recipe" appears
+- [ ] **Anonymous → Sign In flow** — click "Sign In", click "← Back to recipes" to dismiss; click Sign In again, log in successfully, header switches to Bookmarks/Profile/Logout, "+ New Recipe" appears
 - [ ] **test-tiny** — 8 visible recipes (own 2 + public 6), tier 2 (3 cols)
 - [ ] **test-small** — 12 visible, tier 3 (4 cols)
 - [ ] **test-medium** — 20 visible, tier 3 (still 4 cols, at the upper bound)
@@ -67,6 +67,20 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens
 - [ ] **Search stability** — filters the grid without changing card size
 - [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow
+
+## Bookmarks checklist
+
+- [ ] **Bookmark icon visible on every card** (top-right corner of image, outline state initially)
+- [ ] **Click bookmark, icon flips to filled (indigo) immediately** — no spinner, no delay (optimistic UI)
+- [ ] **Bookmark click does NOT open the detail view** (e.stopPropagation working)
+- [ ] **Reload page, bookmark state persists** (proves the Supabase write succeeded)
+- [ ] **Click bookmark on RecipeDetail page** (larger variant top-right) — same behavior
+- [ ] **"Bookmarks" header button → My Bookmarks view** lists saved recipes, sorted most-recent first
+- [ ] **Unbookmark from My Bookmarks view → card disappears immediately** (filter against isFavorited)
+- [ ] **Empty bookmarks state** — log in as a fresh account, navigate to Bookmarks → "No bookmarks yet" empty state
+- [ ] **Anonymous bookmark click → Auth view opens** instead of toggling
+- [ ] **Anonymous click "← Back to recipes" returns to grid** with anonymous header unchanged
+- [ ] **Bookmark state syncs across views** — bookmark from home grid, navigate to Profile (My Recipes), the same recipe's icon there is filled too
 
 ---
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import RecipeCard from './RecipeCard'
 
-export default function Profile({ session, onBack, onRecipeClick }) {
+export default function Profile({ session, onBack, onRecipeClick, isFavorited, onToggleFavorite }) {
     const [loading, setLoading] = useState(true)
     const [username, setUsername] = useState('')
     const [fullName, setFullName] = useState('')
@@ -162,47 +163,13 @@ export default function Profile({ session, onBack, onRecipeClick }) {
                     <h3>My Recipes ({userRecipes.length})</h3>
                     <div className="columns-1 sm:columns-2 md:columns-3 gap-4 mt-4">
                         {userRecipes.map(recipe => (
-                            <div
+                            <RecipeCard
                                 key={recipe.id}
+                                recipe={recipe}
                                 onClick={() => onRecipeClick(recipe)}
-                                className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-shadow duration-300"
-                            >
-                                {recipe.image_url ? (
-                                    <div className="relative overflow-hidden">
-                                        <img
-                                            src={recipe.image_url}
-                                            alt={recipe.title}
-                                            loading="lazy"
-                                            className="block w-full h-auto transition-transform duration-500 ease-out group-hover:scale-105"
-                                        />
-                                        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-4">
-                                            {recipe.tags?.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 max-h-0 opacity-0 mb-0 group-hover:max-h-12 group-hover:opacity-100 group-hover:mb-2 overflow-hidden transition-all duration-300 ease-out">
-                                                    {recipe.tags.slice(0, 3).map(tag => (
-                                                        <span key={tag} className="px-2 py-0.5 bg-white/25 backdrop-blur-sm text-white text-[11px] font-medium rounded-full">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <h4 className="m-0 text-white text-base font-semibold drop-shadow-md leading-tight">{recipe.title}</h4>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="p-5">
-                                        <h4 className="m-0 text-lg font-semibold text-gray-900">{recipe.title}</h4>
-                                        {recipe.tags?.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 mt-3">
-                                                {recipe.tags.slice(0, 3).map(tag => (
-                                                    <span key={tag} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-medium rounded-full">
-                                                        {tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                                favorited={isFavorited ? isFavorited(recipe.id) : false}
+                                onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(recipe.id) : undefined}
+                            />
                         ))}
                     </div>
                 </section>

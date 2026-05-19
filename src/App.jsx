@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
+import { useFavorites } from './hooks/useFavorites'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
+import MyBookmarks from './components/MyBookmarks'
+import RecipeCard from './components/RecipeCard'
 
 function App() {
     const [session, setSession] = useState(null)
@@ -12,10 +15,13 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showProfile, setShowProfile] = useState(false)
+    const [showBookmarks, setShowBookmarks] = useState(false)
     const [showAuth, setShowAuth] = useState(false)
     const [selectedRecipe, setSelectedRecipe] = useState(null)
     const [editingRecipe, setEditingRecipe] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
+
+    const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
 
     useEffect(() => {
         // Check initial session
@@ -72,6 +78,7 @@ function App() {
         setShowCreate(true)
         setSelectedRecipe(null)
         setShowProfile(false)
+        setShowBookmarks(false)
     }
 
     const handleRecipeDeleted = () => {
@@ -83,6 +90,16 @@ function App() {
         setSelectedRecipe(recipe)
         setShowProfile(false)
         setShowCreate(false)
+        setShowBookmarks(false)
+    }
+
+    // Bookmark click handler — anonymous users get the sign-in CTA, signed-in users toggle.
+    const handleBookmarkClick = (recipeId) => {
+        if (!session) {
+            setShowAuth(true)
+            return
+        }
+        toggleFavorite(recipeId)
     }
 
     if (showAuth) {
@@ -94,6 +111,18 @@ function App() {
             session={session}
             onBack={() => setShowProfile(false)}
             onRecipeClick={handleRecipeClick}
+            isFavorited={isFavorited}
+            onToggleFavorite={handleBookmarkClick}
+        />
+    }
+
+    if (showBookmarks && session) {
+        return <MyBookmarks
+            session={session}
+            onBack={() => setShowBookmarks(false)}
+            onRecipeClick={handleRecipeClick}
+            isFavorited={isFavorited}
+            onToggleFavorite={handleBookmarkClick}
         />
     }
 
@@ -116,6 +145,8 @@ function App() {
             onBack={() => setSelectedRecipe(null)}
             onEdit={handleEditRecipe}
             onDelete={handleRecipeDeleted}
+            favorited={isFavorited(selectedRecipe.id)}
+            onToggleFavorite={() => handleBookmarkClick(selectedRecipe.id)}
         />
     }
 
@@ -142,6 +173,7 @@ function App() {
                 <div className="flex gap-3">
                     {session ? (
                         <>
+                            <button onClick={() => setShowBookmarks(true)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Bookmarks</button>
                             <button onClick={() => setShowProfile(true)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Profile</button>
                             <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Logout</button>
                         </>
@@ -173,55 +205,13 @@ function App() {
             ) : (
                 <div className={`${gridColumnsClass} gap-4 mt-6`}>
                     {filteredRecipes.map(recipe => (
-                        <div
+                        <RecipeCard
                             key={recipe.id}
+                            recipe={recipe}
                             onClick={() => handleRecipeClick(recipe)}
-                            className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-shadow duration-300"
-                        >
-                            {recipe.image_url ? (
-                                <div className="relative overflow-hidden">
-                                    <img
-                                        src={recipe.image_url}
-                                        alt={recipe.title}
-                                        loading="lazy"
-                                        className="block w-full h-auto transition-transform duration-500 ease-out group-hover:scale-105"
-                                    />
-                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-4">
-                                        {recipe.description && (
-                                            <p className="m-0 text-white text-sm leading-snug line-clamp-2 max-h-0 opacity-0 mb-0 group-hover:max-h-16 group-hover:opacity-100 group-hover:mb-2 overflow-hidden transition-all duration-300 ease-out drop-shadow">
-                                                {recipe.description}
-                                            </p>
-                                        )}
-                                        {recipe.tags?.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 max-h-0 opacity-0 mb-0 group-hover:max-h-12 group-hover:opacity-100 group-hover:mb-2 overflow-hidden transition-all duration-300 ease-out">
-                                                {recipe.tags.slice(0, 3).map(tag => (
-                                                    <span key={tag} className="px-2 py-0.5 bg-white/25 backdrop-blur-sm text-white text-[11px] font-medium rounded-full">
-                                                        {tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <h3 className="m-0 text-white text-base font-semibold drop-shadow-md leading-tight">
-                                            {recipe.title}
-                                        </h3>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="p-5">
-                                    <h3 className="m-0 mb-2 text-lg font-semibold text-gray-900">{recipe.title}</h3>
-                                    <p className="m-0 text-sm text-gray-600 line-clamp-2">{recipe.description}</p>
-                                    {recipe.tags?.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 mt-3">
-                                            {recipe.tags.slice(0, 3).map(tag => (
-                                                <span key={tag} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-medium rounded-full">
-                                                    {tag}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                            favorited={isFavorited(recipe.id)}
+                            onToggleFavorite={() => handleBookmarkClick(recipe.id)}
+                        />
                     ))}
                 </div>
             )}
