@@ -23,8 +23,11 @@ function App() {
         })
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             setSession(session)
+            if (event === 'PASSWORD_RECOVERY') {
+                setShowProfile(true)
+            }
         })
 
         return () => subscription.unsubscribe()
