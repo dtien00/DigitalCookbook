@@ -35,18 +35,18 @@ Goal: trustworthy starting point. No new features.
 Goal: the home grid feels like Pinterest instead of a basic card list. Adopt Tailwind so future stages are layout-cheap.
 
 **Tasks**
-- Install Tailwind: `npm i -D tailwindcss postcss autoprefixer && npx tailwindcss init -p`.
-- Configure `tailwind.config.js` to scan `./index.html` and `./src/**/*.{js,jsx}`.
-- Replace `src/index.css` body with `@tailwind base; @tailwind components; @tailwind utilities;` plus any genuinely global custom CSS that's worth keeping.
-- Convert the recipe grid in [src/App.jsx](./src/App.jsx) to a responsive masonry-feel layout: CSS columns (`columns-2 md:columns-3 lg:columns-4 xl:columns-5`) with `break-inside-avoid` on each card.
-- Polish card hover: image scales slightly, title overlay fades in.
-- Convert top-level chrome (header, search bar, primary buttons) to Tailwind classes; delete equivalents from [src/App.css](./src/App.css).
-- Add `tags TEXT[]` column to `recipes` in a new migration file (`supabase_migration_002_tags.sql`). Surface tags as a small chip row on cards. Editing tags lives in [CreateRecipe.jsx](./src/components/CreateRecipe.jsx).
+- [x] Install Tailwind. *Done via Tailwind v4 + `@tailwindcss/vite` plugin (configured in [vite.config.js](./vite.config.js)). The v4 approach skips `tailwind.config.js`/`postcss.config.js` and auto-scans the project, so the original task line below is obsolete.*
+- [x] ~~Configure `tailwind.config.js` to scan `./index.html` and `./src/**/*.{js,jsx}`.~~ *Not needed with Tailwind v4 — content scanning is automatic.*
+- [x] ~~Replace `src/index.css` body with `@tailwind base; @tailwind components; @tailwind utilities;`~~ *Done with the v4 equivalent: `@import "tailwindcss";` at the top of [src/index.css](./src/index.css).*
+- [x] Convert the recipe grid in [src/App.jsx](./src/App.jsx) to a responsive masonry-feel layout. *Implemented with `break-inside-avoid` on each card and removed the legacy 4:3 aspect-ratio wrapper so images keep their natural height — that's what produces the varied-height Pinterest look. Column counts are **library-size adaptive** (4 tiers): tiny libraries (≤3) get 1–2 columns / large cards, growing to a 5-column floor at 20+ recipes so cards never drop below ~250px on a 1280px viewport. Tier is computed from `recipes.length`, not `filteredRecipes.length`, so cards don't resize while the user searches.*
+- [x] Polish card hover: image scales slightly, title overlay fades in. *Uses `group` / `group-hover:` to coordinate image `scale-105` and overlay opacity transition. Cards also gain a stronger shadow on hover.*
+- [ ] Convert top-level chrome (header, search bar, primary buttons) to Tailwind classes; delete equivalents from [src/index.css](./src/index.css). *Still pending — header, `.actions` row, and button classes are still legacy CSS.*
+- [ ] Add `tags TEXT[]` column to `recipes` in a new migration file (`supabase_migration_002_tags.sql`). Surface tags as a small chip row on cards. Editing tags lives in [CreateRecipe.jsx](./src/components/CreateRecipe.jsx). *Still pending.*
 
 **Optional this stage**
 - Install `react-router-dom` for shareable URLs (`/`, `/recipe/:id`, `/profile/:id`). Pinterest's link-shareability is part of its DNA; state-only routing makes that impossible. If scope feels heavy, push to Stage 2.
 
-**Exit criteria**: home grid is responsive, multi-column, with hover overlays; Tailwind is the styling system; tags column exists and can be filled in.
+**Exit criteria**: home grid is responsive, multi-column, with hover overlays; Tailwind is the styling system; tags column exists and can be filled in. *Partial: grid + hover are done. Header chrome conversion and tags column still required.*
 
 ---
 
