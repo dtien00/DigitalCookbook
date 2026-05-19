@@ -112,6 +112,15 @@ function App() {
         recipe.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
+    // Density scales with the user's library size, not the filtered view, so cards
+    // don't resize while searching. xl:columns-5 is the floor — beyond that cards
+    // get pixel-mappy on standard laptop widths (~250px each at 1280px).
+    const gridColumnsClass =
+        recipes.length <= 3  ? 'columns-1 md:columns-2 xl:columns-2' :
+        recipes.length <= 8  ? 'columns-1 sm:columns-2 lg:columns-3 xl:columns-3' :
+        recipes.length <= 20 ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4' :
+                               'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
+
     return (
         <div className="container">
             <header className="header">
@@ -136,33 +145,43 @@ function App() {
 
             {loading ? (
                 <p>Loading recipes...</p>
+            ) : filteredRecipes.length === 0 ? (
+                <p>No recipes found.</p>
             ) : (
-                <div className="recipe-grid">
-                    {filteredRecipes.length === 0 ? (
-                        <p>No recipes found.</p>
-                    ) : (
-                        filteredRecipes.map(recipe => (
-                            <div
-                                key={recipe.id}
-                                className="recipe-card"
-                                onClick={() => handleRecipeClick(recipe)}
-                            >
-                                {recipe.image_url ? (
-                                    <div className="card-image-wrapper">
-                                        <img src={recipe.image_url} alt={recipe.title} className="card-image" />
-                                        <div className="card-overlay">
-                                            <h3>{recipe.title}</h3>
-                                        </div>
+                <div className={`${gridColumnsClass} gap-4 mt-6`}>
+                    {filteredRecipes.map(recipe => (
+                        <div
+                            key={recipe.id}
+                            onClick={() => handleRecipeClick(recipe)}
+                            className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-shadow duration-300"
+                        >
+                            {recipe.image_url ? (
+                                <div className="relative overflow-hidden">
+                                    <img
+                                        src={recipe.image_url}
+                                        alt={recipe.title}
+                                        loading="lazy"
+                                        className="block w-full h-auto transition-transform duration-500 ease-out group-hover:scale-105"
+                                    />
+                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-4">
+                                        {recipe.description && (
+                                            <p className="m-0 text-white text-sm leading-snug line-clamp-2 max-h-0 opacity-0 mb-0 group-hover:max-h-16 group-hover:opacity-100 group-hover:mb-2 overflow-hidden transition-all duration-300 ease-out drop-shadow">
+                                                {recipe.description}
+                                            </p>
+                                        )}
+                                        <h3 className="m-0 text-white text-base font-semibold drop-shadow-md leading-tight">
+                                            {recipe.title}
+                                        </h3>
                                     </div>
-                                ) : (
-                                    <div className="card-content">
-                                        <h3>{recipe.title}</h3>
-                                        <p className="description-preview">{recipe.description}</p>
-                                    </div>
-                                )}
-                            </div>
-                        ))
-                    )}
+                                </div>
+                            ) : (
+                                <div className="p-5">
+                                    <h3 className="m-0 mb-2 text-lg font-semibold text-gray-900">{recipe.title}</h3>
+                                    <p className="m-0 text-sm text-gray-600 line-clamp-2">{recipe.description}</p>
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
