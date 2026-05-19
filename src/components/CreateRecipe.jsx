@@ -251,7 +251,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 />
                             </div>
                         ))}
-                        <button type="button" onClick={addIngredient} className="btn-secondary">Add Ingredient</button>
+                        <button type="button" onClick={addIngredient} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Ingredient</button>
                     </section>
 
                     <section className="form-section">
@@ -265,12 +265,12 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 />
                             </div>
                         ))}
-                        <button type="button" onClick={addStep} className="btn-secondary">Add Step</button>
+                        <button type="button" onClick={addStep} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Step</button>
                     </section>
 
                     <div className="form-actions">
-                        <button type="button" onClick={onComplete} className="btn-secondary">Cancel</button>
-                        <button type="submit" disabled={loading} className="btn-primary">
+                        <button type="button" onClick={onComplete} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Cancel</button>
+                        <button type="submit" disabled={loading} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             {loading ? (isEditMode ? 'Updating...' : 'Creating...') : 'Save Recipe'}
                         </button>
                     </div>
