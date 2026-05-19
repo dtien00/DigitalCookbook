@@ -73,7 +73,7 @@ export default function Auth() {
                         </div>
                     )}
 
-                    <button type="submit" disabled={loading} className="btn-primary">
+                    <button type="submit" disabled={loading} className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         {loading ? 'Processing...' :
                             (view === 'signup' ? 'Sign Up' :
                                 view === 'login' ? 'Login' : 'Send Reset Link')}
@@ -85,10 +85,10 @@ export default function Auth() {
                         <>
                             <p>
                                 Don't have an account?{' '}
-                                <button onClick={() => setView('signup')} className="btn-link">Sign Up</button>
+                                <button onClick={() => setView('signup')} className="bg-transparent border-0 p-0 text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer hover:underline underline-offset-2">Sign Up</button>
                             </p>
                             <p>
-                                <button onClick={() => setView('forgot_password')} className="btn-link">Forgot Password?</button>
+                                <button onClick={() => setView('forgot_password')} className="bg-transparent border-0 p-0 text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer hover:underline underline-offset-2">Forgot Password?</button>
                             </p>
                         </>
                     )}
@@ -96,13 +96,13 @@ export default function Auth() {
                     {view === 'signup' && (
                         <p>
                             Already have an account?{' '}
-                            <button onClick={() => setView('login')} className="btn-link">Login</button>
+                            <button onClick={() => setView('login')} className="bg-transparent border-0 p-0 text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer hover:underline underline-offset-2">Login</button>
                         </p>
                     )}
 
                     {view === 'forgot_password' && (
                         <p>
-                            <button onClick={() => setView('login')} className="btn-link">Back to Login</button>
+                            <button onClick={() => setView('login')} className="bg-transparent border-0 p-0 text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer hover:underline underline-offset-2">Back to Login</button>
                         </p>
                     )}
                 </div>

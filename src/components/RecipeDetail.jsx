@@ -61,7 +61,7 @@ export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete 
 
     return (
         <div className="recipe-detail-container">
-            <button onClick={onBack} className="btn-secondary">← Back to List</button>
+            <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
 
             <div className="recipe-detail-header">
                 {recipe.image_url && (
@@ -76,8 +76,8 @@ export default function RecipeDetail({ recipe, userId, onBack, onEdit, onDelete 
 
             {isAuthor && (
                 <div className="author-actions">
-                    <button onClick={() => onEdit(recipe)} className="btn-primary">Edit Recipe</button>
-                    <button onClick={handleDelete} className="btn-danger">Delete Recipe</button>
+                    <button onClick={() => onEdit(recipe)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors">Edit Recipe</button>
+                    <button onClick={handleDelete} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md transition-colors">Delete Recipe</button>
                 </div>
             )}
 

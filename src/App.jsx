@@ -125,25 +125,26 @@ function App() {
                                'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
 
     return (
-        <div className="container">
-            <header className="header">
-                <h1>{session.user.email}'s Cookbook</h1>
-                <div className="header-right">
-                    <button onClick={() => setShowProfile(true)} className="btn-secondary">Profile</button>
-                    <button onClick={handleLogout} className="btn-secondary">Logout</button>
+        <div className="max-w-7xl mx-auto px-5 py-5">
+            <header className="flex justify-between items-center mb-10">
+                <h1 className="text-2xl font-semibold text-gray-900">{session.user.email}'s Cookbook</h1>
+                <div className="flex gap-3">
+                    <button onClick={() => setShowProfile(true)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Profile</button>
+                    <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Logout</button>
                 </div>
             </header>
 
-            <div className="actions">
-                <div className="search-bar">
+            <div className="flex gap-4 items-center mb-8">
+                <div className="flex-1">
                     <input
                         type="text"
                         placeholder="Search recipes..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-full text-base bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
                     />
                 </div>
-                <button onClick={() => setShowCreate(true)} className="btn-primary">+ New Recipe</button>
+                <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors">+ New Recipe</button>
             </div>
 
             {loading ? (
