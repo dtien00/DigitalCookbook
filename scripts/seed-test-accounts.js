@@ -46,10 +46,11 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const TEST_PASSWORD = 'TestPass123!'
 
 const ACCOUNTS = [
-  { email: 'test-tiny@example.com',   username: 'tiny_tim',   full_name: 'Tiny Tim',   recipeCount: 2,  bio: 'Just getting started.' },
-  { email: 'test-small@example.com',  username: 'small_sam',  full_name: 'Small Sam',  recipeCount: 6,  bio: 'Cooks on weekends.' },
-  { email: 'test-medium@example.com', username: 'medium_mia', full_name: 'Medium Mia', recipeCount: 14, bio: 'Has a few go-tos.' },
-  { email: 'test-large@example.com',  username: 'large_lou',  full_name: 'Large Lou',  recipeCount: 28, bio: 'Recipe collector.' },
+  { email: 'test-tiny@example.com',   username: 'tiny_tim',     full_name: 'Tiny Tim',     recipeCount: 2,  bio: 'Just getting started.',                isPublic: false },
+  { email: 'test-small@example.com',  username: 'small_sam',    full_name: 'Small Sam',    recipeCount: 6,  bio: 'Cooks on weekends.',                   isPublic: false },
+  { email: 'test-medium@example.com', username: 'medium_mia',   full_name: 'Medium Mia',   recipeCount: 14, bio: 'Has a few go-tos.',                    isPublic: false },
+  { email: 'test-large@example.com',  username: 'large_lou',    full_name: 'Large Lou',    recipeCount: 28, bio: 'Recipe collector.',                    isPublic: false },
+  { email: 'test-public@example.com', username: 'public_paula', full_name: 'Public Paula', recipeCount: 6,  bio: 'Shares everything she cooks.',         isPublic: true  },
 ]
 
 const RECIPE_TEMPLATES = [
@@ -88,7 +89,7 @@ function makeRecipes(account) {
       tags: template.tags,
       image_url: makeImageUrl(account.username, i),
       servings: 2 + (i % 6),
-      is_public: false,
+      is_public: account.isPublic ?? false,
     }
   })
 }
@@ -185,9 +186,11 @@ async function main() {
   if (succeeded === ACCOUNTS.length) {
     console.log(`\nAll accounts share the same password: ${TEST_PASSWORD}\n`)
     ACCOUNTS.forEach(a => {
-      console.log(`  ${a.email.padEnd(28)} — ${a.recipeCount.toString().padStart(2)} recipes (${a.username})`)
+      const visibility = a.isPublic ? 'public ' : 'private'
+      console.log(`  ${a.email.padEnd(28)} — ${a.recipeCount.toString().padStart(2)} ${visibility} recipes (${a.username})`)
     })
-    console.log('\nLog in with any of these to see the corresponding density tier.')
+    console.log('\nLog in with any of these to see the corresponding density tier,')
+    console.log('or open the app without signing in to browse test-public\'s public set.')
   } else {
     console.log('\nSee errors above. Fix the issue and re-run — the script is safe to re-run.')
     process.exit(1)
