@@ -2,7 +2,16 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
 
-export default function Profile({ session, onBack, onRecipeClick, isFavorited, onToggleFavorite }) {
+export default function Profile({
+    session,
+    onBack,
+    onRecipeClick,
+    isFavorited,
+    onToggleFavorite,
+    likeCount,
+    userLiked,
+    onToggleLike,
+}) {
     const [loading, setLoading] = useState(true)
     const [username, setUsername] = useState('')
     const [fullName, setFullName] = useState('')
@@ -169,6 +178,9 @@ export default function Profile({ session, onBack, onRecipeClick, isFavorited, o
                                 onClick={() => onRecipeClick(recipe)}
                                 favorited={isFavorited ? isFavorited(recipe.id) : false}
                                 onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(recipe.id) : undefined}
+                                liked={userLiked ? userLiked(recipe.id) : false}
+                                likeCount={likeCount ? likeCount(recipe.id) : 0}
+                                onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                             />
                         ))}
                     </div>
