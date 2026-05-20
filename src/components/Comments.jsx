@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { useComments } from '../hooks/useComments'
 import { SkeletonComment } from './Skeleton'
 
@@ -35,9 +36,8 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
         try {
             await addComment(draft)
             setDraft('')
-        } catch {
-            // useComments already logged; surface to the user.
-            alert('Could not post your comment. Please try again.')
+        } catch (error) {
+            toast.error('Could not post comment: ' + error.message)
         } finally {
             setSubmitting(false)
         }
@@ -45,10 +45,10 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
 
     return (
         <section className="mt-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            <h3 className="font-display text-xl text-ink mb-4">
                 Comments
                 {comments.length > 0 && (
-                    <span className="text-gray-500 font-normal ml-2">({comments.length})</span>
+                    <span className="text-ink/60 font-normal ml-2">({comments.length})</span>
                 )}
             </h3>
 
@@ -60,25 +60,25 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
                         onChange={(e) => setDraft(e.target.value)}
                         placeholder="Share your thoughts..."
                         rows={3}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-lg text-base bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 resize-y"
+                        className="w-full px-4 py-3 border border-paper-shade rounded-lg text-base bg-[#fbf6f1] focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust resize-y"
                         disabled={submitting}
                     />
                     <div className="flex justify-end mt-2">
                         <button
                             type="submit"
                             disabled={!draft.trim() || submitting}
-                            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-5 py-2 bg-rust hover:bg-rust-dark text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {submitting ? 'Posting...' : 'Post Comment'}
                         </button>
                     </div>
                 </form>
             ) : (
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg flex flex-wrap justify-between items-center gap-3">
-                    <p className="text-gray-700">Sign in to join the conversation.</p>
+                <div className="mb-6 p-4 bg-paper-shade border border-paper-shade rounded-lg flex flex-wrap justify-between items-center gap-3">
+                    <p className="text-ink">Sign in to join the conversation.</p>
                     <button
                         onClick={() => onRequireAuth?.()}
-                        className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors"
+                        className="px-5 py-2 bg-rust hover:bg-rust-dark text-white font-semibold rounded-md transition-colors"
                     >
                         Sign In
                     </button>
@@ -126,24 +126,24 @@ function CommentItem({ comment, isOwn, onDelete }) {
                     src={avatarUrl}
                     alt=""
                     loading="lazy"
-                    className="w-10 h-10 rounded-full object-cover bg-gray-200 flex-shrink-0"
+                    className="w-10 h-10 rounded-full object-cover bg-paper-shade flex-shrink-0"
                 />
             ) : (
-                <div aria-hidden="true" className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                <div aria-hidden="true" className="w-10 h-10 rounded-full bg-tan-soft text-ink flex items-center justify-center text-sm font-semibold flex-shrink-0">
                     {initials}
                 </div>
             )}
 
             <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900">{username}</span>
-                    <span className="text-xs text-gray-500">{formatRelativeTime(comment.created_at)}</span>
+                    <span className="font-semibold text-ink">{username}</span>
+                    <span className="text-xs text-ink/60">{formatRelativeTime(comment.created_at)}</span>
                 </div>
-                <p className="mt-1 text-gray-700 whitespace-pre-wrap break-words">{comment.content}</p>
+                <p className="mt-1 text-ink whitespace-pre-wrap break-words">{comment.content}</p>
                 {isOwn && (
                     <button
                         onClick={handleDeleteClick}
-                        className="mt-1 min-h-[44px] flex items-center text-xs text-red-500 hover:text-red-700 transition-colors"
+                        className="mt-1 min-h-[44px] flex items-center text-xs text-rose-dark hover:text-rose transition-colors"
                         aria-label="Delete this comment"
                     >
                         Delete

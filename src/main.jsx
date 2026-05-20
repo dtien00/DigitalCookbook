@@ -6,8 +6,12 @@ import './index.css'
 
 // Toaster lives at the root, outside App, so it stays mounted across every
 // view dispatch in App.jsx (Profile, Bookmarks, CreateRecipe, RecipeDetail,
-// home grid). One mount, top-center, default styling — palette retint
-// belongs to a separate visual-polish pass.
+// home grid). One mount, top-center, rustic palette via CSS variables from
+// @theme in index.css so the toast surface stays in sync with the rest of
+// the app without restating hex values here. Icon colors swap green/red for
+// rust/rose-dark — the rustic palette has no green, so rust carries the
+// affirmative tone and rose-dark the warning, consistent with the Delete
+// button treatment on the recipe detail page.
 //
 // The children render function wraps each toast in a clickable div that
 // calls toast.dismiss(t.id). react-hot-toast does NOT ship click-to-dismiss
@@ -23,9 +27,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             position="top-center"
             toastOptions={{
                 duration: 3500,
-                style: { fontSize: '0.95rem' },
-                success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } },
-                error: { duration: 5000, iconTheme: { primary: '#dc2626', secondary: '#fff' } },
+                style: {
+                    fontSize: '0.95rem',
+                    background: 'var(--color-paper-shade)',
+                    color: 'var(--color-ink)',
+                    border: '1px solid var(--color-paper-shade)',
+                },
+                success: { iconTheme: { primary: 'var(--color-rust)', secondary: 'var(--color-paper)' } },
+                error: { duration: 5000, iconTheme: { primary: 'var(--color-rose-dark)', secondary: 'var(--color-paper)' } },
             }}
         >
             {(t) => (
