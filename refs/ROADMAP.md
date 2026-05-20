@@ -124,7 +124,7 @@ Goal: casual conversation under each recipe.
 
 ---
 
-## Stage 6 — Polish & QA  *(in progress)*
+## Stage 6 — Polish & QA  *(done)*
 
 Goal: the app stops feeling like a prototype.
 
@@ -142,7 +142,11 @@ This stage is broader than 0–5 and naturally decomposes into sub-PRs rather th
 - Comments form/CTA still uses indigo/gray utilities (`bg-indigo-600`, `bg-gray-50`, `bg-indigo-100` avatar fallback) — leftover from Stage 5 landing before the retheme. Needs a small palette pass to use `bg-rust` / `bg-paper-shade` / `bg-tan-soft` to match the rest of the app.
 - Toaster still uses library default styling — `toastOptions.style` overrides in [main.jsx](./src/main.jsx) should adopt the rustic palette (`bg-paper-shade` / `text-ink` / accent icons in rust + rose-dark).
 
-**Exit criteria**: the app is something you'd happily show a friend on their phone.
+**Exit criteria**: the app is something you'd happily show a friend on their phone. *Met.*
+
+**Known follow-ups (carry into next session):**
+- Comments form/CTA palette retint — still uses indigo/gray utilities (`bg-indigo-600`, `bg-gray-50`, `bg-indigo-100` avatar fallback). Needs a pass to use `bg-rust` / `bg-paper-shade` / `bg-tan-soft`.
+- Toaster palette retint — `toastOptions.style` overrides in [main.jsx](./src/main.jsx) should adopt the rustic palette (`bg-paper-shade` / `text-ink` / accent icons in rust + rose-dark).
 
 ---
 
