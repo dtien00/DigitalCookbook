@@ -126,6 +126,24 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Hover-pause** — hover over a toast mid-display; its auto-dismiss timer freezes until you mouse off. This is `react-hot-toast`'s default behavior and explains why an error toast you're inspecting may appear to outlast its 5s duration (the timer is paused while your cursor is over it).
 - [ ] **No `alert()` regressions** — perform every action above with the browser devtools console open; expect zero `alert is not defined`-style errors and zero native modal dialogs (apart from `window.confirm("Are you sure you want to delete this recipe?")` which is intentionally kept)
 - [ ] **Screen reader hookup** — success toasts get `role="status"`, error toasts get `role="alert"` (react-hot-toast does this automatically); verify with browser devtools accessibility tree if curious
+## Comments checklist
+
+> Requires migration 005 applied in the Supabase project (`supabase_migration_005_comments.sql` — tightens the INSERT policy and adds the covering index). Run it via the Supabase Dashboard SQL editor before testing.
+
+- [ ] **Comments section visible at the bottom of every RecipeDetail page** — below the steps, heading "Comments" with `(N)` count when comments exist
+- [ ] **Empty state shows on a fresh recipe** — `"Be the first to comment."` italic gray
+- [ ] **Signed-in: Add-comment form is visible** — textarea + "Post Comment" button; button disabled when draft is empty or whitespace-only
+- [ ] **Anonymous: form is replaced by Sign-in CTA** — `"Sign in to join the conversation."` panel with a Sign In button → opens the Auth overlay
+- [ ] **Post a comment** — appears immediately at the top of the list (optimistic UI), draft clears, no page reload
+- [ ] **Comment shows author username + relative timestamp** — `"tiny_tim · just now"`, then `"5s ago"`, `"2m ago"`, etc. as time passes
+- [ ] **Avatar fallback to initials** — seeded accounts have no `avatar_url`; show colored chip with first two letters of username uppercased (e.g. `TI` for `tiny_tim`)
+- [ ] **Reload page, comments persist + order is newest-first** — proves the insert succeeded and the order-by is correct
+- [ ] **Delete-own comment** — own comments show a small red "Delete" link below the content; click → confirm → removed immediately (optimistic); reload confirms persistence
+- [ ] **Delete control hidden on other users' comments** — log in as account A, view a recipe with comments from account B; B's comments have no Delete control
+- [ ] **Comments visible to anonymous viewers** — log out, open a recipe with comments; the list renders (counts and content are public), only the form is replaced by the CTA
+- [ ] **Optimistic-add survives network success** — the temp-id row is replaced by the real server row carrying the joined `profiles` data (username + avatar render without a second fetch)
+- [ ] **Multi-line content preserves newlines** — paste a comment with embedded `\n`; rendered with `whitespace-pre-wrap` so line breaks survive
+- [ ] **Long words / URLs don't overflow the column** — `break-words` keeps a 200-character no-spaces string from blowing out the layout
 
 ---
 
