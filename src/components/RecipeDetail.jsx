@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
+import Comments from './Comments'
 
 export default function RecipeDetail({
     recipe,
@@ -14,6 +15,7 @@ export default function RecipeDetail({
     liked,
     likeCount = 0,
     onToggleLike,
+    onRequireAuth,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -141,6 +143,12 @@ export default function RecipeDetail({
                         </ol>
                     )}
                 </section>
+
+                <Comments
+                    recipeId={recipe.id}
+                    userId={userId}
+                    onRequireAuth={onRequireAuth}
+                />
             </div>
         </div>
     )
