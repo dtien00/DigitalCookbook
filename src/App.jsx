@@ -9,6 +9,7 @@ import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
+import { SkeletonCard } from './components/Skeleton'
 
 function App() {
     const [session, setSession] = useState(null)
@@ -222,9 +223,20 @@ function App() {
                 </div>
 
                 {loading ? (
-                    <p className="font-display italic text-rose">Loading recipes...</p>
+                    <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <SkeletonCard key={i} index={i} />
+                        ))}
+                    </div>
                 ) : filteredRecipes.length === 0 ? (
-                    <p className="font-display italic text-rose">No recipes found.</p>
+                    <EmptyGridState
+                        searchTerm={searchTerm}
+                        hasAnyRecipes={recipes.length > 0}
+                        session={session}
+                        onClearSearch={() => setSearchTerm('')}
+                        onSignIn={() => setShowAuth(true)}
+                        onCreate={() => setShowCreate(true)}
+                    />
                 ) : (
                     <div className={`${gridColumnsClass} gap-4 mt-6`}>
                         {filteredRecipes.map(recipe => (
@@ -256,6 +268,61 @@ function App() {
                 <Auth onBack={() => setShowAuth(false)} />
             </div>
         </>
+    )
+}
+
+// Three distinct empty states for the home grid:
+//   - search returned nothing (offer to clear)
+//   - no recipes exist at all, viewer is signed in (offer to create)
+//   - no recipes exist at all, viewer is anonymous (offer to sign in)
+// Each carries the same ornamental layout — centered, generous padding,
+// the rustic ✦ glyph as a small visual anchor — so empty space reads
+// as intentional rather than broken.
+function EmptyGridState({ searchTerm, hasAnyRecipes, session, onClearSearch, onSignIn, onCreate }) {
+    if (searchTerm && hasAnyRecipes) {
+        return (
+            <div className="text-center py-16">
+                <p className="text-2xl text-tan mb-4">✦</p>
+                <p className="font-display text-xl text-ink mb-2">No recipes match "{searchTerm}"</p>
+                <p className="font-display italic text-rose mb-6">Try a different word, or browse the full collection.</p>
+                <button
+                    onClick={onClearSearch}
+                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                >
+                    Clear search
+                </button>
+            </div>
+        )
+    }
+
+    if (session) {
+        return (
+            <div className="text-center py-16">
+                <p className="text-2xl text-tan mb-4">✦</p>
+                <p className="font-display text-xl text-ink mb-2">Your cookbook is empty.</p>
+                <p className="font-display italic text-rose mb-6">Add your first recipe to get started.</p>
+                <button
+                    onClick={onCreate}
+                    className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
+                >
+                    + New Recipe
+                </button>
+            </div>
+        )
+    }
+
+    return (
+        <div className="text-center py-16">
+            <p className="text-2xl text-tan mb-4">✦</p>
+            <p className="font-display text-xl text-ink mb-2">No public recipes yet.</p>
+            <p className="font-display italic text-rose mb-6">Sign in to start your own cookbook.</p>
+            <button
+                onClick={onSignIn}
+                className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
+            >
+                Sign In
+            </button>
+        </div>
     )
 }
 

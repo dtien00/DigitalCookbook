@@ -171,20 +171,28 @@ export default function Profile({
 
                 <section className="user-recipes-section">
                     <h3>My Recipes ({userRecipes.length})</h3>
-                    <div className="columns-1 sm:columns-2 md:columns-3 gap-4 mt-4">
-                        {userRecipes.map(recipe => (
-                            <RecipeCard
-                                key={recipe.id}
-                                recipe={recipe}
-                                onClick={() => onRecipeClick(recipe)}
-                                favorited={isFavorited ? isFavorited(recipe.id) : false}
-                                onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(recipe.id) : undefined}
-                                liked={userLiked ? userLiked(recipe.id) : false}
-                                likeCount={likeCount ? likeCount(recipe.id) : 0}
-                                onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
-                            />
-                        ))}
-                    </div>
+                    {userRecipes.length === 0 ? (
+                        <div className="text-center py-12 mt-4">
+                            <p className="text-2xl text-tan mb-3">✦</p>
+                            <p className="font-display text-lg text-ink mb-1">You haven't shared any recipes yet.</p>
+                            <p className="font-display italic text-rose">Use "+ New Recipe" on the home page to add your first.</p>
+                        </div>
+                    ) : (
+                        <div className="columns-1 sm:columns-2 md:columns-3 gap-4 mt-4">
+                            {userRecipes.map(recipe => (
+                                <RecipeCard
+                                    key={recipe.id}
+                                    recipe={recipe}
+                                    onClick={() => onRecipeClick(recipe)}
+                                    favorited={isFavorited ? isFavorited(recipe.id) : false}
+                                    onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(recipe.id) : undefined}
+                                    liked={userLiked ? userLiked(recipe.id) : false}
+                                    likeCount={likeCount ? likeCount(recipe.id) : 0}
+                                    onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </section>
             </div>
         </div>

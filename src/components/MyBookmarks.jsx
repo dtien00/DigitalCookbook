@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
+import { SkeletonCard } from './Skeleton'
 
 // Shows the current user's bookmarked recipes, sorted by when they
 // were saved. Mounts a fresh fetch each time the user navigates here.
@@ -74,11 +75,16 @@ export default function MyBookmarks({
             </header>
 
             {loading ? (
-                <p className="text-gray-500">Loading bookmarks...</p>
+                <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4" role="status" aria-label="Loading bookmarks">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <SkeletonCard key={i} index={i} />
+                    ))}
+                </div>
             ) : displayedRecipes.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-gray-700 text-lg mb-2">No bookmarks yet.</p>
-                    <p className="text-gray-500">Save recipes you love by tapping the bookmark icon on any card.</p>
+                    <p className="text-2xl text-tan mb-4">✦</p>
+                    <p className="font-display text-xl text-ink mb-2">No bookmarks yet.</p>
+                    <p className="font-display italic text-rose">Save recipes you love by tapping the bookmark icon on any card.</p>
                 </div>
             ) : (
                 <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4">

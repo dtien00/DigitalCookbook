@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useComments } from '../hooks/useComments'
+import { SkeletonComment } from './Skeleton'
 
 // Comment thread for a recipe. Renders below the steps section in
 // RecipeDetail. Three responsibilities:
@@ -86,9 +87,12 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
 
             {/* Comment list */}
             {loading ? (
-                <p className="text-gray-500">Loading comments...</p>
+                <ul className="space-y-4" role="status" aria-label="Loading comments">
+                    <SkeletonComment />
+                    <SkeletonComment />
+                </ul>
             ) : comments.length === 0 ? (
-                <p className="text-gray-500 italic">Be the first to comment.</p>
+                <p className="font-display italic text-rose">Be the first to comment.</p>
             ) : (
                 <ul className="space-y-4">
                     {comments.map(c => (
@@ -120,11 +124,12 @@ function CommentItem({ comment, isOwn, onDelete }) {
             {avatarUrl ? (
                 <img
                     src={avatarUrl}
-                    alt={username}
+                    alt=""
+                    loading="lazy"
                     className="w-10 h-10 rounded-full object-cover bg-gray-200 flex-shrink-0"
                 />
             ) : (
-                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                <div aria-hidden="true" className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
                     {initials}
                 </div>
             )}

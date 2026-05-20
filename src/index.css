@@ -16,6 +16,18 @@
   --font-display: 'Lora', Georgia, 'Times New Roman', serif;
 }
 
+/* Keyboard focus ring — applied via :focus-visible so it appears for
+   keyboard navigation but not for mouse clicks. Uses rust at 2px offset
+   so it stays visible against the paper background and image overlays.
+   Inputs/textareas with their own focus styles in App.jsx and
+   Comments.jsx remain unchanged. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--color-rust);
+  outline-offset: 2px;
+}
+
 /* Basic styles */
 body {
   margin: 0;

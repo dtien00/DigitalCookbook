@@ -290,3 +290,48 @@ The home view stays Public — anonymous-by-default browsing is preserved (Stage
 
 The book-opening login metaphor in the [Login Experience](#login-experience) section above implicitly assumes auth is the user's first contact with the app. That assumption is in tension with anonymous-by-default arrival. If we keep the book metaphor, it likely applies *only* when a user actively chooses to sign in (clicks the header CTA), not as a forced landing — worth resolving when either the book metaphor or this nav IA moves from proposed to implemented.
 
+---
+
+# Polish primitives (Stage 6)
+
+Conventions added during the Stage 6 polish pass. New components/views should follow these so the app stays visually coherent.
+
+## Keyboard focus ring
+
+A single global rule in [src/index.css](../src/index.css) renders a 2px `var(--color-rust)` outline at 2px offset on `button`, `a`, and `[role="button"]` when `:focus-visible` fires. Two specifics worth knowing:
+
+- **`:focus-visible`, not `:focus`** — mouse clicks don't draw the ring; only keyboard focus does. Drawing focus rings on mouse click is the classic "ugly" pattern; this avoids it without sacrificing keyboard accessibility.
+- **Inputs and textareas opt out of this** — the search bar and comment textarea have their own `focus:ring-2 focus:ring-rust/40 focus:border-rust` treatment inline. If you add a new input with a custom focus style, use `focus:` (or both `focus:` and `focus-visible:`) — the global rule only covers buttons.
+
+If you build a custom interactive element (e.g. a card-like div that handles click), mark it with `role="button"` and `tabIndex={0}` and the global rule will give it a focus ring for free. RecipeCard does exactly this.
+
+## Loading skeletons
+
+[src/components/Skeleton.jsx](../src/components/Skeleton.jsx) exports a small set of palette-consistent placeholders:
+
+- `<Skeleton className="…" />` — base shimmering box. Compose for one-offs.
+- `<SkeletonCard index={i} />` — masonry-friendly card placeholder. Varied heights via the `index` prop so a row of skeletons doesn't all align.
+- `<SkeletonComment />` — avatar circle + header + two body lines, matching the real `CommentItem` shape.
+
+All use Tailwind's `animate-pulse` (subtle opacity oscillation) on `bg-paper-shade`. No custom keyframe needed — palette-consistent by construction.
+
+**Accessibility:** each individual skeleton carries `aria-hidden="true"`. The container that wraps a group of skeletons carries `role="status"` + `aria-label="Loading recipes"` (or "ingredients", "comments", etc.) so assistive tech announces the loading state once, not per-shimmer. When the real content arrives, the role/aria-label disappear with the loading branch and screen readers continue normally.
+
+## Empty states
+
+The shared visual recipe across every "nothing here" view: centered text block, generous vertical padding (`py-12` to `py-16`), and three stacked elements top-to-bottom:
+
+```
+[ ✦ ]                                              ← text-2xl text-tan
+Headline in serif                                   ← font-display text-xl text-ink
+Italic-serif subtext explaining what to do next.    ← font-display italic text-rose
+[ optional CTA button ]                             ← rust primary, or paper-shade secondary
+```
+
+The `✦` glyph is the same one used on the recipe-detail page divider (`.recipe-content hr::after`) — it's the app's quiet "page ornament" mark and gives empty space visual weight without filler.
+
+Two design decisions worth keeping:
+
+- **Always include the next-step CTA when one exists.** The home grid's "no recipes match search" empty state offers Clear search; "signed in, no recipes" offers + New Recipe; "anonymous, no recipes" offers Sign In. Empty states without a path forward feel like dead ends.
+- **One empty-state component does not fit all.** App.jsx's `<EmptyGridState>` is local to that file because the messages and CTAs are coupled to grid context. Other views (Profile My Recipes, MyBookmarks, Comments) inline their own small empty blocks following the same visual recipe. If a fourth view duplicates the structure substantially, *then* promote it to a shared component — not before.
+
