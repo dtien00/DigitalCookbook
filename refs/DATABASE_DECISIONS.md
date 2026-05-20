@@ -88,7 +88,10 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_002_tags.sql` — adds `tags TEXT[] NOT NULL DEFAULT '{}'` to `recipes` + GIN index `idx_recipes_tags`. Idempotent (`IF NOT EXISTS` on both column and index).
 - `supabase_migration_003_favorites.sql` — adds `created_at TIMESTAMPTZ` + covering index to `favorites`, *and* attaches the three RLS policies that migration 001 forgot. Idempotent (`IF NOT EXISTS` for column/index, `DROP POLICY IF EXISTS` + `CREATE POLICY` for policies).
 - `supabase_migration_004_likes.sql` — adds `created_at TIMESTAMPTZ` to `likes` and tightens the INSERT policy (was `auth.role() = 'authenticated'`, now `auth.uid() = user_id`). Idempotent.
-- Future migrations: `supabase_migration_005_*.sql`, etc.
+- `supabase_migration_006_profiles_insert.sql` — adds the INSERT policy on `profiles` that migration 001 forgot. Required so `Profile.jsx`'s `upsert(...)` (which compiles to `INSERT ... ON CONFLICT DO UPDATE`) passes RLS. Idempotent.
+- Future migrations: `supabase_migration_007_*.sql`, etc. *(Note: number 005 is reserved for the `stage-5-comments` branch — `supabase_migration_005_comments.sql` will land in this list when that branch merges.)*
+- `supabase_migration_005_comments.sql` — tightens the comments INSERT policy (same gap as the original likes policy) and adds a covering `(recipe_id, created_at DESC)` index for the per-recipe newest-first list. Idempotent.
+- Future migrations: `supabase_migration_006_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -146,6 +149,19 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Privacy.** Bulk-fetching includes every like row's `user_id`. The migration-001 public SELECT policy on `likes` explicitly allows this — likes are designed as public information. If a future requirement wants likes to be private (e.g., "anonymous likes"), the SELECT policy needs to flip to own-only + a separate aggregate view for counts.
 - **created_at column added but unused** in this stage. Defensive — when Stage 7's "trending" / "recently liked" features land, the timestamp is already there. The cost of an `IF NOT EXISTS` column add now is negligible.
 
+## Profiles INSERT policy (migration 006)
+
+**Decision:** Add `CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id)`.
+
+**Why:**
+- **Migration 001 forgot the INSERT policy.** Profiles had SELECT (public) and UPDATE (own-only) but no INSERT. The `handle_new_user()` trigger creates profile rows via `SECURITY DEFINER`, bypassing RLS, so the gap was invisible during signup.
+- **`upsert()` exposes the gap.** `Profile.jsx` calls `supabase.from('profiles').upsert(updates)`. Postgres implements upsert as `INSERT ... ON CONFLICT DO UPDATE` — both branches require the INSERT RLS check to pass, even when the row already exists and the statement takes the UPDATE branch. With no INSERT policy, every Profile save was rejected with `new row violates row-level security policy for table "profiles"`.
+- **`WITH CHECK (auth.uid() = id)`:** matches the existing pattern from migration 004 (likes INSERT tightening). A user can only INSERT a profile row whose `id` equals their own auth uid — they can't claim another user's id during the conflict path.
+
+**Tradeoffs:**
+- **None significant.** The policy is strictly additive — it unblocks the upsert that was already supposed to work. The `SECURITY DEFINER` trigger continues to work unchanged (it bypasses RLS regardless).
+- **Alternative considered:** rewriting `Profile.jsx` to use `.update()` instead of `.upsert()`, since the row should always exist by the time the user reaches the Profile screen. Rejected — `.upsert()` is the more defensive choice (handles edge cases where the trigger didn't fire, legacy users imported without it, etc.) and the missing policy was the actual bug, not the upsert semantics.
+
 ## Test-account seeding (`scripts/seed-test-accounts.js`)
 
 **Decision:** Seed test data via a Node script that uses the regular Supabase signup flow (anon key + `auth.signUp`), not the `service_role` key. Seeded recipes are marked `is_public = false`.
@@ -160,6 +176,25 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - Temporary auth-policy change required. Re-enable "Confirm email" after seeding.
 - Test accounts use a known shared password (`TestPass123!`) — fine for local/dev Supabase projects, not for any project that touches real users.
 - Profile bios are written via a separate `UPDATE` on `profiles` because the `handle_new_user` trigger only handles username/full_name/avatar_url from `raw_user_meta_data`.
+
+## Comments: INSERT policy hardening + covering index (migration 005)
+
+**Decision (policy):** Replace the migration-001 INSERT policy `WITH CHECK (auth.role() = 'authenticated')` with `WITH CHECK (auth.uid() = user_id)`. Identical gap and identical fix as migration 004 for `likes`.
+
+**Why:**
+- The original policy verified the request came from a logged-in user but didn't verify the `user_id` column matched the authenticated caller. A crafted client could `INSERT INTO comments (recipe_id, user_id, content) VALUES (..., '<other-user-uuid>', 'imposter comment')` and the policy would accept it. The new policy closes that gap.
+- The DELETE policy (`USING (auth.uid() = user_id)`) and SELECT policy (`USING (true)` — comments are public information, same model as likes) were already correct and don't change.
+
+**Decision (covering index):** Add `idx_comments_recipe_created` on `(recipe_id, created_at DESC)` alongside the existing `idx_comments_recipe (recipe_id)` from migration 001.
+
+**Why:**
+- The dominant query for the comments UI is `WHERE recipe_id = $1 ORDER BY created_at DESC` — the new compound index serves both the filter and the sort with no separate sort step. The original index covers the filter only.
+- Both indexes coexist intentionally. The write amplification on `INSERT` is minimal (one extra index entry per comment) and Postgres can choose whichever index has the lower estimated cost per query. The original isn't strictly redundant — it's narrower and may win for `EXISTS`-style predicates that don't care about ordering.
+
+**Tradeoffs:**
+- **Comments are public.** Anonymous viewers can read every comment on every public recipe. This matches the social model of casual recipe hubs and mirrors the likes policy. If a future requirement wants comments to be visible only to signed-in users (or only to followers), the SELECT policy needs to flip — but no aggregate-count complication, since unlike likes there's no public count to preserve.
+- **No moderation hooks yet.** A comment is `DELETE`-able only by its author or via a manual SQL delete (which RLS doesn't gate for the `service_role`). If the project grows beyond personal use, a `reports` table + admin-only moderation UI is the natural next step.
+- **No edit-comment support.** The schema technically allows it (no policy blocking UPDATE by the author — there's no policy at all, so RLS denies by default). If editing becomes a requirement, add an UPDATE policy `USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` and a `updated_at` column.
 
 ## Future considerations (not yet decided)
 

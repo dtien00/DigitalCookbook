@@ -167,6 +167,7 @@ function App() {
             liked={userLiked(selectedRecipe.id)}
             likeCount={likeCount(selectedRecipe.id)}
             onToggleLike={() => handleLikeClick(selectedRecipe.id)}
+            onRequireAuth={() => setShowAuth(true)}
         />
     }
 
