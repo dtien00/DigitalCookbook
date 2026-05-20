@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Auth({ onBack }) {
@@ -23,7 +24,7 @@ export default function Auth({ onBack }) {
                     }
                 })
                 if (error) throw error
-                alert('Check your email for the confirmation link!')
+                toast.success('Check your email for the confirmation link!')
             } else if (view === 'login') {
                 const { error } = await supabase.auth.signInWithPassword({ email, password })
                 if (error) throw error
@@ -32,11 +33,11 @@ export default function Auth({ onBack }) {
                     redirectTo: window.location.origin,
                 })
                 if (error) throw error
-                alert('Password reset link sent to your email!')
+                toast.success('Password reset link sent to your email!')
                 setView('login')
             }
         } catch (error) {
-            alert(error.message)
+            toast.error(error.message)
         } finally {
             setLoading(false)
         }

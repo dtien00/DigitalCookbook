@@ -122,17 +122,19 @@ Goal: casual conversation under each recipe.
 
 ---
 
-## Stage 6 — Polish & QA
+## Stage 6 — Polish & QA  *(in progress)*
 
 Goal: the app stops feeling like a prototype.
 
+This stage is broader than 0–5 and naturally decomposes into sub-PRs rather than one umbrella branch. Each sub-task lands as its own focused PR off `main`.
+
 **Tasks**
-- Replace every `alert(...)` call with a toast system. Lightweight option: `react-hot-toast`. Touch [Auth.jsx](./src/components/Auth.jsx), [CreateRecipe.jsx](./src/components/CreateRecipe.jsx), [RecipeDetail.jsx](./src/components/RecipeDetail.jsx), [Profile.jsx](./src/components/Profile.jsx).
-- Accessibility pass: alt text on all images, keyboard navigation on cards (Enter to open), visible focus styles, ARIA labels on icon-only buttons (bookmark/like/delete).
-- Loading skeletons in the grid and on the detail page (instead of `Loading...` text).
-- Empty states across views (no recipes yet, no bookmarks, no comments, etc.).
-- Image lazy loading: `loading="lazy"` on every `<img>` in the grid.
-- Mobile audit: cook-in-the-kitchen use case. Make sure the detail page reads well on a phone propped against the kettle.
+- [x] Replace every `alert(...)` call with a toast system. Lightweight option: `react-hot-toast`. Touch [Auth.jsx](./src/components/Auth.jsx), [CreateRecipe.jsx](./src/components/CreateRecipe.jsx), [RecipeDetail.jsx](./src/components/RecipeDetail.jsx), [Profile.jsx](./src/components/Profile.jsx). *Done on `stage-6-toasts` branch. 11 alerts → toasts across the four files above. `<Toaster>` mounts at root in [main.jsx](./src/main.jsx) so it stays visible across every view dispatch in App.jsx (Profile, Bookmarks, CreateRecipe, RecipeDetail, home grid, Auth overlay). Categorisation: signup-confirm / password-reset-sent / profile-updated / password-updated / recipe-saved → `toast.success`; every `catch(error)` branch → `toast.error` (5-second duration, longer than success). Default styling for now — palette retint piggybacks on the `frontend-vfx` merge as a follow-up since toasts don't yet exist on that branch. **Followup at Stage 5 merge:** the `alert(...)` in [Comments.jsx](./src/components/Comments.jsx) (on `stage-5-comments`, not on main) needs the same conversion during rebase.*
+- [ ] Accessibility pass: alt text on all images, keyboard navigation on cards (Enter to open), visible focus styles, ARIA labels on icon-only buttons (bookmark/like/delete).
+- [ ] Loading skeletons in the grid and on the detail page (instead of `Loading...` text).
+- [ ] Empty states across views (no recipes yet, no bookmarks, no comments, etc.).
+- [ ] Image lazy loading: `loading="lazy"` on every `<img>` in the grid.
+- [ ] Mobile audit: cook-in-the-kitchen use case. Make sure the detail page reads well on a phone propped against the kettle.
 
 **Exit criteria**: the app is something you'd happily show a friend on their phone.
 
