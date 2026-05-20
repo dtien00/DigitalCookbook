@@ -26,7 +26,7 @@ export default function LikeButton({ liked, count, onClick, size = 'md', classNa
             className={`${btn} ${gap} inline-flex items-center rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-white hover:scale-105 active:scale-95 transition-all ${className}`}
         >
             <svg
-                className={`${icon} ${liked ? 'fill-rose-500 stroke-rose-500' : 'fill-none stroke-gray-800'} transition-colors`}
+                className={`${icon} ${liked ? 'fill-rose stroke-rose' : 'fill-none stroke-ink'} transition-colors`}
                 viewBox="0 0 24 24"
                 strokeWidth="2"
                 strokeLinecap="round"

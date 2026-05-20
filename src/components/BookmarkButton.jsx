@@ -23,7 +23,7 @@ export default function BookmarkButton({ favorited, onClick, size = 'md', classN
             className={`${btn} flex items-center justify-center rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-white hover:scale-110 active:scale-95 transition-all ${className}`}
         >
             <svg
-                className={`${icon} ${favorited ? 'fill-indigo-600 stroke-indigo-600' : 'fill-none stroke-gray-800'} transition-colors`}
+                className={`${icon} ${favorited ? 'fill-rust stroke-rust' : 'fill-none stroke-ink'} transition-colors`}
                 viewBox="0 0 24 24"
                 strokeWidth="2"
                 strokeLinecap="round"
