@@ -139,3 +139,28 @@ Hover states were silently *missing* in the legacy CSS — buttons changed nothi
 
 Disabled state was also unstyled in legacy CSS. Now: `disabled:opacity-50 disabled:cursor-not-allowed` on primary buttons that accept the prop.
 
+---
+
+## Toasts (ephemeral feedback)
+
+Stage 6 replaces every `alert(...)` call with `react-hot-toast`. The library is ~7.5KB gzipped and gives us non-blocking notifications, success/error iconography, and stacking out of the box — well-suited to a casual recipe hub where the alternative was native browser modal dialogs that interrupt cooking flow.
+
+**Mount.** `<Toaster>` lives once at the root in [src/main.jsx](../src/main.jsx), outside `<App>`. App.jsx has multiple early-return branches based on view state (Profile / Bookmarks / CreateRecipe / RecipeDetail / home grid / Auth overlay) — mounting at the root keeps the Toaster present across all of them without having to thread it through every branch.
+
+**Position.** `top-center`. Reasoning:
+- `top-right` collides visually with the header's button cluster (Bookmarks / Profile / Logout / Sign In) which lives top-right.
+- `bottom-*` competes with mobile browser chrome (URL bars, autofill suggestions) on phones — the main "cook with phone propped against the kettle" use case.
+- `top-center` is out of the way of both, naturally reads first because it's where success/failure feedback is expected after a form submit.
+
+**Durations.**
+- Success toasts: 3.5s default. Long enough to register, short enough to not nag.
+- Error toasts: 5s. Errors usually require the user to *read* and *think*, so give them an extra beat.
+
+**Categorisation rule.** Every `try { ... }` success path → `toast.success(msg)`. Every `catch (error) { ... }` path → `toast.error(error.message)`. No `toast()` (neutral) calls yet — every current message is clearly one of the two. Add neutral toasts later if a use case appears (e.g. "Comment posted" without a noteworthy success quality, or info notices like "Refreshing feed…").
+
+**Styling.** Currently the library defaults (white background, dark text, green/red icons). When `frontend-vfx` lands, a tiny follow-up should pass `toastOptions.style` overrides through the `<Toaster>` mount to use the rustic palette — `bg-paper-shade` surface, `text-ink`, `border-paper-shade`, accent icons in `--color-rust` (success) / `--color-rose-dark` (error). Keep it lightweight — toasts are noise that should fade, not feature highlights.
+
+**Why not `window.confirm` replacement?** Toasts are *non-blocking* — they can't gate a destructive action. The "Delete recipe?" `window.confirm` calls in [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) and [Comments.jsx](../src/components/Comments.jsx) (the latter on `stage-5-comments`) stay as native confirms for now. A real modal-confirm component is a separate Stage 6 sub-task; it doesn't have to ship with the toast change.
+
+**Accessibility hook.** `react-hot-toast` announces success/error toasts via `role="status"` (success) and `role="alert"` (error) automatically — screen readers will hear them without us doing anything. That's a bonus pickup we get for swapping out `alert()`, which was technically accessible but completely interrupting.
+

@@ -96,6 +96,36 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Like state per-user** — A likes a recipe; B logs in, the heart shows outline for B (the count is shared but the fill state is per-user)
 - [ ] **Counts and bookmarks are independent** — liking does NOT bookmark, and vice versa; both can be active simultaneously
 
+## Toasts checklist
+
+> Verifies the Stage 6 toast migration. Each item exercises a path that used to fire a native `alert(...)` browser modal and should now surface as a top-center toast.
+
+**Auth flow ([Auth.jsx](../src/components/Auth.jsx)):**
+- [ ] **Signup success** — sign up with a fresh email → green-checkmark toast: "Check your email for the confirmation link!" (requires "Confirm email" ON in Supabase Auth, otherwise the session is created immediately and the toast is skipped — that's expected)
+- [ ] **Forgot password** — click "Forgot Password", enter an email, Send → green toast: "Password reset link sent to your email!" + view switches back to Login
+- [ ] **Auth error** — try logging in with a wrong password → red toast with the Supabase error message (e.g. "Invalid login credentials"), 5-second duration
+
+**Recipe CRUD ([CreateRecipe.jsx](../src/components/CreateRecipe.jsx), [RecipeDetail.jsx](../src/components/RecipeDetail.jsx)):**
+- [ ] **Create recipe** — fill the form, Save → green toast: "Recipe created successfully!" + redirect back to grid
+- [ ] **Edit recipe** — open an existing recipe, Edit, change something, Save → green toast: "Recipe updated successfully!"
+- [ ] **Save error** — Supabase write failure (rare; can simulate by temporarily killing network) → red toast with the error
+- [ ] **Delete recipe failure** — author tries to delete and hits an RLS or network error → red toast: "Error deleting recipe: ..." (the native `window.confirm` dialog beforehand still fires — that's intentional, blocking destructive actions belongs to a future modal-confirm component)
+
+**Profile ([Profile.jsx](../src/components/Profile.jsx)):**
+- [ ] **Profile load error** — rare; if Supabase is down on first profile fetch → red toast
+- [ ] **Profile update success** — change Bio, Save → green toast: "Profile updated!"
+- [ ] **Profile update error** — RLS violation or network failure → red toast with error
+- [ ] **Password update success** — change password → green toast: "Password updated successfully!" + password input clears
+- [ ] **Password update error** — invalid password (too short) → red toast
+
+**General toast behavior:**
+- [ ] **Position** — toasts appear top-center, above all content (including the recipe-detail page, the Auth overlay slide-in, and modal-ish forms)
+- [ ] **Stacking** — fire multiple actions in quick succession; toasts stack vertically and dismiss in order
+- [ ] **Duration** — success toasts auto-dismiss after ~3.5s; error toasts stay ~5s
+- [ ] **Dismissible** — clicking anywhere on a toast dismisses it immediately (enabled via a custom-render wrapper in [main.jsx](../src/main.jsx) — `react-hot-toast` does NOT ship click-to-dismiss by default; the wrapper around `<ToastBar>` adds the affordance)
+- [ ] **Hover-pause** — hover over a toast mid-display; its auto-dismiss timer freezes until you mouse off. This is `react-hot-toast`'s default behavior and explains why an error toast you're inspecting may appear to outlast its 5s duration (the timer is paused while your cursor is over it).
+- [ ] **No `alert()` regressions** — perform every action above with the browser devtools console open; expect zero `alert is not defined`-style errors and zero native modal dialogs (apart from `window.confirm("Are you sure you want to delete this recipe?")` which is intentionally kept)
+- [ ] **Screen reader hookup** — success toasts get `role="status"`, error toasts get `role="alert"` (react-hot-toast does this automatically); verify with browser devtools accessibility tree if curious
 ## Comments checklist
 
 > Requires migration 005 applied in the Supabase project (`supabase_migration_005_comments.sql` — tightens the INSERT policy and adds the covering index). Run it via the Supabase Dashboard SQL editor before testing.
