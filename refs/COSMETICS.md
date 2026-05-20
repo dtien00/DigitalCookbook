@@ -139,6 +139,93 @@ Hover states were silently *missing* in the legacy CSS — buttons changed nothi
 
 Disabled state was also unstyled in legacy CSS. Now: `disabled:opacity-50 disabled:cursor-not-allowed` on primary buttons that accept the prop.
 
+> **Note:** The button utilities documented above (indigo primary, gray secondary, rose-500 like state) reflect the original cool-modern palette. The rustic-paper retheme below replaces those at the home-grid and recipe-detail surfaces — utility strings shift from `bg-indigo-600` to `bg-rust`, `bg-gray-200` to `bg-paper-shade`, etc. Auth / Profile / Bookmarks / CreateRecipe screens still render with the legacy utilities; see "What this branch does *not* touch" below.
+
+---
+
+# Visual theme — rustic paper
+
+The app reads as an aged cookbook page rather than a modern web product. Source palette: [coolors.co/1e1e24-a2666f-b06452-d6aa6c-f2e9e4](https://coolors.co/1e1e24-a2666f-b06452-d6aa6c-f2e9e4).
+
+## Palette
+
+Defined as Tailwind v4 `@theme` tokens in [src/index.css](../src/index.css) — every name becomes a utility automatically (`bg-rust`, `text-ink`, `border-paper-shade`, etc.).
+
+| Token | Hex | Role |
+|---|---|---|
+| `paper` | `#f2e9e4` | App background (the "page") |
+| `paper-shade` | `#e8dcd2` | Borders, dividers, secondary button background — a slightly darker paper for separation |
+| `ink` | `#1e1e24` | Body text, deep accents, gradient overlays on image cards |
+| `rust` | `#b06452` | **Primary action** — Sign In, +New Recipe, Edit, focus rings, bookmark "saved" fill |
+| `rust-dark` | `#94503f` | Primary button hover |
+| `rose` | `#a2666f` | Secondary accent — like "liked" fill, italic muted text (Loading…, descriptions), placeholder |
+| `rose-dark` | `#84525a` | Rose hover; also the Delete button base (red-500 felt jarring in this palette — `rose-dark` is the same warning intent in palette voice) |
+| `tan` | `#d6aa6c` | Tertiary highlights — divider rules under titles, ornamental flourishes |
+| `tan-soft` | `#ede0c4` | Tag chip background (replaces the previous `indigo-50`) |
+
+The "card surface" color `#fbf6f1` is a slightly-lighter-than-paper shade used directly (not a token) for inner card/form backgrounds — gives a subtle two-tone "card resting on page" feel without adding yet another named token.
+
+## Typography
+
+- **Body and chrome:** kept on the system sans-serif stack (`-apple-system, …`). Ingredient lists, ingredient quantities, search-bar text — anywhere readability beats character.
+- **Display / headings / recipe titles:** [Lora](https://fonts.google.com/specimen/Lora) loaded from Google Fonts via `index.html`. Bound to the `font-display` utility in `@theme`. Lora is a transitional serif — readable at small sizes, warm at large sizes, fits "cookbook" without feeling Victorian.
+- Italic Lora is used for *descriptive* / *atmospheric* text (recipe descriptions on cards, loading states) — picks up the handwritten-margin-note feel without leaning into a script font.
+
+## Paper texture
+
+A subtle `.paper-grain` utility class (defined in `index.css`) lays three offset radial-gradient layers at very low alpha over the `paper` background. No image asset, no SVG noise — just CSS. Applied to the top-level `<div>` of the home grid and the recipe detail wrapper so they read as an actual page surface.
+
+Intensity is intentionally felt-not-seen. If it disappears entirely against your monitor's gamma, that's the right calibration — too strong and it tips into kitsch.
+
+## Per-component decisions
+
+### Recipe card (home grid)
+- Card background `#fbf6f1` with a 1px `paper-shade` border and a warm shadow (`rgba(30,30,36,0.06)` rest → `0.12` hover). Replaces the previous pure-white-on-cool-gray shadow.
+- **Image cards:** image gets a `sepia-[0.08]` filter — barely perceptible, but unifies arbitrary photo color casts into the warm palette. Bottom-gradient overlay now uses `ink/90 → transparent` instead of `black/85`.
+- **Image-less cards:** title gets a serif treatment (`font-display`), followed by a 12px `tan` rule line under it (the hand-ruled-recipe-card cue), then italic-serif description.
+- Tag chips use `bg-tan-soft text-ink` instead of `bg-indigo-50 text-indigo-700`. On image cards' hover-revealed chips, the frosted-glass treatment stays but uses `bg-paper/25` instead of `bg-white/25`.
+
+### Recipe detail page (the "page from a book")
+This is where the cookbook metaphor lives most fully:
+- Page wrapped in `paper-grain` so the texture extends to the viewport edges.
+- Title: large serif `Lora` (~2.5rem), tightly leaded, with a centered `tan` horizontal rule (80px wide, 2px tall) *under* the title — an explicit cookbook-page ornament. The description sits below the rule in italic-serif rose.
+- Recipe content card (`#fbf6f1`) carries the body in serif `Lora` at default-ish reading size.
+- Section headings (`Ingredients`, `Steps`) are rust-colored serif. The `<hr>` between sections is replaced with a centered `✦` glyph in tan over a tan rule — feels printed, not web-divider-y.
+- Edit button is rust-primary; Delete button is `rose-dark` (was `red-500` — too modern/alert for this palette; `rose-dark` reads as "warning in the family").
+
+### Bookmark + Like buttons (corners of every card)
+- **Bookmark saved:** filled `rust` (was `indigo-600`).
+- **Like liked:** filled `rose` (was `rose-500` — Tailwind's bright pink-red). The new dusty `rose` is muted, so the contrast against an unliked outline is less stark than before, but still clearly differentiable from the bookmark's terracotta.
+- Outline (unsaved/unliked) state uses `stroke-ink` instead of `stroke-gray-800`.
+- The frosted disc background (`bg-white/90`) is unchanged — white still reads cleanest against arbitrary image content.
+
+## What this branch does *not* touch
+- **Auth, Profile, MyBookmarks, CreateRecipe** screens are deferred to a follow-up retheme. They currently still use the old indigo/gray tokens — visible mismatch when you navigate to them. Conscious scope cut: home grid + recipe detail are the two highest-traffic surfaces.
+- The legacy CSS `.auth-card` / `.form-card` / `.recipe-content` classes still exist; their *colors* now match the new palette (`#fbf6f1` paper-card background, `#e8dcd2` borders) so the deferred screens don't look totally broken in the meantime — they just don't get the serif heading + ornamental rule treatment yet.
+- The book-opening login metaphor (see [Login Experience](#login-experience)) remains aspirational. The palette and typography here are the foundation it would build on.
+
+## Motion
+
+The app is mostly static — micro-interactions (button hover, card lift, image scale) handle their own quick transitions. The one **explicit screen-level motion** is the Auth view's entrance/exit.
+
+### Auth slide-in
+When an anonymous user clicks "Sign In" (header) — or any sign-in-gated action like bookmark/like on a card — the Auth screen **slides in from the right** over whatever was previously visible. Clicking "← Back" reverses the animation.
+
+**Implementation pattern: always-mounted overlay.**
+[App.jsx](../src/App.jsx) renders `<Auth>` inside a `fixed inset-0 z-50` container that is *always* in the DOM but positioned `translate-x-full` (off-screen right) when `showAuth` is false. Toggling `showAuth` to true changes it to `translate-x-0`; a CSS transition on `transform` does the slide. The container also gets `pointer-events-none` while hidden so it can't intercept clicks off-screen, and `aria-hidden={!showAuth}` so screen readers skip it.
+
+This pattern was chosen over conditional mount/unmount because exit animations are awkward with React's reconciliation — keeping the component mounted means CSS handles the whole transition with zero state machinery.
+
+**Tuning:**
+- **Duration:** 450ms — felt long enough to read as deliberate (this is a context shift, not a hover blip) but short enough to not feel sluggish.
+- **Easing:** `ease-out` — decelerates as it lands. Matches the "settling into place" feel; `ease-in-out` felt too mechanical.
+- **Direction:** right-to-left. Picked because (a) it's the most familiar drawer pattern, and (b) it pairs intuitively with "← Back" — the slide-in came from the right, the back arrow points left, the page leaves the way it came.
+
+**Side effect to know about:** the page behind the overlay stays rendered during the slide. Functionally fine — pointer events are blocked by Auth's full-viewport cream background. Visually it means the home grid is *behind* the cream sheet, not destroyed when you sign in — which actually reinforces the "this is a layer over the cookbook" feel.
+
+### What's deferred
+The COSMETICS-aspirational book-opening login (see [Login Experience](#login-experience)) is a different and richer motion idea than a side slide. If/when that lands, this slide-in becomes either the fallback for non-FTUE entries to Auth, or gets replaced entirely.
+
 ---
 
 ## Toasts (ephemeral feedback)
@@ -158,9 +245,9 @@ Stage 6 replaces every `alert(...)` call with `react-hot-toast`. The library is 
 
 **Categorisation rule.** Every `try { ... }` success path → `toast.success(msg)`. Every `catch (error) { ... }` path → `toast.error(error.message)`. No `toast()` (neutral) calls yet — every current message is clearly one of the two. Add neutral toasts later if a use case appears (e.g. "Comment posted" without a noteworthy success quality, or info notices like "Refreshing feed…").
 
-**Styling.** Currently the library defaults (white background, dark text, green/red icons). When `frontend-vfx` lands, a tiny follow-up should pass `toastOptions.style` overrides through the `<Toaster>` mount to use the rustic palette — `bg-paper-shade` surface, `text-ink`, `border-paper-shade`, accent icons in `--color-rust` (success) / `--color-rose-dark` (error). Keep it lightweight — toasts are noise that should fade, not feature highlights.
+**Styling.** Currently the library defaults (white background, dark text, green/red icons). Now that the rustic palette has landed, a tiny follow-up should pass `toastOptions.style` overrides through the `<Toaster>` mount to use it — `bg-paper-shade` surface, `text-ink`, `border-paper-shade`, accent icons in `--color-rust` (success) / `--color-rose-dark` (error). Keep it lightweight — toasts are noise that should fade, not feature highlights.
 
-**Why not `window.confirm` replacement?** Toasts are *non-blocking* — they can't gate a destructive action. The "Delete recipe?" `window.confirm` calls in [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) and [Comments.jsx](../src/components/Comments.jsx) (the latter on `stage-5-comments`) stay as native confirms for now. A real modal-confirm component is a separate Stage 6 sub-task; it doesn't have to ship with the toast change.
+**Why not `window.confirm` replacement?** Toasts are *non-blocking* — they can't gate a destructive action. The "Delete recipe?" `window.confirm` calls in [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) and [Comments.jsx](../src/components/Comments.jsx) stay as native confirms for now. A real modal-confirm component is a separate sub-task; it doesn't have to ship with the toast change.
 
 **Accessibility hook.** `react-hot-toast` announces success/error toasts via `role="status"` (success) and `role="alert"` (error) automatically — screen readers will hear them without us doing anything. That's a bonus pickup we get for swapping out `alert()`, which was technically accessible but completely interrupting.
 
