@@ -21,9 +21,20 @@ export default function RecipeCard({
     likeCount = 0,
     onToggleLike,
 }) {
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick?.()
+        }
+    }
+
     return (
         <div
+            role="button"
+            tabIndex={0}
             onClick={onClick}
+            onKeyDown={handleKeyDown}
+            aria-label={`Open recipe: ${recipe.title}`}
             className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-lg bg-[#fbf6f1] border border-paper-shade shadow-[0_2px_8px_rgba(30,30,36,0.06)] hover:shadow-[0_8px_20px_rgba(30,30,36,0.12)] transition-shadow duration-300 relative"
         >
             {onToggleLike && (
