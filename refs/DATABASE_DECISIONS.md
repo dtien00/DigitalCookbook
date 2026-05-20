@@ -196,6 +196,22 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **No moderation hooks yet.** A comment is `DELETE`-able only by its author or via a manual SQL delete (which RLS doesn't gate for the `service_role`). If the project grows beyond personal use, a `reports` table + admin-only moderation UI is the natural next step.
 - **No edit-comment support.** The schema technically allows it (no policy blocking UPDATE by the author — there's no policy at all, so RLS denies by default). If editing becomes a requirement, add an UPDATE policy `USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` and a `updated_at` column.
 
+## Home-grid pagination: offset + count-on-every-page (mobile branch)
+
+**Decision:** Paginate the home-grid `recipes` query with Supabase's `.range(from, to)` (offset-style) and pass `{ count: 'exact' }` on every page fetch.
+
+**Why:**
+- **Offset over cursor for now.** Cursor pagination on `created_at` would be more robust against insert/delete drift (a new recipe added during the user's session won't shift offsets), but offset is dead-simple and the home grid isn't seeing concurrent writes from other users — only the signed-in author adds/deletes. The drift cost is hypothetical at this scale.
+- **`count: 'exact'` on every page.** The total visible row count drives the column-density tier (1/2/3/3/4 etc. — see [refs/COSMETICS.md "Browse / Recipe Grid"](./COSMETICS.md)). If `totalCount` were computed only once on the initial fetch, deletes would leave a stale count and the column tier could mis-size after page 2. Recomputing on each fetch costs one extra index scan per request — negligible at this scale and the count is naturally authoritative. Respected by RLS, so anon users get the public count, signed-in users get public + own.
+- **PAGE_SIZE = 20.** Balances request overhead vs initial-paint speed on a phone. Drop to ~6 in dev when seed data has fewer than 20 recipes (otherwise infinity scroll never triggers and you can't see it work).
+
+**Tradeoffs:**
+- **Offset drift.** If a recipe is inserted or deleted between page fetches, the offsets shift and the user could see a duplicate (or skip a row). Acceptable for a solo cookbook without realtime. Switch to cursor pagination on `created_at` if/when the app gains concurrent writers.
+- **Search is still client-side.** The search box filters loaded pages only; "Loading more" is hidden during search to avoid surfacing recipes the user can't see. The eventual full-fidelity fix is server-side `ilike` filtering with pagination reset on each keystroke — listed in Stage 7 as part of "Tags filtering UI + ingredient search".
+- **Count cost.** Each fetch runs an extra `SELECT COUNT(*)` against the visible row set. Fast (indexed), but if the recipes table ever grows past ~100k rows the per-page count starts to dominate. Switch to `count: 'estimated'` (a planner-stats fast estimate, accurate enough for tier-sizing) before then.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
