@@ -82,8 +82,9 @@ export default function MyBookmarks({
                 </div>
             ) : displayedRecipes.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-gray-700 text-lg mb-2">No bookmarks yet.</p>
-                    <p className="text-gray-500">Save recipes you love by tapping the bookmark icon on any card.</p>
+                    <p className="text-2xl text-tan mb-4">✦</p>
+                    <p className="font-display text-xl text-ink mb-2">No bookmarks yet.</p>
+                    <p className="font-display italic text-rose">Save recipes you love by tapping the bookmark icon on any card.</p>
                 </div>
             ) : (
                 <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4">

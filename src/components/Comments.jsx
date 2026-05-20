@@ -92,7 +92,7 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
                     <SkeletonComment />
                 </ul>
             ) : comments.length === 0 ? (
-                <p className="text-gray-500 italic">Be the first to comment.</p>
+                <p className="font-display italic text-rose">Be the first to comment.</p>
             ) : (
                 <ul className="space-y-4">
                     {comments.map(c => (
