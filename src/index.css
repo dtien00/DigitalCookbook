@@ -316,3 +316,41 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* Recipe-detail mobile typography. Target: phone propped against a kettle.
+   Changes vs desktop:
+   - Container and content-card padding tightened so text isn't crushed on
+     narrow screens (48px card padding → 20px; 40px top → 20px).
+   - Title scaled down from 2.5rem to 1.75rem so long recipe names don't
+     wrap across 3+ lines.
+   - Hero image capped at 220px so the first thing the user sees on opening
+     is the title + start of ingredients, not just a photograph.
+   - Steps bumped to 1.05rem / 1.75 line-height with extra item spacing,
+     so instructions can be read from arm's length while cooking. */
+@media (max-width: 640px) {
+  .recipe-detail-container,
+  .profile-container {
+    padding: 20px 16px;
+  }
+
+  .recipe-detail-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .detail-image {
+    max-height: 220px;
+  }
+
+  .recipe-content {
+    padding: 24px 20px;
+  }
+
+  .step-list {
+    font-size: 1.05rem;
+    line-height: 1.75;
+  }
+
+  .step-list li {
+    margin-bottom: 16px;
+  }
+}
