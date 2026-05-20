@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
 import Comments from './Comments'
+import Skeleton from './Skeleton'
 
 export default function RecipeDetail({
     recipe,
@@ -120,7 +121,13 @@ export default function RecipeDetail({
                 <div className="recipe-content">
                     <section>
                         <h3>Ingredients</h3>
-                        {loading ? <p className="italic text-rose">Loading...</p> : (
+                        {loading ? (
+                            <ul className="space-y-3" role="status" aria-label="Loading ingredients">
+                                {['w-full', 'w-3/5', 'w-4/5', 'w-3/5'].map((w, i) => (
+                                    <Skeleton key={i} className={`h-4 ${w}`} />
+                                ))}
+                            </ul>
+                        ) : (
                             <ul className="ingredient-list">
                                 {ingredients.map(ing => (
                                     <li key={ing.id}>
@@ -135,7 +142,13 @@ export default function RecipeDetail({
 
                     <section>
                         <h3>Steps</h3>
-                        {loading ? <p className="italic text-rose">Loading...</p> : (
+                        {loading ? (
+                            <ol className="space-y-3" role="status" aria-label="Loading steps">
+                                {['w-full', 'w-4/5', 'w-full', 'w-3/5', 'w-4/5'].map((w, i) => (
+                                    <Skeleton key={i} className={`h-4 ${w}`} />
+                                ))}
+                            </ol>
+                        ) : (
                             <ol className="step-list">
                                 {steps.map(step => (
                                     <li key={step.id}>

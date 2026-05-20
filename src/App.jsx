@@ -9,6 +9,7 @@ import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
+import { SkeletonCard } from './components/Skeleton'
 
 function App() {
     const [session, setSession] = useState(null)
@@ -222,7 +223,11 @@ function App() {
                 </div>
 
                 {loading ? (
-                    <p className="font-display italic text-rose">Loading recipes...</p>
+                    <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <SkeletonCard key={i} index={i} />
+                        ))}
+                    </div>
                 ) : filteredRecipes.length === 0 ? (
                     <p className="font-display italic text-rose">No recipes found.</p>
                 ) : (
