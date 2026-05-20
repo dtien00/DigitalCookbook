@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
@@ -69,7 +70,7 @@ export default function RecipeDetail({
                 if (error) throw error
                 onDelete()
             } catch (error) {
-                alert('Error deleting recipe: ' + error.message)
+                toast.error('Error deleting recipe: ' + error.message)
             }
         }
     }
