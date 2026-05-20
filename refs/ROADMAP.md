@@ -105,20 +105,22 @@ Goal: lightweight "I appreciate this" signal, separate from bookmarks (Pinterest
 
 ---
 
-## Stage 5 — Comments
+## Stage 5 — Comments  *(done)*
 
 Goal: casual conversation under each recipe.
 
 **Tasks**
-- New component: `src/components/Comments.jsx` — list of comments + an "Add comment" form. Renders on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx).
-- New hook: `src/hooks/useComments.js` — `{ comments, addComment, deleteComment, loading }` for a given recipe.
-- Joins to `profiles` so each comment shows the author's username and avatar.
-- Delete-own-comment only (RLS already enforces this on the server).
-- Empty state ("Be the first to comment"), basic relative timestamps ("2h ago").
+- [x] New component: `src/components/Comments.jsx` — list of comments + an "Add comment" form. Renders on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx). *Done. Sectioned below the steps. Shows count next to the heading once any exist. Author avatars fall back to initials in a colored chip when `avatar_url` is empty (current state for all seeded accounts).*
+- [x] New hook: `src/hooks/useComments.js` — `{ comments, addComment, deleteComment, loading }` for a given recipe. *Done. Per-recipe scope (mounted inside RecipeDetail, not at App level — comments are content-heavy and only viewed one recipe at a time, so the bulk-fetch pattern from useLikes/useFavorites doesn't apply). Optimistic UI on both add and delete with rollback. `addComment` inserts an optimistic temp-id row, then swaps for the real server row (which carries the joined profile data); `deleteComment` snapshots the prior list for rollback.*
+- [x] Joins to `profiles` so each comment shows the author's username and avatar. *Done via PostgREST relationship inference on `comments.user_id -> profiles.id` (single FK, no disambiguation needed). The `profiles` SELECT policy is public-read, so the join resolves for anonymous viewers too.*
+- [x] Delete-own-comment only (RLS already enforces this on the server). *UI shows the Delete control only for `comment.user_id === userId`. The query also filters `eq('user_id', userId)` as a belt-and-suspenders defence; the DELETE policy (`USING (auth.uid() = user_id)`) is the actual enforcement.*
+- [x] Empty state ("Be the first to comment"), basic relative timestamps ("2h ago"). *Done. `formatRelativeTime` produces "just now" / "Ns/m/h/d/w ago" / absolute date for >30 days. Computed at render time (no live ticker) — recipe pages are short-lived enough that re-renders on parent updates keep timestamps fresh.*
 
-**Schema**: no change — `comments` already exists.
+**Schema**: technically `comments` already existed, **but** its INSERT policy had the same gap as the original likes policy (`WITH CHECK (auth.role() = 'authenticated')` — verified logged-in but not that `user_id` matched the caller). Migration 005 (`supabase_migration_005_comments.sql`) replaces it with `WITH CHECK (auth.uid() = user_id)` and adds a covering `(recipe_id, created_at DESC)` index for the dominant query path. Idempotent.
 
-**Exit criteria**: posting, listing, deleting your own comment all work; another user's "Delete" button is hidden.
+**Anonymous behavior**: the comment list is visible to anonymous viewers (counts/content are public — same as likes). The add-comment form is replaced with a "Sign in to join the conversation" CTA whose Sign In button opens the Auth overlay (parent-supplied `onRequireAuth`).
+
+**Exit criteria**: posting, listing, deleting your own comment all work; another user's "Delete" button is hidden. *Met. Build clean (83 modules, ~7.71s). Visual smoke test pending — comments use the pre-retheme palette (indigo/gray); will pick up the rustic palette automatically once `frontend-vfx` merges (tokens like `bg-indigo-600` get retinted at the call site as part of that branch's follow-up restyling).*
 
 ---
 

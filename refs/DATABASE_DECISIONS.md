@@ -90,6 +90,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_004_likes.sql` — adds `created_at TIMESTAMPTZ` to `likes` and tightens the INSERT policy (was `auth.role() = 'authenticated'`, now `auth.uid() = user_id`). Idempotent.
 - `supabase_migration_006_profiles_insert.sql` — adds the INSERT policy on `profiles` that migration 001 forgot. Required so `Profile.jsx`'s `upsert(...)` (which compiles to `INSERT ... ON CONFLICT DO UPDATE`) passes RLS. Idempotent.
 - Future migrations: `supabase_migration_007_*.sql`, etc. *(Note: number 005 is reserved for the `stage-5-comments` branch — `supabase_migration_005_comments.sql` will land in this list when that branch merges.)*
+- `supabase_migration_005_comments.sql` — tightens the comments INSERT policy (same gap as the original likes policy) and adds a covering `(recipe_id, created_at DESC)` index for the per-recipe newest-first list. Idempotent.
+- Future migrations: `supabase_migration_006_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -174,6 +176,25 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - Temporary auth-policy change required. Re-enable "Confirm email" after seeding.
 - Test accounts use a known shared password (`TestPass123!`) — fine for local/dev Supabase projects, not for any project that touches real users.
 - Profile bios are written via a separate `UPDATE` on `profiles` because the `handle_new_user` trigger only handles username/full_name/avatar_url from `raw_user_meta_data`.
+
+## Comments: INSERT policy hardening + covering index (migration 005)
+
+**Decision (policy):** Replace the migration-001 INSERT policy `WITH CHECK (auth.role() = 'authenticated')` with `WITH CHECK (auth.uid() = user_id)`. Identical gap and identical fix as migration 004 for `likes`.
+
+**Why:**
+- The original policy verified the request came from a logged-in user but didn't verify the `user_id` column matched the authenticated caller. A crafted client could `INSERT INTO comments (recipe_id, user_id, content) VALUES (..., '<other-user-uuid>', 'imposter comment')` and the policy would accept it. The new policy closes that gap.
+- The DELETE policy (`USING (auth.uid() = user_id)`) and SELECT policy (`USING (true)` — comments are public information, same model as likes) were already correct and don't change.
+
+**Decision (covering index):** Add `idx_comments_recipe_created` on `(recipe_id, created_at DESC)` alongside the existing `idx_comments_recipe (recipe_id)` from migration 001.
+
+**Why:**
+- The dominant query for the comments UI is `WHERE recipe_id = $1 ORDER BY created_at DESC` — the new compound index serves both the filter and the sort with no separate sort step. The original index covers the filter only.
+- Both indexes coexist intentionally. The write amplification on `INSERT` is minimal (one extra index entry per comment) and Postgres can choose whichever index has the lower estimated cost per query. The original isn't strictly redundant — it's narrower and may win for `EXISTS`-style predicates that don't care about ordering.
+
+**Tradeoffs:**
+- **Comments are public.** Anonymous viewers can read every comment on every public recipe. This matches the social model of casual recipe hubs and mirrors the likes policy. If a future requirement wants comments to be visible only to signed-in users (or only to followers), the SELECT policy needs to flip — but no aggregate-count complication, since unlike likes there's no public count to preserve.
+- **No moderation hooks yet.** A comment is `DELETE`-able only by its author or via a manual SQL delete (which RLS doesn't gate for the `service_role`). If the project grows beyond personal use, a `reports` table + admin-only moderation UI is the natural next step.
+- **No edit-comment support.** The schema technically allows it (no policy blocking UPDATE by the author — there's no policy at all, so RLS denies by default). If editing becomes a requirement, add an UPDATE policy `USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` and a `updated_at` column.
 
 ## Future considerations (not yet decided)
 
