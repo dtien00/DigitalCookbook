@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
 
@@ -48,7 +49,7 @@ export default function Profile({
                 setAvatarUrl(data.avatar_url || '')
             }
         } catch (error) {
-            alert(error.message)
+            toast.error(error.message)
         } finally {
             setLoading(false)
         }
@@ -83,9 +84,9 @@ export default function Profile({
             let { error } = await supabase.from('profiles').upsert(updates)
 
             if (error) throw error
-            alert('Profile updated!')
+            toast.success('Profile updated!')
         } catch (error) {
-            alert(error.message)
+            toast.error(error.message)
         } finally {
             setLoading(false)
         }
@@ -100,10 +101,10 @@ export default function Profile({
             })
 
             if (error) throw error
-            alert('Password updated successfully!')
+            toast.success('Password updated successfully!')
             setNewPassword('')
         } catch (error) {
-            alert(error.message)
+            toast.error(error.message)
         } finally {
             setPasswordLoading(false)
         }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 
 export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
@@ -189,10 +190,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 if (stepError) throw stepError
             }
 
-            alert(isEditMode ? 'Recipe updated successfully!' : 'Recipe created successfully!')
+            toast.success(isEditMode ? 'Recipe updated successfully!' : 'Recipe created successfully!')
             onComplete()
         } catch (error) {
-            alert(error.message)
+            toast.error(error.message)
         } finally {
             setLoading(false)
         }
