@@ -80,7 +80,7 @@ export default function RecipeDetail({
         <div className="paper-grain min-h-screen">
             <div className="recipe-detail-container">
                 <div className="flex justify-between items-center mb-4">
-                    <button onClick={onBack} className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">← Back to List</button>
+                    <button onClick={onBack} className="px-4 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">← Back to List</button>
                     <div className="flex items-center gap-3">
                         {onToggleLike && (
                             <LikeButton liked={liked} count={likeCount} onClick={onToggleLike} size="lg" />
@@ -114,7 +114,7 @@ export default function RecipeDetail({
                 {isAuthor && (
                     <div className="author-actions">
                         <button onClick={() => onEdit(recipe)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Edit Recipe</button>
-                        <button onClick={handleDelete} className="px-4 py-2 bg-rose-dark hover:bg-rose text-paper font-semibold rounded-md transition-colors">Delete Recipe</button>
+                        <button onClick={handleDelete} className="px-4 py-2.5 bg-rose-dark hover:bg-rose text-paper font-semibold rounded-md transition-colors">Delete Recipe</button>
                     </div>
                 )}
 

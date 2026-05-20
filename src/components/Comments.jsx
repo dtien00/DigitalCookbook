@@ -143,7 +143,7 @@ function CommentItem({ comment, isOwn, onDelete }) {
                 {isOwn && (
                     <button
                         onClick={handleDeleteClick}
-                        className="mt-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+                        className="mt-1 min-h-[44px] flex items-center text-xs text-red-500 hover:text-red-700 transition-colors"
                         aria-label="Delete this comment"
                     >
                         Delete
