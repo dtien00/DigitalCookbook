@@ -92,7 +92,7 @@ export default function RecipeDetail({
 
                 <div className="recipe-detail-header">
                     {recipe.image_url && (
-                        <img src={recipe.image_url} alt={recipe.title} className="detail-image" />
+                        <img src={recipe.image_url} alt={`${recipe.title} cover image`} loading="lazy" className="detail-image" />
                     )}
                     <h1>{recipe.title}</h1>
                     <p className="description">{recipe.description}</p>

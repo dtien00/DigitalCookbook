@@ -120,11 +120,12 @@ function CommentItem({ comment, isOwn, onDelete }) {
             {avatarUrl ? (
                 <img
                     src={avatarUrl}
-                    alt={username}
+                    alt=""
+                    loading="lazy"
                     className="w-10 h-10 rounded-full object-cover bg-gray-200 flex-shrink-0"
                 />
             ) : (
-                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                <div aria-hidden="true" className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
                     {initials}
                 </div>
             )}
