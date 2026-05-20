@@ -335,3 +335,24 @@ Two design decisions worth keeping:
 - **Always include the next-step CTA when one exists.** The home grid's "no recipes match search" empty state offers Clear search; "signed in, no recipes" offers + New Recipe; "anonymous, no recipes" offers Sign In. Empty states without a path forward feel like dead ends.
 - **One empty-state component does not fit all.** App.jsx's `<EmptyGridState>` is local to that file because the messages and CTAs are coupled to grid context. Other views (Profile My Recipes, MyBookmarks, Comments) inline their own small empty blocks following the same visual recipe. If a fourth view duplicates the structure substantially, *then* promote it to a shared component — not before.
 
+## Floating affordances (density toggle, scroll-to-top)
+
+Both floating controls in the home view share one visual treatment so they read as a pair: 48×48 circular buttons (`w-12 h-12 rounded-full`), `bg-paper-shade/90 backdrop-blur-sm shadow-md`, ink-stroked icons. Together they pin to the top corners of the viewport — density toggle top-left, scroll-to-top top-right — and fade in/out together once the user scrolls past the action row (`scrollY > 80`).
+
+**Why fade rather than mount/unmount:** the controls live in the DOM at all times with `aria-hidden={!scrolled}` + `tabIndex={scrolled ? 0 : -1}` + `opacity-0 pointer-events-none` when hidden. Keeping them mounted means CSS handles the entrance smoothly (same pattern as the Auth slide-in overlay) and screen readers / keyboard focus skip them cleanly when invisible.
+
+**Density toggle has an inline twin** in the action row, left of the search input. The twin is always visible at the top of the page; the floating copy takes over once the twin scrolls off. Both buttons share an extracted `densityIcon` JSX const and `densityAriaLabel` string so there's a single source of truth for icon and label — no drift between the two copies. The icon previews the destination state: a 2×2 grid means "tap to densify", two wide bars means "tap to return to default".
+
+Scroll-to-top has no inline twin — there's nothing to do at the top of the page if you're already there. Single floating instance only.
+
+## Infinity-scroll markers
+
+Two ephemeral indicators sit below the grid when more pages are available:
+
+- **"Loading more recipes…"** — italic-serif rose text (matches the existing loading-state copy on the home grid), centered, `py-6`. Carries `role="status"` so screen readers announce it. Shown only while an append fetch is in flight.
+- **`✦` end marker** — single tan-colored star glyph, also centered, `py-6`. Appears only after the user has loaded at least one page beyond the first and the server returned a partial final page. A quiet "you've reached the end" without text.
+
+The sentinel `<div>` that drives the IntersectionObserver is `h-1 w-full` and `aria-hidden`. It exists purely to be observed; it has no visual presence.
+
+Search disables the sentinel: when the user is typing in the search bar, "load more" is hidden because the search filters client-side over loaded pages only — appending more rows that may not match the search would surface confusing UX. Documented as a known limitation; the eventual fix is server-side `ilike` filtering with pagination reset on each keystroke.
+

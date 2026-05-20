@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
@@ -11,6 +11,11 @@ import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 
+// Number of recipes to fetch per infinity-scroll page. 20 balances request
+// overhead against initial-paint speed on phone. Lower it for visible
+// testing when seed data has < 20 recipes.
+const PAGE_SIZE = 20
+
 function App() {
     const [session, setSession] = useState(null)
     const [recipes, setRecipes] = useState([])
@@ -22,6 +27,35 @@ function App() {
     const [selectedRecipe, setSelectedRecipe] = useState(null)
     const [editingRecipe, setEditingRecipe] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Grid density toggle. `doubled` flips between the library-size-adaptive
+    // default and a 2x-denser variant of the same tier at every breakpoint —
+    // e.g. tier 3 goes from 1/2/3/3/4 (base/sm/md/lg/xl) to 2/4/6/6/8.
+    // `scrolled` controls visibility of the floating density toggle AND the
+    // floating scroll-to-top button — both hidden at the top of the page,
+    // both fade in after the user scrolls past the action row.
+    const [doubled, setDoubled] = useState(false)
+    const [scrolled, setScrolled] = useState(false)
+
+    // Infinity-scroll pagination state.
+    // - totalCount: full row count from Supabase (respects RLS). Drives the
+    //   density tier so the column layout doesn't reflow as more pages load.
+    // - hasMore: true while the last fetch returned a full page (PAGE_SIZE
+    //   rows). The sentinel near the bottom of the grid stops triggering
+    //   once we know we've reached the end.
+    // - loadingMore: gates the IntersectionObserver from double-firing while
+    //   a fetch is already in flight.
+    const [hasMore, setHasMore] = useState(true)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [totalCount, setTotalCount] = useState(0)
+    const sentinelRef = useRef(null)
+    const pageRef = useRef(0)
+
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 80)
+        window.addEventListener('scroll', handleScroll, { passive: true })
+        return () => window.removeEventListener('scroll', handleScroll)
+    }, [])
 
     const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike } = useLikes(session?.user.id)
@@ -50,25 +84,60 @@ function App() {
     // Fetch recipes for everyone, including anonymous visitors.
     // RLS filters: `is_public OR auth.uid() = author_id`, so anon users
     // see only public recipes; logged-in users see public + their own.
-    // Refetch on session change so private recipes appear/disappear.
+    // Refetch on session change so private recipes appear/disappear —
+    // resets pagination back to page 0.
     useEffect(() => {
-        fetchRecipes()
+        pageRef.current = 0
+        setHasMore(true)
+        fetchRecipes({ page: 0, append: false })
     }, [session])
 
-    async function fetchRecipes() {
+    // Infinity scroll: an IntersectionObserver watches a sentinel placed
+    // below the grid. When the sentinel scrolls into the viewport (with
+    // 200px of look-ahead) and we know more rows exist, fetch the next
+    // page and append. `loadingMore` guards against the observer firing
+    // again before the in-flight request completes.
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el) return
+        const obs = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+                fetchRecipes({ page: pageRef.current + 1, append: true })
+            }
+        }, { rootMargin: '200px' })
+        obs.observe(el)
+        return () => obs.disconnect()
+    }, [hasMore, loading, loadingMore])
+
+    async function fetchRecipes({ page = 0, append = false } = {}) {
         try {
-            setLoading(true)
-            const { data, error } = await supabase
+            if (append) setLoadingMore(true)
+            else setLoading(true)
+
+            const from = page * PAGE_SIZE
+            const to = from + PAGE_SIZE - 1
+
+            // `count: 'exact'` returns the full visible row count alongside
+            // the page. Respected by RLS, so anon users get only the public
+            // count. Used to size the column tier so layout doesn't reflow
+            // as more pages load.
+            const { data, error, count } = await supabase
                 .from('recipes')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .order('created_at', { ascending: false })
+                .range(from, to)
 
             if (error) throw error
-            setRecipes(data || [])
+            const newRows = data || []
+            setRecipes(prev => append ? [...prev, ...newRows] : newRows)
+            setHasMore(newRows.length === PAGE_SIZE)
+            if (typeof count === 'number') setTotalCount(count)
+            pageRef.current = page
         } catch (error) {
             console.error('Error fetching recipes:', error.message)
         } finally {
             setLoading(false)
+            setLoadingMore(false)
         }
     }
 
@@ -178,20 +247,81 @@ function App() {
             recipe.description?.toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        // Density scales with the user's library size, not the filtered view, so cards
-        // don't resize while searching. xl:columns-5 is the floor — beyond that cards
-        // get pixel-mappy on standard laptop widths (~250px each at 1280px).
-        const gridColumnsClass =
-            recipes.length <= 3  ? 'columns-1 md:columns-2 xl:columns-2' :
-            recipes.length <= 8  ? 'columns-1 sm:columns-2 lg:columns-3 xl:columns-3' :
-            recipes.length <= 20 ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4' :
-                                   'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
+        // Density scales with the user's full library size (totalCount from
+        // Supabase), not the loaded subset, so the column count stays stable
+        // as infinity scroll appends more pages. Two parallel ladders: the
+        // default tiering (xl:columns-5 floor) and a 2x-denser variant
+        // exposed via the floating toggle. Doubled values are literal class
+        // names so Tailwind's content scanner picks them up at build time.
+        const gridColumnsClass = doubled ? (
+            totalCount <= 3  ? 'columns-2 md:columns-4 xl:columns-4' :
+            totalCount <= 8  ? 'columns-2 sm:columns-4 lg:columns-6 xl:columns-6' :
+            totalCount <= 20 ? 'columns-2 sm:columns-4 md:columns-6 xl:columns-8' :
+                               'columns-4 md:columns-6 lg:columns-8 xl:columns-10'
+        ) : (
+            totalCount <= 3  ? 'columns-1 md:columns-2 xl:columns-2' :
+            totalCount <= 8  ? 'columns-1 sm:columns-2 lg:columns-3 xl:columns-3' :
+            totalCount <= 20 ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4' :
+                               'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
+        )
+
+        // Icon for the density toggle — reused by both the inline and floating
+        // copies of the button. Previews the destination state: 2×2 grid means
+        // "tap to densify", two wide bars means "tap to return to default".
+        const densityIcon = !doubled ? (
+            <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="4"  y="4"  width="7" height="7" rx="1" />
+                <rect x="13" y="4"  width="7" height="7" rx="1" />
+                <rect x="4"  y="13" width="7" height="7" rx="1" />
+                <rect x="13" y="13" width="7" height="7" rx="1" />
+            </svg>
+        ) : (
+            <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="4"  y="4" width="7" height="16" rx="1" />
+                <rect x="13" y="4" width="7" height="16" rx="1" />
+            </svg>
+        )
+        const densityAriaLabel = doubled ? 'Show fewer columns' : 'Show more columns'
 
         return (
             <div className="paper-grain min-h-screen">
+            {/* Density toggle. Rendered in two places that share state and
+                visual treatment: an inline copy in the action row below
+                (always visible at the top of the page, sits in normal flow),
+                and a floating copy that fades in once the user has scrolled
+                past the inline one. Both flip between the default library-size
+                tiering and a 2x-denser variant of the same tier. The icon
+                previews the destination state. */}
+            <button
+                type="button"
+                onClick={() => setDoubled(d => !d)}
+                aria-label={densityAriaLabel}
+                aria-pressed={doubled}
+                aria-hidden={!scrolled}
+                tabIndex={scrolled ? 0 : -1}
+                className={`fixed top-4 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
+                {densityIcon}
+            </button>
+
+            {/* Scroll-to-top button. Mirrors the density toggle on the
+                right edge. Same scroll-trigger as the toggle so the two
+                appear and disappear together. */}
+            <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                aria-label="Scroll to top"
+                aria-hidden={!scrolled}
+                tabIndex={scrolled ? 0 : -1}
+                className={`fixed top-4 right-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
+                <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="18 15 12 9 6 15" />
+                </svg>
+            </button>
             <div className="max-w-7xl mx-auto px-5 py-5">
-                <header className="flex justify-between items-center mb-10 pb-6 border-b border-paper-shade">
-                    <h1 className="font-display text-3xl font-semibold text-ink tracking-tight">
+                <header className="flex justify-between items-center mb-10 pb-6 border-b border-paper-shade gap-3">
+                    <h1 className="font-display text-base sm:text-2xl md:text-3xl font-semibold text-ink tracking-tight min-w-0 truncate">
                         {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
                     </h1>
                     <div className="flex gap-3">
@@ -207,8 +337,21 @@ function App() {
                     </div>
                 </header>
 
-                <div className="flex gap-4 items-center mb-8">
-                    <div className="flex-1">
+                <div className="flex gap-3 items-center mb-8">
+                    {/* Inline density toggle — same control as the floating copy
+                        above. Lives in document flow so it's always reachable at
+                        the top of the page; scrolls off naturally as the user
+                        scrolls down, at which point the floating copy takes over. */}
+                    <button
+                        type="button"
+                        onClick={() => setDoubled(d => !d)}
+                        aria-label={densityAriaLabel}
+                        aria-pressed={doubled}
+                        className="flex-shrink-0 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center hover:bg-paper-shade transition-colors"
+                    >
+                        {densityIcon}
+                    </button>
+                    <div className="flex-1 min-w-0">
                         <input
                             type="text"
                             placeholder="Search recipes..."
@@ -218,7 +361,7 @@ function App() {
                         />
                     </div>
                     {session && (
-                        <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">+ New Recipe</button>
+                        <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
                     )}
                 </div>
 
@@ -231,27 +374,49 @@ function App() {
                 ) : filteredRecipes.length === 0 ? (
                     <EmptyGridState
                         searchTerm={searchTerm}
-                        hasAnyRecipes={recipes.length > 0}
+                        hasAnyRecipes={totalCount > 0}
                         session={session}
                         onClearSearch={() => setSearchTerm('')}
                         onSignIn={() => setShowAuth(true)}
                         onCreate={() => setShowCreate(true)}
                     />
                 ) : (
-                    <div className={`${gridColumnsClass} gap-4 mt-6`}>
-                        {filteredRecipes.map(recipe => (
-                            <RecipeCard
-                                key={recipe.id}
-                                recipe={recipe}
-                                onClick={() => handleRecipeClick(recipe)}
-                                favorited={isFavorited(recipe.id)}
-                                onToggleFavorite={() => handleBookmarkClick(recipe.id)}
-                                liked={userLiked(recipe.id)}
-                                likeCount={likeCount(recipe.id)}
-                                onToggleLike={() => handleLikeClick(recipe.id)}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className={`${gridColumnsClass} gap-4 mt-6`}>
+                            {filteredRecipes.map(recipe => (
+                                <RecipeCard
+                                    key={recipe.id}
+                                    recipe={recipe}
+                                    onClick={() => handleRecipeClick(recipe)}
+                                    favorited={isFavorited(recipe.id)}
+                                    onToggleFavorite={() => handleBookmarkClick(recipe.id)}
+                                    liked={userLiked(recipe.id)}
+                                    likeCount={likeCount(recipe.id)}
+                                    onToggleLike={() => handleLikeClick(recipe.id)}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Infinity-scroll sentinel + indicators. The sentinel
+                            triggers the next page fetch as it approaches the
+                            viewport. When we know we've reached the end
+                            (hasMore=false AND we've loaded more than one
+                            page), show a quiet ✦ marker. Sentinel skipped
+                            during search-filtering since the filter is
+                            client-side and "more recipes" don't necessarily
+                            match the search anyway. */}
+                        {!searchTerm && hasMore && (
+                            <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
+                        )}
+                        {loadingMore && (
+                            <p className="text-center font-display italic text-rose py-6" role="status">
+                                Loading more recipes…
+                            </p>
+                        )}
+                        {!searchTerm && !hasMore && recipes.length > PAGE_SIZE && (
+                            <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
+                        )}
+                    </>
                     )}
                 </div>
             </div>
