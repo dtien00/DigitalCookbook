@@ -37,6 +37,10 @@ function App() {
     const [doubled, setDoubled] = useState(false)
     const [scrolled, setScrolled] = useState(false)
 
+    // Profile dropdown menu open/closed state.
+    const [menuOpen, setMenuOpen] = useState(false)
+    const menuRef = useRef(null)
+
     // Infinity-scroll pagination state.
     // - totalCount: full row count from Supabase (respects RLS). Drives the
     //   density tier so the column layout doesn't reflow as more pages load.
@@ -56,6 +60,21 @@ function App() {
         window.addEventListener('scroll', handleScroll, { passive: true })
         return () => window.removeEventListener('scroll', handleScroll)
     }, [])
+
+    // Close the profile dropdown on outside click or Escape.
+    useEffect(() => {
+        if (!menuOpen) return
+        const onPointerDown = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
+        }
+        const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false) }
+        document.addEventListener('pointerdown', onPointerDown)
+        document.addEventListener('keydown', onKey)
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown)
+            document.removeEventListener('keydown', onKey)
+        }
+    }, [menuOpen])
 
     const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike } = useLikes(session?.user.id)
@@ -324,13 +343,59 @@ function App() {
                     <h1 className="font-display text-base sm:text-2xl md:text-3xl font-semibold text-ink tracking-tight min-w-0 truncate">
                         {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
                     </h1>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-shrink-0">
                         {session ? (
-                            <>
-                                <button onClick={() => setShowBookmarks(true)} className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">Bookmarks</button>
-                                <button onClick={() => setShowProfile(true)} className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">Profile</button>
-                                <button onClick={handleLogout} className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">Logout</button>
-                            </>
+                            // Single "Profile" trigger that expands into a dropdown
+                            // containing My Profile, Bookmarks, and Log out. Collapsed
+                            // by default; closes on outside click or Escape.
+                            <div className="relative" ref={menuRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setMenuOpen(o => !o)}
+                                    aria-haspopup="menu"
+                                    aria-expanded={menuOpen}
+                                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors flex items-center gap-1.5"
+                                >
+                                    Profile
+                                    <svg
+                                        className={`w-4 h-4 stroke-ink fill-none transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`}
+                                        viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </button>
+
+                                {menuOpen && (
+                                    <div
+                                        role="menu"
+                                        className="absolute right-0 mt-1 w-44 bg-white border border-paper-shade rounded-md shadow-md overflow-hidden z-50"
+                                    >
+                                        <button
+                                            role="menuitem"
+                                            onClick={() => { setShowProfile(true); setMenuOpen(false) }}
+                                            className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
+                                        >
+                                            My Profile
+                                        </button>
+                                        <button
+                                            role="menuitem"
+                                            onClick={() => { setShowBookmarks(true); setMenuOpen(false) }}
+                                            className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
+                                        >
+                                            Bookmarks
+                                        </button>
+                                        <div className="border-t border-paper-shade" aria-hidden="true" />
+                                        <button
+                                            role="menuitem"
+                                            onClick={() => { handleLogout(); setMenuOpen(false) }}
+                                            className="w-full text-left px-4 py-2.5 text-rose font-medium hover:bg-paper-shade transition-colors"
+                                        >
+                                            Log out
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <button onClick={() => setShowAuth(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Sign In</button>
                         )}
