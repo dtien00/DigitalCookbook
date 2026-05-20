@@ -5,7 +5,7 @@
 // heart — clicking opens the auth view (parent wires that).
 
 const SIZE_MAP = {
-    sm: { btn: 'h-8 px-2.5 text-xs',  icon: 'w-4 h-4', gap: 'gap-1' },
+    sm: { btn: 'h-11 px-3 text-xs',   icon: 'w-4 h-4', gap: 'gap-1' },
     md: { btn: 'h-10 px-3 text-sm',   icon: 'w-5 h-5', gap: 'gap-1.5' },
     lg: { btn: 'h-12 px-4 text-base', icon: 'w-6 h-6', gap: 'gap-2' },
 }
