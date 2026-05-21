@@ -495,14 +495,26 @@ function App() {
                     >
                         {densityIcon}
                     </button>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 relative">
                         <input
                             type="text"
                             placeholder="Search recipes — or tag1, tag2 for tag filter…"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full px-4 py-3 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
+                            className="w-full px-4 py-3 pr-11 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
                         />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                aria-label="Clear search"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-paper-shade hover:bg-tan/40 text-ink flex items-center justify-center transition-colors"
+                            >
+                                <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <path d="M4 4l8 8M12 4l-8 8" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                     {session && (
                         <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
