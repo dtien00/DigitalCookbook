@@ -283,6 +283,10 @@ function App() {
                 return searchTokens.every(token => recipeTagsLower.includes(token))
             }
             const q = searchTokens[0]
+            if (searchMode === 'hybrid') {
+                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                if (recipeTagsLower.includes(q)) return true
+            }
             return recipe.title.toLowerCase().includes(q) ||
                 recipe.description?.toLowerCase().includes(q)
         })
@@ -302,7 +306,13 @@ function App() {
             return diff !== 0 ? diff : a.localeCompare(b)
         })
 
-        const activeTags = searchMode === 'tag' ? new Set(searchTokens) : new Set()
+        // Hybrid mode is also "tag-active" for chip display purposes: the
+        // single token IS being matched against tags (alongside title/desc),
+        // so the corresponding chip should render in its active state and
+        // clicking it should deactivate the filter.
+        const activeTags = (searchMode === 'tag' || searchMode === 'hybrid')
+            ? new Set(searchTokens)
+            : new Set()
 
         // Collapsed chip row shows the top N by frequency. Any currently
         // active tags (from a typed comma-list or prior chip clicks) are
@@ -666,11 +676,17 @@ function EmptyGridState({ searchTerm, hasAnyRecipes, session, onClearSearch, onS
     )
 }
 
-// Parses the search input into one of three modes:
+// Parses the search input into one of four modes:
 //   - none: empty / whitespace-only input
 //   - tag: comma present in raw input → split, trim, lowercase each token;
 //     empty tokens dropped so "italian," still parses as one tag
-//   - text: no comma → single trimmed/lowercased token for substring match
+//   - hybrid: single token with no whitespace → match against tags exactly
+//     OR substring-match title/description. Catches the common case where
+//     a user types one word ("vegetarian") and wants both tag-matches and
+//     recipes whose title/description happens to contain the word.
+//   - text: multi-word input (has whitespace, no comma) → substring match
+//     on title/description only, since tags are normalized to single words
+//     and an exact tag match against a multi-word query would never hit.
 // Splitting on the *raw* string (not the trimmed one) is intentional so a
 // lone comma still triggers tag mode; the empty-token filter then yields
 // an empty array → no match, which is the right behavior for "just a comma".
@@ -681,7 +697,9 @@ function parseSearch(raw) {
         if (tokens.length === 0) return { mode: 'none', tokens: [] }
         return { mode: 'tag', tokens }
     }
-    return { mode: 'text', tokens: [raw.trim().toLowerCase()] }
+    const trimmed = raw.trim().toLowerCase()
+    if (!/\s/.test(trimmed)) return { mode: 'hybrid', tokens: [trimmed] }
+    return { mode: 'text', tokens: [trimmed] }
 }
 
 export default App
