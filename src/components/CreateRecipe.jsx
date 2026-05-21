@@ -11,7 +11,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [servings, setServings] = useState(recipeToEdit?.servings || 1)
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
-    const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '' }])
+    const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '', notes: '' }])
     const [steps, setSteps] = useState([{ instruction: '', step_number: 1 }])
     const [imageFile, setImageFile] = useState(null)
     const [imagePreview, setImagePreview] = useState(recipeToEdit?.image_url || null)
@@ -39,7 +39,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 .order('order_index', { ascending: true })
 
             if (ingData?.length > 0) {
-                setIngredients(ingData.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit })))
+                setIngredients(ingData.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit, notes: i.notes || '' })))
             }
 
             // Fetch steps
@@ -86,7 +86,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     }
 
     const addIngredient = () => {
-        setIngredients([...ingredients, { name: '', quantity: '', unit: '' }])
+        setIngredients([...ingredients, { name: '', quantity: '', unit: '', notes: '' }])
     }
 
     const addStep = () => {
@@ -164,6 +164,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     name: ing.name,
                     quantity: ing.quantity || 0,
                     unit: ing.unit,
+                    notes: ing.notes?.trim() || null,
                     order_index: index
                 }))
 
@@ -260,22 +261,30 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     <section className="form-section">
                         <h3>Ingredients</h3>
                         {ingredients.map((ing, index) => (
-                            <div key={index} className="form-row">
+                            <div key={index} className="mb-3">
+                                <div className="form-row">
+                                    <input
+                                        placeholder="Name"
+                                        value={ing.name}
+                                        onChange={e => handleIngredientChange(index, 'name', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="Qty"
+                                        type="number"
+                                        value={ing.quantity}
+                                        onChange={e => handleIngredientChange(index, 'quantity', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="Unit (e.g. cups)"
+                                        value={ing.unit}
+                                        onChange={e => handleIngredientChange(index, 'unit', e.target.value)}
+                                    />
+                                </div>
                                 <input
-                                    placeholder="Name"
-                                    value={ing.name}
-                                    onChange={e => handleIngredientChange(index, 'name', e.target.value)}
-                                />
-                                <input
-                                    placeholder="Qty"
-                                    type="number"
-                                    value={ing.quantity}
-                                    onChange={e => handleIngredientChange(index, 'quantity', e.target.value)}
-                                />
-                                <input
-                                    placeholder="Unit (e.g. cups)"
-                                    value={ing.unit}
-                                    onChange={e => handleIngredientChange(index, 'unit', e.target.value)}
+                                    placeholder="Notes (optional — e.g. or any neutral oil)"
+                                    value={ing.notes || ''}
+                                    onChange={e => handleIngredientChange(index, 'notes', e.target.value)}
+                                    className="mt-1.5 w-full italic text-sm"
                                 />
                             </div>
                         ))}

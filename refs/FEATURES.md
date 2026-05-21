@@ -34,9 +34,3 @@ Features to possible implement during development
 - Each recipe has a share button that copies a link to the user's clipboard
     - The link should be to the website and the recipe
     - It should be independent of anon/signed users that access the link
-    
-
-# Notes
-- Add a notes section to each ingredient
-    - Possible alternatives; do not require exact ingredient especially if limited in ethnic choices
-- Add 
