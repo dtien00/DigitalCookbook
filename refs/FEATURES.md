@@ -31,3 +31,10 @@ Features to possible implement during development
 ## AI/Image recognition
 - Takes a photo of ingredients, user manually confirms ingredients and can be used to determine what can be made from it
 - Yield nutritional information based on ingredients
+
+# Sharing Recipe
+- Promotes outreach of application
+- Each recipe has a share button that copies a link to the user's clipboard
+    - The link should be to the website and the recipe
+    - It should be independent of anon/signed users that access the link
+    

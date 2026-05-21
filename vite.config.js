@@ -8,5 +8,7 @@ export default defineConfig({
   // Wi-Fi can reach it via the PC's LAN IP. Vite prints both Local and
   // Network URLs at startup. Override with `npm run dev -- --host false`
   // if you ever want localhost-only.
-  server: { host: true },
+  // allowedHosts: true disables Vite's host-allowlist DNS-rebinding check
+  // so LAN IPs and trycloudflare tunnels work in dev. Dev-only — no effect on build.
+  server: { host: true, allowedHosts: true },
 })
