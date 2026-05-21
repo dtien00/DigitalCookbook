@@ -22,8 +22,11 @@ export default function RecipeDetail({
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
     const [loading, setLoading] = useState(true)
+    const [targetServings, setTargetServings] = useState(recipe.servings || 1)
 
     const isAuthor = userId === recipe.author_id
+    const baseServings = recipe.servings || 1
+    const multiplier = targetServings / baseServings
 
     useEffect(() => {
         fetchRecipeDetails()
@@ -106,8 +109,29 @@ export default function RecipeDetail({
                             ))}
                         </div>
                     )}
-                    <div className="recipe-meta">
-                        <span>Servings: {recipe.servings}</span>
+                    <div className="recipe-meta flex items-center gap-2 flex-wrap">
+                        <span>Servings:</span>
+                        <button
+                            onClick={() => setTargetServings(s => Math.max(1, s - 1))}
+                            disabled={targetServings <= 1}
+                            className="w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                            aria-label="Decrease servings"
+                        >−</button>
+                        <span className="w-6 text-center font-semibold">{targetServings}</span>
+                        <button
+                            onClick={() => setTargetServings(s => Math.min(99, s + 1))}
+                            disabled={targetServings >= 99}
+                            className="w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                            aria-label="Increase servings"
+                        >+</button>
+                        {targetServings !== baseServings && (
+                            <button
+                                onClick={() => setTargetServings(baseServings)}
+                                className="text-xs text-rose hover:underline underline-offset-2 ml-1 transition-colors"
+                            >
+                                reset
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -131,7 +155,7 @@ export default function RecipeDetail({
                             <ul className="ingredient-list">
                                 {ingredients.map(ing => (
                                     <li key={ing.id}>
-                                        {ing.quantity} {ing.unit} {ing.name}
+                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
                                     </li>
                                 ))}
                             </ul>
@@ -168,4 +192,19 @@ export default function RecipeDetail({
             </div>
         </div>
     )
+}
+
+// Scale a numeric ingredient quantity by the current multiplier and render
+// common fractions (½ ¼ ¾ ⅓ ⅔) so "0.5 cups" reads as "½ cups" after scaling.
+// Quantities are stored as NUMERIC in Postgres so quantity is always a number or null.
+function scaleQuantity(quantity, multiplier) {
+    if (!quantity) return quantity
+    const raw = parseFloat((quantity * multiplier).toFixed(2))
+    const whole = Math.floor(raw)
+    const decimal = parseFloat((raw - whole).toFixed(2))
+    if (decimal === 0) return String(whole)
+    const FRACS = { 0.25: '¼', 0.5: '½', 0.75: '¾', 0.33: '⅓', 0.67: '⅔' }
+    const frac = FRACS[decimal]
+    if (frac) return whole === 0 ? frac : `${whole} ${frac}`
+    return String(raw)
 }

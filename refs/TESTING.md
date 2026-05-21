@@ -145,6 +145,20 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Multi-line content preserves newlines** — paste a comment with embedded `\n`; rendered with `whitespace-pre-wrap` so line breaks survive
 - [ ] **Long words / URLs don't overflow the column** — `break-words` keeps a 200-character no-spaces string from blowing out the layout
 
+## Servings multiplier checklist
+
+> Verifies the Stage 7 servings stepper on RecipeDetail. Local-state-only — no migration required.
+
+- [ ] **Stepper visible** on every RecipeDetail page next to the "Servings:" label
+- [ ] **Bounds: minimum** — click `−` until `targetServings = 1`; button becomes disabled (40% opacity, not-allowed cursor) and further clicks do nothing
+- [ ] **Bounds: maximum** — click `+` until `targetServings = 99`; button disables the same way
+- [ ] **Quantities scale live** — pick a recipe with `0.5 cup` or `0.25 tsp` ingredients and bump servings; quantities update on each click without page reload
+- [ ] **Fractions render** — at multiplier values that produce `.25 / .5 / .75 / .33 / .67`, the ingredient line shows `¼ ½ ¾ ⅓ ⅔` (e.g. `0.5 cup` × 1.5 = `¾ cup`)
+- [ ] **Whole + fraction** — `1 cup` × 1.5 renders as `1 ½ cup`, not `1.5 cup`
+- [ ] **Reset link** — appears as soon as `targetServings ≠ baseServings`; disappears when you return to baseline; clicking it restores `baseServings`
+- [ ] **No persistence** — navigate away and back; servings resets to the recipe's original value. Refresh the page; same result. (The author's recipe contract is preserved.)
+- [ ] **Anonymous users** — stepper works for signed-out viewers too (no auth gate on a client-side cooking aid)
+
 ---
 
 ## Future testing notes

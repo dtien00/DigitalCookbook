@@ -199,6 +199,16 @@ This is where the cookbook metaphor lives most fully:
 - Outline (unsaved/unliked) state uses `stroke-ink` instead of `stroke-gray-800`.
 - The frosted disc background (`bg-white/90`) is unchanged — white still reads cleanest against arbitrary image content.
 
+### Servings stepper (Recipe Detail)
+A ± stepper next to the "Servings:" label in the recipe-meta row. Local state only — no server persistence; the multiplier resets on navigation away.
+
+- **± buttons:** `w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold` — small circular discs in the paper-shade family so they read as paper ornaments rather than primary actions. The stepper is a fine-tuning control, not a CTA; muted treatment matches its intent.
+- **Bounds:** disabled at `1` and `99` (`disabled:opacity-40 disabled:cursor-not-allowed`). Below 1 makes no sense; 99 is a generous upper bound that still feels like a hand-typed recipe rather than industrial.
+- **Reset link:** appears inline when `targetServings ≠ baseServings`. Styled as `text-xs text-rose hover:underline underline-offset-2` — the italic-rose family used elsewhere for muted-explanatory text, so reset reads as "undo this small experiment", not a destructive action.
+- **Fraction rendering:** the `scaleQuantity()` helper substitutes `½ ¼ ¾ ⅓ ⅔` for the matching decimals so "½ cup" stays "½ cup" at multiplier 1, and "¾ cup" reads naturally at multiplier 1.5. Quantities are stored as NUMERIC in Postgres, so no string parsing is needed.
+
+**Why local-state-only:** the multiplier is a cooking-session affordance, not a preference. Scaling a recipe to 6 servings tonight shouldn't change what the recipe says the next time someone (or you) opens it. Persisting it would muddy the "this is the author's recipe" contract.
+
 ## What this branch does *not* touch
 - **Auth, Profile, MyBookmarks, CreateRecipe** screens are deferred to a follow-up retheme. They currently still use the old indigo/gray tokens — visible mismatch when you navigate to them. Conscious scope cut: home grid + recipe detail are the two highest-traffic surfaces.
 - The legacy CSS `.auth-card` / `.form-card` / `.recipe-content` classes still exist; their *colors* now match the new palette (`#fbf6f1` paper-card background, `#e8dcd2` borders) so the deferred screens don't look totally broken in the meantime — they just don't get the serif heading + ornamental rule treatment yet.
