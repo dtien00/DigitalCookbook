@@ -37,6 +37,10 @@ function App() {
     const [doubled, setDoubled] = useState(false)
     const [scrolled, setScrolled] = useState(false)
 
+    // Tag chip row collapse state. Collapsed shows the most-used tags only;
+    // expanded shows the full list. Threshold below.
+    const [tagsExpanded, setTagsExpanded] = useState(false)
+
     // Profile dropdown menu open/closed state.
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef(null)
@@ -261,10 +265,85 @@ function App() {
             />
         }
 
-        const filteredRecipes = recipes.filter(recipe =>
-            recipe.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            recipe.description?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        // Search supports two modes:
+        //   - tag mode: any comma in the input → split, trim, lowercase the
+        //     tokens; recipes must include EVERY token in their tags array
+        //     (AND match). Empty tokens (e.g. trailing comma) are dropped, so
+        //     "italian," with one token still works as a single-tag filter.
+        //   - text mode: no comma → existing substring match on title /
+        //     description, case-insensitive.
+        // Whitespace is trimmed around every token so "  italian , pasta  "
+        // behaves identically to "italian,pasta".
+        const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
+
+        const filteredRecipes = recipes.filter(recipe => {
+            if (searchMode === 'none') return true
+            if (searchMode === 'tag') {
+                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                return searchTokens.every(token => recipeTagsLower.includes(token))
+            }
+            const q = searchTokens[0]
+            if (searchMode === 'hybrid') {
+                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                if (recipeTagsLower.includes(q)) return true
+            }
+            return recipe.title.toLowerCase().includes(q) ||
+                recipe.description?.toLowerCase().includes(q)
+        })
+
+        // Tags from currently loaded recipes, sorted by frequency desc with
+        // alphabetical tiebreak. Frequency-sort surfaces the most actionable
+        // chips first; alphabetical tiebreak keeps the order stable across
+        // re-renders (objects with identical counts would otherwise jitter).
+        // Limitation: tags that only exist on unloaded pages won't appear
+        // until the user scrolls — acceptable for the current corpus size.
+        const tagCounts = new Map()
+        recipes.forEach(r => (r.tags || []).forEach(t => {
+            tagCounts.set(t, (tagCounts.get(t) || 0) + 1)
+        }))
+        const availableTags = Array.from(tagCounts.keys()).sort((a, b) => {
+            const diff = tagCounts.get(b) - tagCounts.get(a)
+            return diff !== 0 ? diff : a.localeCompare(b)
+        })
+
+        // Hybrid mode is also "tag-active" for chip display purposes: the
+        // single token IS being matched against tags (alongside title/desc),
+        // so the corresponding chip should render in its active state and
+        // clicking it should deactivate the filter.
+        const activeTags = (searchMode === 'tag' || searchMode === 'hybrid')
+            ? new Set(searchTokens)
+            : new Set()
+
+        // Collapsed chip row shows the top N by frequency. Any currently
+        // active tags (from a typed comma-list or prior chip clicks) are
+        // pinned into view even if they'd otherwise be hidden, so a filter
+        // never appears to "vanish" from the row.
+        const TAG_CHIP_LIMIT = 12
+        const overLimit = availableTags.length > TAG_CHIP_LIMIT
+        const visibleTags = (tagsExpanded || !overLimit)
+            ? availableTags
+            : (() => {
+                const top = availableTags.slice(0, TAG_CHIP_LIMIT)
+                const topSet = new Set(top.map(t => t.toLowerCase()))
+                const pinned = availableTags.filter(t =>
+                    activeTags.has(t.toLowerCase()) && !topSet.has(t.toLowerCase())
+                )
+                return [...top, ...pinned]
+            })()
+
+        const toggleTagFilter = (tag) => {
+            const tagLower = tag.toLowerCase()
+            const current = new Set(activeTags)
+            if (current.has(tagLower)) current.delete(tagLower)
+            else current.add(tagLower)
+            const arr = Array.from(current)
+            if (arr.length === 0) setSearchTerm('')
+            // Trailing comma on a single tag forces tag-mode parsing rather
+            // than falling back to text mode (since text mode would substring-
+            // match titles/descriptions, not the tags array).
+            else if (arr.length === 1) setSearchTerm(arr[0] + ',')
+            else setSearchTerm(arr.join(', '))
+        }
 
         // Density scales with the user's full library size (totalCount from
         // Supabase), not the loaded subset, so the column count stays stable
@@ -416,19 +495,72 @@ function App() {
                     >
                         {densityIcon}
                     </button>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 relative">
                         <input
                             type="text"
-                            placeholder="Search recipes..."
+                            placeholder="Search recipes — or tag1, tag2 for tag filter…"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full px-4 py-3 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
+                            className="w-full px-4 py-3 pr-11 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
                         />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                aria-label="Clear search"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-paper-shade hover:bg-tan/40 text-ink flex items-center justify-center transition-colors"
+                            >
+                                <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <path d="M4 4l8 8M12 4l-8 8" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                     {session && (
                         <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
                     )}
                 </div>
+
+                {/* Tag chip row — discoverability layer over the tag-mode
+                    search syntax. Each chip toggles its tag into the search
+                    input as a comma-separated token; the chip's active state
+                    is derived from the input so typed and clicked filters
+                    stay visually in sync. Hidden when no tags exist on the
+                    loaded recipes. */}
+                {availableTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6 items-center" role="group" aria-label="Filter by tag">
+                        {visibleTags.map(tag => {
+                            const isActive = activeTags.has(tag.toLowerCase())
+                            return (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => toggleTagFilter(tag)}
+                                    aria-pressed={isActive}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                                        isActive
+                                            ? 'bg-rust text-paper hover:bg-rust-dark'
+                                            : 'bg-tan-soft text-ink hover:bg-tan/40'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            )
+                        })}
+                        {overLimit && (
+                            <button
+                                type="button"
+                                onClick={() => setTagsExpanded(e => !e)}
+                                aria-expanded={tagsExpanded}
+                                className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                            >
+                                {tagsExpanded
+                                    ? 'Show less'
+                                    : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {loading ? (
                     <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
@@ -554,6 +686,32 @@ function EmptyGridState({ searchTerm, hasAnyRecipes, session, onClearSearch, onS
             </button>
         </div>
     )
+}
+
+// Parses the search input into one of four modes:
+//   - none: empty / whitespace-only input
+//   - tag: comma present in raw input → split, trim, lowercase each token;
+//     empty tokens dropped so "italian," still parses as one tag
+//   - hybrid: single token with no whitespace → match against tags exactly
+//     OR substring-match title/description. Catches the common case where
+//     a user types one word ("vegetarian") and wants both tag-matches and
+//     recipes whose title/description happens to contain the word.
+//   - text: multi-word input (has whitespace, no comma) → substring match
+//     on title/description only, since tags are normalized to single words
+//     and an exact tag match against a multi-word query would never hit.
+// Splitting on the *raw* string (not the trimmed one) is intentional so a
+// lone comma still triggers tag mode; the empty-token filter then yields
+// an empty array → no match, which is the right behavior for "just a comma".
+function parseSearch(raw) {
+    if (!raw || !raw.trim()) return { mode: 'none', tokens: [] }
+    if (raw.includes(',')) {
+        const tokens = raw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+        if (tokens.length === 0) return { mode: 'none', tokens: [] }
+        return { mode: 'tag', tokens }
+    }
+    const trimmed = raw.trim().toLowerCase()
+    if (!/\s/.test(trimmed)) return { mode: 'hybrid', tokens: [trimmed] }
+    return { mode: 'text', tokens: [trimmed] }
 }
 
 export default App

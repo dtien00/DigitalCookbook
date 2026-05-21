@@ -35,3 +35,8 @@ Features to possible implement during development
     - The link should be to the website and the recipe
     - It should be independent of anon/signed users that access the link
     
+
+# Notes
+- Add a notes section to each ingredient
+    - Possible alternatives; do not require exact ingredient especially if limited in ethnic choices
+- Add 
