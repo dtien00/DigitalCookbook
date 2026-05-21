@@ -23,6 +23,8 @@ export default function RecipeDetail({
     const [steps, setSteps] = useState([])
     const [loading, setLoading] = useState(true)
     const [targetServings, setTargetServings] = useState(recipe.servings || 1)
+    const [checkedIngredients, setCheckedIngredients] = useState(() => new Set())
+    const [checkedSteps, setCheckedSteps] = useState(() => new Set())
 
     const isAuthor = userId === recipe.author_id
     const baseServings = recipe.servings || 1
@@ -30,7 +32,18 @@ export default function RecipeDetail({
 
     useEffect(() => {
         fetchRecipeDetails()
+        setCheckedIngredients(new Set())
+        setCheckedSteps(new Set())
     }, [recipe.id])
+
+    function toggleChecked(setter, id) {
+        setter(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
 
     async function fetchRecipeDetails() {
         try {
@@ -152,12 +165,25 @@ export default function RecipeDetail({
                                 ))}
                             </ul>
                         ) : (
-                            <ul className="ingredient-list">
-                                {ingredients.map(ing => (
-                                    <li key={ing.id}>
-                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
-                                    </li>
-                                ))}
+                            <ul className="ingredient-list list-none pl-0">
+                                {ingredients.map(ing => {
+                                    const checked = checkedIngredients.has(ing.id)
+                                    return (
+                                        <li key={ing.id}>
+                                            <label className="flex items-start gap-3 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
+                                                    className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
+                                                />
+                                                <span className={checked ? 'line-through text-ink/50' : ''}>
+                                                    {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                                </span>
+                                            </label>
+                                        </li>
+                                    )
+                                })}
                             </ul>
                         )}
                     </section>
@@ -174,11 +200,24 @@ export default function RecipeDetail({
                             </ol>
                         ) : (
                             <ol className="step-list">
-                                {steps.map(step => (
-                                    <li key={step.id}>
-                                        {step.instruction}
-                                    </li>
-                                ))}
+                                {steps.map(step => {
+                                    const checked = checkedSteps.has(step.id)
+                                    return (
+                                        <li key={step.id}>
+                                            <label className="flex items-start gap-3 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => toggleChecked(setCheckedSteps, step.id)}
+                                                    className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
+                                                />
+                                                <span className={checked ? 'line-through text-ink/50' : ''}>
+                                                    {step.instruction}
+                                                </span>
+                                            </label>
+                                        </li>
+                                    )
+                                })}
                             </ol>
                         )}
                     </section>
