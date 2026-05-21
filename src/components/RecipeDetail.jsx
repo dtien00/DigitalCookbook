@@ -111,6 +111,19 @@ export default function RecipeDetail({
                     {recipe.image_url && (
                         <img src={recipe.image_url} alt={`${recipe.title} cover image`} loading="lazy" className="detail-image" />
                     )}
+                    {recipe.is_public === false && (
+                        <div className="flex justify-center mb-2">
+                            <span
+                                aria-label="Private recipe"
+                                className="inline-flex items-center gap-1 bg-ink/70 text-paper text-xs font-medium rounded-full px-2.5 py-1"
+                            >
+                                <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="currentColor">
+                                    <path d="M5 6V4.5a3 3 0 0 1 6 0V6h.5A1.5 1.5 0 0 1 13 7.5v5A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-5A1.5 1.5 0 0 1 4.5 6H5Zm1.5 0h3V4.5a1.5 1.5 0 0 0-3 0V6Z" />
+                                </svg>
+                                Private
+                            </span>
+                        </div>
+                    )}
                     <h1>{recipe.title}</h1>
                     <p className="description">{recipe.description}</p>
                     {recipe.tags?.length > 0 && (

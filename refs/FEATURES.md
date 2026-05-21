@@ -15,9 +15,6 @@ Features to possible implement during development
 - Old Recipe Book
 - Lined Notepad/Notebook
 
-# Add Visual Distinction between public/private recipes
-- Add a "P" tag on the bottom right corner or else on the preview picture
-
 # Introduce an Admin Account
 - Delete any recipe
 - Delete any user
