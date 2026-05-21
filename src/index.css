@@ -68,6 +68,693 @@ body {
   max-width: 400px;
 }
 
+/* ─── Auth style: Book Cover — Composition Notebook ────────────────────────
+   Visual metaphor: a closed cookbook on the paper background. See
+   src/components/auth/styles/BookCoverComposition.jsx for the markup.
+   All textures here are pure CSS (no image assets) so they reflow cleanly
+   and stay palette-coherent if tokens shift.                                */
+
+/* Page surface — the paper background the book sits on. */
+.auth-book-page {
+  background-color: #f2e9e4;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(30, 30, 36, 0.04) 1px, transparent 1.5px),
+    radial-gradient(circle at 70% 80%, rgba(30, 30, 36, 0.03) 1px, transparent 1.5px),
+    radial-gradient(circle at 40% 60%, rgba(30, 30, 36, 0.02) 1px, transparent 1.5px);
+  background-size: 80px 80px, 110px 110px, 60px 60px;
+}
+
+/* Floating "Back to recipes" — sits outside the book frame at top-left of
+   the paper-grain page so the cover reads as one closed object. Paper-shade
+   chip with ink text reads against the page without competing with the rust
+   leather. */
+.auth-book-back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  padding: 8px 14px;
+  background-color: rgba(232, 220, 210, 0.92);
+  color: #1e1e24;
+  border: 1px solid rgba(30, 30, 36, 0.18);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 2px 6px rgba(30, 30, 36, 0.18);
+  transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.auth-book-back:hover {
+  background-color: #e8dcd2;
+}
+
+.auth-book-back:active {
+  transform: translateY(1px);
+}
+
+/* The closed book — cognac-leather hardcover. Built in layers:
+   1. Base radial gradient: lighter cognac at top-center fading to deep saddle
+      at the edges/corners. This is the "soft-lit polished leather" look from
+      the reference photo — the cover catches light at the top center and
+      darkens into a vignette toward the bound edge.
+   2. A second linear gradient overlays a faint left-to-right shading so the
+      left side (near the spine) reads slightly darker than the open edge.
+   3. Three subtle radial-gradient noise passes at very low alpha add a hint
+      of leather grain without the speckled-pixel look the previous build had.
+   4. Heavy dark border + deep drop shadow for the bound-book weight.
+   No frame, no fleurs — the reference is intentionally minimal, just leather. */
+.auth-book {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background-color: #8d5a40;
+  background-image:
+    /* Faint grain — three offset radial speckles at low alpha. */
+    radial-gradient(circle at 22% 28%, rgba(40, 22, 12, 0.10) 0.8px, transparent 1.4px),
+    radial-gradient(circle at 68% 62%, rgba(40, 22, 12, 0.08) 0.7px, transparent 1.3px),
+    radial-gradient(circle at 48% 84%, rgba(40, 22, 12, 0.09) 0.9px, transparent 1.5px),
+    /* Spine-side darkening — left edge sinks into shadow more than the right. */
+    linear-gradient(to right,
+      rgba(40, 22, 12, 0.22) 0%,
+      rgba(40, 22, 12, 0.0) 25%,
+      rgba(40, 22, 12, 0.0) 75%,
+      rgba(40, 22, 12, 0.10) 100%),
+    /* Main lighting — soft top-center highlight fading to dark corners. */
+    radial-gradient(ellipse 90% 70% at 50% 18%,
+      #b07a5a 0%,
+      #9d6648 35%,
+      #7a4a30 75%,
+      #5a341f 100%);
+  background-size: 22px 22px, 18px 18px, 26px 26px, 100% 100%, 100% 100%;
+  background-position: 0 0, 6px 8px, 10px 4px, 0 0, 0 0;
+  background-blend-mode: multiply, multiply, multiply, normal, normal;
+  border: 1px solid #3a1f12;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 200, 0.16),
+    inset 0 0 0 1px rgba(30, 15, 5, 0.22),
+    inset 0 -3px 10px rgba(30, 15, 5, 0.30),
+    0 16px 36px rgba(30, 15, 5, 0.42),
+    0 6px 14px rgba(30, 15, 5, 0.22);
+  overflow: hidden;
+}
+
+/* Spine — left strip of deeper leather, no raised bands (the reference shows
+   none from the front-cover view). Just a darker leather edge with a vertical
+   gradient suggesting curvature into the binding. */
+.auth-book-spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 16px;
+  background:
+    linear-gradient(to right,
+      rgba(30, 15, 5, 0.70) 0%,
+      rgba(30, 15, 5, 0.40) 55%,
+      rgba(30, 15, 5, 0.08) 95%,
+      rgba(255, 230, 200, 0.06) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Right-edge page sliver — thin cream strip suggesting the closed book's
+   page block peeking out from behind the front cover. Tiny horizontal lines
+   imply individual page edges. */
+.auth-book-pages {
+  position: absolute;
+  inset: 8px 0 8px auto;
+  right: 0;
+  width: 5px;
+  background-color: #ede0c4;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(30, 15, 5, 0.18) 0 0.5px,
+    transparent 0.5px 2px
+  );
+  border-left: 1px solid rgba(30, 15, 5, 0.35);
+  border-right: 1px solid rgba(30, 15, 5, 0.55);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Cover surface — where the notebook label and patch sit. No tooled frame;
+   the leather is the surface. */
+.auth-book-cover {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 28px 18px 32px;   /* extra left padding clears the spine */
+  min-height: 580px;
+}
+
+/* Blind-embossed brand at the bottom of the cover — the only ornament on the
+   reference. ✦ glyph above, "DIGITAL COOKBOOK" wordmark below. Pressed into
+   the leather rather than gilded: the text color sits close to the leather
+   tone and the two-tone text-shadow does the depressed-edge work — a dark
+   shadow on top (the indent's shaded edge) and a faint highlight below (the
+   indent's lit lip). Pushed to the bottom of the cover via margin-top: auto;
+   so the cartouche stays anchored to the top. */
+.auth-book-brand {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.auth-book-brand-mark {
+  font-size: 1.05rem;
+  line-height: 1;
+  color: rgba(74, 40, 25, 0.85);
+  text-shadow:
+    0 -1px 0 rgba(20, 8, 2, 0.55),
+    0 1px 0 rgba(255, 230, 200, 0.16);
+}
+
+.auth-book-brand-text {
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.30em;
+  text-transform: uppercase;
+  color: rgba(74, 40, 25, 0.88);
+  text-shadow:
+    0 -1px 0 rgba(20, 8, 2, 0.60),
+    0 1px 0 rgba(255, 230, 200, 0.18);
+}
+
+/* ── Composition-notebook label ──
+   Two-layer build: an outer "marbled" border (.auth-comp-marble) made of
+   stippled ink dots over tan-soft, and an inner cream surface with faint
+   tan rules running across it. The form fields sit on top of the rules so
+   the "writing on lined paper" cue lands without obstructing input UX. */
+.auth-comp-label {
+  position: relative;
+  border-radius: 3px;
+  padding: 10px;
+  margin-bottom: 14px;
+  box-shadow:
+    0 2px 4px rgba(30, 30, 36, 0.18),
+    0 0 0 1px rgba(30, 30, 36, 0.35);
+}
+
+.auth-comp-marble {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background-color: #ede0c4;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(30, 30, 36, 0.55) 1.2px, transparent 1.6px),
+    radial-gradient(circle at 78% 42%, rgba(30, 30, 36, 0.45) 1px, transparent 1.4px),
+    radial-gradient(circle at 36% 76%, rgba(30, 30, 36, 0.5) 1.1px, transparent 1.5px),
+    radial-gradient(circle at 88% 88%, rgba(30, 30, 36, 0.4) 0.9px, transparent 1.3px),
+    radial-gradient(circle at 22% 60%, rgba(132, 82, 90, 0.35) 1px, transparent 1.4px),
+    radial-gradient(circle at 60% 14%, rgba(132, 82, 90, 0.3) 0.9px, transparent 1.3px);
+  background-size: 14px 14px, 18px 18px, 12px 12px, 20px 20px, 16px 16px, 22px 22px;
+  background-position: 0 0, 4px 6px, 8px 2px, 2px 10px, 6px 4px, 10px 8px;
+  pointer-events: none;
+}
+
+.auth-comp-inner {
+  position: relative;
+  background-color: #fbf6f1;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(214, 170, 108, 0.35) 27px,
+    rgba(214, 170, 108, 0.35) 28px
+  );
+  padding: 18px 18px 20px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(30, 30, 36, 0.08);
+}
+
+.auth-comp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-comp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-comp-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(30, 30, 36, 0.25);
+  border-radius: 4px;
+  background-color: rgba(251, 246, 241, 0.85);
+  color: #1e1e24;
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.auth-comp-input:focus {
+  outline: none;
+  border-color: #b06452;
+  box-shadow: 0 0 0 3px rgba(176, 100, 82, 0.18);
+}
+
+/* ── Clasp row (view-toggle + submit clasp) ──
+   A flex band sitting on the leather between the cartouche and the OAuth
+   section. View-toggle links (Sign Up / Forgot Password / etc.) sit on the
+   left like margin notes scribbled on the leather; the leather strap clasp
+   sits on the right as the submit affordance. They share the eye-line so
+   the user can read alternatives + submit without their gaze hopping.      */
+
+.auth-clasp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px 14px;
+}
+
+/* View-toggle links — restyled for the leather background. Body text in
+   tan-muted (italic for the "are you a returning user?" voice); active
+   prompt link in brighter tan so it pops; tertiary "Forgot Password?" uses
+   a more muted dust-rose so it doesn't compete with the primary toggle. */
+.auth-view-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: rgba(232, 200, 150, 0.78);
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.auth-view-toggle p {
+  margin: 0;
+}
+
+.auth-view-toggle-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-style: normal;
+  font-weight: 700;
+  color: #f5dca8;
+  cursor: pointer;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.auth-view-toggle-link:hover {
+  color: #fff2cc;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-view-toggle-link-muted {
+  color: rgba(214, 170, 108, 0.85);
+  font-weight: 600;
+}
+
+.auth-view-toggle-link-muted:hover {
+  color: #d6aa6c;
+}
+
+/* The clasp itself — flex child of .auth-clasp-row. The width is enlarged
+   and a negative right margin pulls the right end past the cover's right
+   padding into the book's overflow:hidden, so the strap visually disappears
+   over the right edge as if wrapping around to the back cover. */
+.auth-clasp {
+  position: relative;
+  /* Above .auth-book-pages (z-index 2) so the strap visually crosses *over*
+     the cream page-edges sliver as it heads toward the right edge — the
+     leather appears to wrap around the white edge of the book to the back. */
+  z-index: 3;
+  flex-shrink: 0;
+  width: 170px;
+  height: 44px;
+  /* Pull the right end well past the cover's right padding so a clear chunk
+     of the strap extends past the book's right edge and gets clipped by
+     .auth-book's overflow:hidden — that's the "wraps around to the back"
+     illusion. Negative margin doesn't affect the view-toggle's position on
+     the left because the row uses justify-content: space-between. */
+  margin-right: -64px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  /* No outer focus ring — the strap itself gets focus styling instead. */
+  outline: none;
+  transition: transform 120ms ease;
+}
+
+/* The strap — leather rectangle holding the label + brass stud. Single
+   element so the contents stay within the strap's bounds. Label fills the
+   middle space; stud sits at the right edge where a real journal's closure
+   button would be. */
+.auth-clasp-strap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Left padding holds the stud away from the strap's left edge; right
+     padding is 0 because the right end of the strap is the wrap zone (gets
+     visually darkened + clipped past the book edge — no content sits there). */
+  padding: 0 0 0 12px;
+  background-color: #6f4530;
+  background-image:
+    /* Faint leather grain — same family as the cover but darker so the strap
+       reads as a distinct piece sewn on, not painted onto the leather. */
+    radial-gradient(circle at 30% 50%, rgba(20, 8, 2, 0.20) 0.8px, transparent 1.4px),
+    radial-gradient(circle at 70% 30%, rgba(20, 8, 2, 0.15) 0.7px, transparent 1.3px),
+    linear-gradient(to bottom,
+      #8a5a40 0%,
+      #6f4530 50%,
+      #4f2f1c 100%);
+  background-size: 12px 12px, 16px 16px, 100% 100%;
+  border: 1px solid #2a1408;
+  border-radius: 4px 6px 6px 4px;   /* slightly rounder on the right edge */
+  box-shadow:
+    /* Top edge catches light. */
+    inset 0 1px 0 rgba(255, 220, 180, 0.28),
+    /* Bottom edge sinks. */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    /* Outer drop — the strap sits proud of the cover. */
+    0 3px 6px rgba(20, 10, 0, 0.5),
+    0 1px 2px rgba(20, 10, 0, 0.3);
+  transition: filter 150ms ease;
+}
+
+/* Stitching — two dashed dark hairlines running along the strap, top + bottom.
+   The dashes are tight enough to read as real stitches at this size. */
+.auth-clasp-stitch {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  height: 0;
+  border-top: 1px dashed rgba(20, 8, 2, 0.65);
+  pointer-events: none;
+}
+
+.auth-clasp-stitch-top    { top: 4px; }
+.auth-clasp-stitch-bottom { bottom: 3px; }
+
+/* Brass stud — circular rivet sitting on the left side of the strap, where a
+   hole-and-button closure's button would be. Radial gradient from a light
+   highlight to dark brass + a dark border ring, capped with a tiny specular
+   spot for the metal glint. */
+.auth-clasp-stud {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  /* Now sits on the left of the LOGIN label — the closure point is visible
+     toward the spine side of the strap, with the strap continuing to the
+     right where it wraps around the book's back cover. */
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%,
+      #f5dca8 0%,
+      #d6aa6c 22%,
+      #a07a3d 55%,
+      #5a4225 85%,
+      #2a1c0e 100%);
+  border: 1px solid #2a1c0e;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+  /* Tiny specular highlight as a pseudo-element so the stud catches light. */
+  position: relative;
+}
+
+.auth-clasp-stud::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 245, 220, 0.85);
+}
+
+.auth-clasp-label {
+  /* Sits to the right of the stud (which is now on the left). margin-right
+     auto pushes the wrap-shadow span to the very right end of the strap. */
+  margin-right: auto;
+  color: #f5e6c8;
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.65),
+    0 -1px 0 rgba(255, 220, 160, 0.08);
+}
+
+/* Wrap-shadow at the right end of the strap — a smooth darkening gradient
+   suggesting the leather is curving around the book's right edge into
+   shadow. Narrowed so it starts well *after* the LOGIN label (earlier wider
+   span + inset box-shadow created a visible vertical line that cut through
+   the label). Pure gradient now, no inset hairline — the gentle ramp does
+   all the work, with no hard boundary anywhere along the strap. */
+.auth-clasp-wrap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 60px;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(20, 8, 2, 0.15) 35%,
+    rgba(20, 8, 2, 0.55) 75%,
+    rgba(20, 8, 2, 0.85) 100%
+  );
+  border-radius: 0 6px 6px 0;
+}
+
+/* Hover: strap brightens slightly and pulls back to the left, like the
+   closure being eased open. Active: a stronger pull + press-down. */
+.auth-clasp:hover:not(:disabled) .auth-clasp-strap {
+  filter: brightness(1.08);
+}
+
+.auth-clasp:hover:not(:disabled) {
+  transform: translateX(-3px);
+}
+
+.auth-clasp:active:not(:disabled) {
+  transform: translateX(-5px) translateY(1px);
+}
+
+.auth-clasp:focus-visible .auth-clasp-strap {
+  outline: 2px solid #d6aa6c;
+  outline-offset: 2px;
+}
+
+.auth-clasp:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── OAuth brass label plates ──
+   Each provider gets its own faux brass plaque with ornate scrollwork ends
+   flanking a slightly-inset bronze writing surface. The plate is a single
+   <button> (not a wrapper div + inner button) so the entire ornate surface
+   is the click target and keyboard focus lands on the right element. The
+   scrollwork is inlined SVG (see ScrollCap in BookCoverComposition.jsx) —
+   two paths + a central boss + a highlight curve, simple enough to read as
+   ornate at this size without trying to be a literal acanthus.            */
+
+.auth-plates-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.auth-plate-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: rgba(214, 170, 108, 0.95);
+  font-family: 'Lora', Georgia, serif;
+  font-style: italic;
+  font-size: 0.85rem;
+  text-shadow: 0 1px 0 rgba(30, 30, 36, 0.45);
+}
+
+.auth-plate-divider::before,
+.auth-plate-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(214, 170, 108, 0.55), transparent);
+}
+
+/* The label-plate panel — a single brass plaque holding both provider cells.
+   Built as a flex row: [scroll-cap] [vertical-stack of cells] [scroll-cap].
+   Same brass treatment as the previous per-plate build, just wider and taller
+   so it can host two cells inside. */
+.auth-plate-panel {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  /* Brass base — vertical gradient + patina specks. */
+  background-color: #6a4f2a;
+  background-image:
+    radial-gradient(circle at 22% 35%, rgba(76, 96, 70, 0.30) 0.9px, transparent 1.5px),
+    radial-gradient(circle at 75% 60%, rgba(30, 18, 8, 0.32) 0.8px, transparent 1.4px),
+    radial-gradient(circle at 48% 20%, rgba(232, 200, 150, 0.18) 0.7px, transparent 1.3px),
+    linear-gradient(to bottom,
+      #a07a3d 0%,
+      #8a6a3d 30%,
+      #6a4f2a 70%,
+      #5a4225 100%);
+  background-size: 14px 14px, 16px 16px, 12px 12px, 100% 100%;
+  background-blend-mode: multiply, multiply, screen, normal;
+  border: 1px solid #2a1c0e;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    inset 0 0 0 2px rgba(60, 42, 18, 0.4),
+    0 3px 7px rgba(20, 10, 0, 0.50),
+    0 1px 2px rgba(20, 10, 0, 0.28);
+}
+
+/* Scrollwork end caps — single SVG, mirrored on the right via scaleX(-1).
+   Stretched to the panel height so the scroll sits beside both cells. */
+.auth-plate-scroll {
+  flex-shrink: 0;
+  width: 44px;
+  align-self: stretch;
+  display: block;
+}
+
+.auth-plate-scroll-right {
+  transform: scaleX(-1);
+}
+
+/* The cell column — sits between the two scrollwork caps, holds the two
+   provider cells with a small gap so they read as separate label slots
+   slipped into the brass plate. */
+.auth-plate-cells {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* Provider cell — high-contrast parchment card sitting on the dark brass.
+   The contrast is the point: cream on dark brass reads as a paper label
+   slipped into a plaque holder, and the two cells stay visually distinct
+   from each other and from the surrounding metal. */
+.auth-plate-cell {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background-color: #f2e9e4;
+  background-image:
+    /* Faint parchment grain — adds a hint of paper texture without
+       competing with the high-contrast brass behind. */
+    radial-gradient(circle at 20% 30%, rgba(106, 79, 42, 0.06) 0.8px, transparent 1.4px),
+    radial-gradient(circle at 70% 65%, rgba(106, 79, 42, 0.05) 0.7px, transparent 1.3px);
+  background-size: 16px 16px, 14px 14px;
+  color: #1e1e24;
+  border: 1px solid #2a1c0e;
+  border-radius: 3px;
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  /* Slight raised relief above the brass — top highlight, bottom dark
+     hairline, outer drop shadow. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(30, 30, 36, 0.15),
+    0 2px 4px rgba(20, 10, 0, 0.55),
+    0 1px 1px rgba(20, 10, 0, 0.3);
+  transition: background-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+}
+
+.auth-plate-cell:hover:not(:disabled) {
+  background-color: #fbf6f1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(30, 30, 36, 0.18),
+    0 3px 6px rgba(20, 10, 0, 0.55),
+    0 1px 2px rgba(20, 10, 0, 0.32);
+}
+
+.auth-plate-cell:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 2px rgba(30, 30, 36, 0.30),
+    0 1px 2px rgba(20, 10, 0, 0.35);
+}
+
+.auth-plate-cell:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Mobile tuning — keep the book metaphor on phone widths. The cover stays
+   narrow; spine slims down so the form has the bulk of horizontal room. */
+@media (max-width: 480px) {
+  .auth-book-cover {
+    padding: 22px 20px 14px 26px;
+    min-height: 520px;
+  }
+  .auth-book-spine {
+    width: 12px;
+  }
+  .auth-book-pages {
+    width: 4px;
+  }
+  .auth-comp-inner {
+    padding: 14px;
+  }
+  .auth-patch-inner {
+    flex-direction: column;
+    padding: 8px;
+  }
+  .auth-book-brand {
+    padding-top: 20px;
+  }
+  .auth-clasp {
+    width: 150px;
+    margin-right: -52px;
+  }
+  .auth-view-toggle {
+    font-size: 0.78rem;
+  }
+}
+
 .form-group {
   margin-bottom: 20px;
 }
