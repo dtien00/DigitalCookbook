@@ -53,6 +53,17 @@ export default function RecipeCard({
                     className="absolute top-3 right-3 z-10"
                 />
             )}
+            {recipe.is_public === false && (
+                <span
+                    aria-label="Private recipe"
+                    className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 bg-ink/70 backdrop-blur-sm text-paper text-[10px] font-medium rounded-full px-2 py-0.5"
+                >
+                    <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3 h-3" fill="currentColor">
+                        <path d="M5 6V4.5a3 3 0 0 1 6 0V6h.5A1.5 1.5 0 0 1 13 7.5v5A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-5A1.5 1.5 0 0 1 4.5 6H5Zm1.5 0h3V4.5a1.5 1.5 0 0 0-3 0V6Z" />
+                    </svg>
+                    Private
+                </span>
+            )}
 
             {recipe.image_url ? (
                 <div className="relative overflow-hidden">
