@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { toast } from 'react-hot-toast'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
@@ -99,6 +100,14 @@ function App() {
             if (session) {
                 setShowAuth(false)
             }
+            // On sign-out (including token expiry), reset all view state so
+            // re-login always returns to the home grid, not a stale sub-page.
+            if (!session) {
+                setShowProfile(false)
+                setShowBookmarks(false)
+                setShowCreate(false)
+                setMenuOpen(false)
+            }
         })
 
         return () => subscription.unsubscribe()
@@ -165,7 +174,21 @@ function App() {
     }
 
     const handleLogout = async () => {
-        await supabase.auth.signOut()
+        const { error } = await supabase.auth.signOut()
+        // "AuthSessionMissingError" means the JWT already expired and Supabase
+        // cleared it from localStorage before we called signOut — treat it as a
+        // successful logout. Any other error is unexpected and worth surfacing.
+        if (error && error.name !== 'AuthSessionMissingError') {
+            toast.error('Sign-out failed: ' + error.message)
+            return
+        }
+        // Force-clear React state in case onAuthStateChange doesn't fire
+        // (it won't if the session was already missing on Supabase's side).
+        setSession(null)
+        setShowProfile(false)
+        setShowBookmarks(false)
+        setShowCreate(false)
+        setMenuOpen(false)
     }
 
     const handleEditRecipe = (recipe) => {
@@ -448,6 +471,11 @@ function App() {
                                 {menuOpen && (
                                     <div
                                         role="menu"
+                                        // Stop pointerdown from bubbling to the document
+                                        // outside-click handler — prevents a race on desktop
+                                        // where the handler could close the menu before the
+                                        // button's click event fires.
+                                        onPointerDown={e => e.stopPropagation()}
                                         className="absolute right-0 mt-1 w-44 bg-white border border-paper-shade rounded-md shadow-md overflow-hidden z-50"
                                     >
                                         <button
@@ -467,7 +495,7 @@ function App() {
                                         <div className="border-t border-paper-shade" aria-hidden="true" />
                                         <button
                                             role="menuitem"
-                                            onClick={() => { handleLogout(); setMenuOpen(false) }}
+                                            onClick={async () => { await handleLogout(); setMenuOpen(false) }}
                                             className="w-full text-left px-4 py-2.5 text-rose font-medium hover:bg-paper-shade transition-colors"
                                         >
                                             Log out
