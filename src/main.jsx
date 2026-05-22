@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { Toaster, ToastBar, toast } from 'react-hot-toast'
 import App from './App.jsx'
 import MaintenancePage from './components/MaintenancePage.jsx'
@@ -25,7 +26,17 @@ const inMaintenance = import.meta.env.VITE_MAINTENANCE === 'true'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        {inMaintenance ? <MaintenancePage /> : <App />}
+        {inMaintenance ? (
+            <MaintenancePage />
+        ) : (
+            // BrowserRouter wraps App so useNavigate / useParams / useLocation
+            // work inside App and any child component. Maintenance page stays
+            // routerless since it's a static holding screen — no navigation,
+            // no Supabase calls, no client behavior beyond rendering text.
+            <BrowserRouter>
+                <App />
+            </BrowserRouter>
+        )}
         <Toaster
             position="top-center"
             toastOptions={{

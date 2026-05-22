@@ -347,6 +347,56 @@ Browsers add their own URL / date header on print by default — re-adding one w
 
 ---
 
+# Routing (Stage 8)
+
+The app uses `react-router-dom` for URL-driven views as of Stage 8. The state-driven view cascade (`showProfile`/`showBookmarks`/`showCreate`/`selectedRecipe`/`editingRecipe`) was replaced with `<Routes>` so deep links work, the back button behaves naturally, and recipe URLs are shareable.
+
+## URL scheme
+
+| Route | View | Auth |
+|---|---|---|
+| `/` | Home grid | anonymous + signed-in |
+| `/recipe/:id` | Recipe detail | anonymous + signed-in (RLS gates visibility) |
+| `/recipe/:id/edit` | Edit form (CreateRecipe in edit mode) | author only — non-authors redirect to `/recipe/:id` |
+| `/new` | Create form | signed-in only — anon redirects to `/` |
+| `/profile` | Profile | signed-in only — anon redirects to `/` |
+| `/bookmarks` | My bookmarks | signed-in only — anon redirects to `/` |
+| `*` | Catch-all → `/` (replace) | any — keeps URL bar from displaying a 404 the app can't render |
+
+Auth lives at `/auth`? **No.** It stays as an overlay state (`showAuth`). The slide-in motion (`fixed inset-0 z-50 translate-x-full → translate-x-0`, 450ms ease-out) is documented above as deliberate UX. Treating Auth as a route would either (a) lose the overlay-over-current-page metaphor by replacing the underlying view, or (b) require complex modal-route patterns. Sign-in is invoked in-place from any route, and the URL bar reflects whatever route the user was on when they clicked Sign In — so they return to that exact context after authenticating. A future iteration could expose a `?signin=1` query param if shareable sign-in becomes a need (e.g. an email link to "click here to sign in"), but that's deferred.
+
+## Deep-link fetch cascade
+
+`/recipe/:id` rendering uses a two-tier lookup in `RecipeDetailRoute` (in `src/App.jsx`):
+1. **Cache hit** — find the recipe by id in the parent's `recipes` array (already paginated into memory). This is the common case: clicking a card from the grid puts the recipe in cache, so the route is instant.
+2. **Cache miss → fetch** — pasting `/recipe/<uuid>` into a fresh tab finds an empty `recipes` array. The component falls back to `supabase.from('recipes').select('*').eq('id', id).maybeSingle()` and renders a `Loading recipe…` placeholder while the fetch is in flight.
+
+RLS handles visibility automatically — private recipes belonging to other users return no row, surfaced as a "Recipe not found" empty state with a "← Back to recipes" CTA. The empty state shares the same ✦ glyph + serif + italic-rose layout as the other empty states in the app.
+
+## Vercel SPA rewrite
+
+`vercel.json` at the repo root rewrites every path to `/index.html`:
+
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+```
+
+Vercel's filesystem-first behavior means built assets (`/assets/*.js`, `/assets/*.css`) still resolve normally — the rewrite only catches client routes like `/recipe/<uuid>` that don't exist as files. Without this, deep links and page reloads on sub-routes would 404 in Production. Local dev (`npm run dev`) has Vite's history fallback enabled by default, so the same URLs work without extra config.
+
+## Why not `<Outlet>` with shared layout
+
+A "shell + outlet" structure (header + search row in App, route content rendering inside `<Outlet>`) was considered. Skipped because each view (home grid, recipe detail, profile, bookmarks, create) has its own header treatment — there isn't a single chrome that wraps all of them. A shared shell would either need to be invisible-via-CSS on the non-home views or carry conditional rendering that defeats the point. Routes are simpler at this scale.
+
+## Auth-overlay z-index
+
+The Auth overlay stays at `z-50`, above the Routes. The env banner is `z-[60]` so it remains visible during sign-in (the moment the test/prod mistake could happen). No routing change affects these layers.
+
+## `onAuthStateChange` gotcha
+
+The sign-out-redirect-to-home logic gates on `event === 'SIGNED_OUT'` rather than `!session`. The reason: Supabase fires `INITIAL_SESSION` with `session=null` on every page load for anonymous users — without the event-name gate, every deep link (e.g. `/recipe/:id` pasted into a fresh tab) bounces back to `/` immediately on mount before the route even has a chance to render. A subtle but critical distinction documented in the relevant `useEffect` in `src/App.jsx`.
+
+---
+
 # Navigation IA — proposed *(not implemented)*
 
 A directional sketch of where the app's navigation could evolve. Currently top-level navigation is a flat row of buttons in the header (Bookmarks · Profile · Logout for signed-in users); the proposal here reframes those around two top-level spaces — **Public Hub** and **Personal Hub** — to give the app a clearer mental model.
