@@ -165,6 +165,49 @@ PR branches deploy to their own preview URLs automatically — useful for showin
 
 ---
 
+## Ongoing maintenance
+
+### Will exceeding Hobby limits auto-upgrade to Pro?
+
+**No.** Vercel will not silently move you to a paid plan — upgrades require explicit click-through. If you hit a limit, the offending resource is throttled or paused until the next monthly reset (functions stop, bandwidth fails, builds queue). The site goes offline; your wallet doesn't get charged. (Exception: Vercel may require an upgrade if they determine the project is commercial use. A personal cookbook is fine.)
+
+You get warning emails at 75% / 90% / 100% of each metric — toggle them on at Vercel → Settings → Notifications.
+
+### Hobby ceilings worth knowing
+
+| Metric | Hobby limit | Reality at solo-cookbook scale |
+|---|---|---|
+| Edge requests | 1M / mo | The one to actually watch |
+| Fast Data Transfer | 100 GB / mo | Non-issue |
+| Serverless function GB-hours | 100 GB-hrs / mo | Non-issue (static SPA) |
+| Build execution | 6,000 min / mo | ~30s per push, non-issue |
+
+Supabase Free has its own ceilings — the 500 MB DB and 1 GB Storage limits are already noted above, but the gotcha is the **7-day inactivity pause**. If no one hits the project for a week, Supabase pauses it and the first request after that hangs ~30s while it spins back up. Visiting the live URL occasionally keeps it warm.
+
+### Monthly checklist
+
+1. **Vercel usage** — Dashboard → project → Usage. Eyeball Edge Requests.
+2. **Supabase status** — dashboard should show "Active." If paused, click "Restore."
+3. **Supabase storage** — Storage tab. Recipe images grow over time.
+4. **`npm audit`** — patch high/critical advisories on a stage branch with a preview URL check.
+5. **Smoke-test live** — sign in, create/edit a recipe, log out. Catches Auth URL regressions.
+
+### Rollback
+
+Vercel → Deployments → find a known-good build → **Promote to Production**. No git revert needed for a fast rollback.
+
+### Key rotation
+
+The anon key is public-safe by design, but rotation is cheap insurance:
+
+1. Supabase → Settings → API → "Reset anon key"
+2. Vercel → Settings → Environment Variables → update `VITE_SUPABASE_ANON_KEY`
+3. Trigger a redeploy (push any commit, or Vercel → Deployments → "Redeploy")
+
+Service-role keys (if ever used by [scripts/seed-test-accounts.js](scripts/seed-test-accounts.js)) live only in local `credentials.env` and rotate the same way.
+
+---
+
 ## Security and cost notes
 
 - **Anon key exposure is fine.** The `VITE_SUPABASE_ANON_KEY` ships inside the bundled JS. This is by design — every Supabase web app does it. RLS policies (see `supabase_migration_*.sql`) are the real access control. Audit those before going public.
