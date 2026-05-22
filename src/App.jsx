@@ -12,6 +12,7 @@ import Profile from './components/Profile'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
+import EnvBanner from './components/EnvBanner'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -655,6 +656,7 @@ function App() {
 
     return (
         <>
+            <EnvBanner />
             {renderMainView()}
             <div
                 aria-hidden={!showAuth}

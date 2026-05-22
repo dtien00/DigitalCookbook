@@ -4,6 +4,35 @@ Operational reference for testing the app — seeded test accounts, how to refre
 
 ---
 
+## Environments
+
+The project runs on a **single Supabase backend** shared by every deployment — there is no separate test database. The test/prod boundary is enforced by convention, not by infrastructure:
+
+- **Production** is the `main` branch on Vercel — [digital-cookbook-ruddy.vercel.app](https://digital-cookbook-ruddy.vercel.app). Real users (if any) sign in here.
+- **Preview** is every other branch / PR. Vercel auto-deploys these to `digital-cookbook-*-git-*.vercel.app` URLs. Treat these as the test environment.
+- **Local dev** (`npm run dev`) hits the same Supabase project as both of the above.
+
+### The convention
+
+> Never sign in as a real user on a non-production URL. Use the seeded test accounts (below) instead.
+
+A bad insert or a buggy migration *can* still touch real data on Preview / local — there is only one DB. The discipline above keeps the human-error surface small. When a change is risky enough to need a true firewall, the upgrade path is a second Supabase project scoped to Preview env vars; document the migration in [DATABASE_DECISIONS.md](./DATABASE_DECISIONS.md) when that happens.
+
+### The visual cue
+
+[EnvBanner](../src/components/EnvBanner.jsx) renders a fixed top strip on any deployment where `VITE_ENV_LABEL` is set. It sits above the Auth overlay (z-index 60 vs 50) so the warning is visible at the moment a sign-in mistake would happen.
+
+To wire it up in Vercel:
+
+1. Project → **Settings** → **Environment Variables** → **Add New**
+2. Name: `VITE_ENV_LABEL`, Value: `test`
+3. **Environments**: check **Preview** only (leave **Production** and **Development** unchecked).
+4. Save, then redeploy any open Preview to pick up the var.
+
+Local dev is unaffected unless you add `VITE_ENV_LABEL=local` to `.env.local`.
+
+---
+
 ## Test accounts
 
 Four seeded accounts each exercise one of the four library-size density tiers documented in [COSMETICS.md](./COSMETICS.md) → *Browse / Recipe Grid*. Logging in as each account shows a different grid density without any code change — useful for visual regression checking when touching the grid.

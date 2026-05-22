@@ -415,3 +415,11 @@ The sentinel `<div>` that drives the IntersectionObserver is `h-1 w-full` and `a
 
 Search disables the sentinel: when the user is typing in the search bar, "load more" is hidden because the search filters client-side over loaded pages only — appending more rows that may not match the search would surface confusing UX. Documented as a known limitation; the eventual fix is server-side `ilike` filtering with pagination reset on each keystroke.
 
+## Backdrop
+
+- **"Large library bookshelf"** - When signing out/switching accounts, could look like the book closing, going into the background and grabbing another book to login. When scrolling up/down, books go in/out the library shelf.
+
+## Recipe Item
+
+- **Each recipe is a book** - Instead of being a card, could represent it as a book that comes out into the middle, opens and can see the ingredients and steps inside. Alternate styles can be supported.
+
