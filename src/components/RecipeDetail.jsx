@@ -136,22 +136,6 @@ export default function RecipeDetail({
         }
     }
 
-    // Set document.title to the recipe title around window.print() so the
-    // browser's "Save as PDF" dialog suggests the recipe name as the filename
-    // (browsers derive the default filename from document.title). Restored
-    // on afterprint so tab + bookmark labels return to normal when the
-    // dialog closes — works whether the user prints or cancels.
-    const handlePrint = () => {
-        const originalTitle = document.title
-        document.title = recipe.title
-        const restore = () => {
-            document.title = originalTitle
-            window.removeEventListener('afterprint', restore)
-        }
-        window.addEventListener('afterprint', restore)
-        window.print()
-    }
-
     // In-app PDF download. Library choice: html2pdf.js (wraps html2canvas +
     // jsPDF). Alternative considered: jsPDF alone — would require manually
     // parsing ingredient/step state and building the layout from scratch;
@@ -223,18 +207,6 @@ export default function RecipeDetail({
                         {onToggleFavorite && (
                             <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
                         )}
-                        <button
-                            onClick={handlePrint}
-                            aria-label="Print this recipe"
-                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors"
-                        >
-                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <polyline points="6 9 6 2 18 2 18 9" />
-                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                                <rect x="6" y="14" width="12" height="8" />
-                            </svg>
-                            <span className="hidden sm:inline">Print</span>
-                        </button>
                         <button
                             onClick={handleDownloadPdf}
                             disabled={pdfLoading}
