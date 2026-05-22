@@ -54,3 +54,6 @@ coverage/
 
 # Supabase migration SQL queries
 supabase_migration/
+
+# Local recipe print tests
+print_tests/

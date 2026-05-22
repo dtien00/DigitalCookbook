@@ -312,6 +312,41 @@ Stage 6 replaces every `alert(...)` call with `react-hot-toast`. The library is 
 
 ---
 
+# Print stylesheet (Stage 8)
+
+The Recipe Detail page is printable as a kitchen card via the browser's native Print dialog (Ctrl+P / ⌘+P). A Print button sits next to Like/Bookmark in the top action row — same paper-shade pill treatment as the Back button, since print is a quiet utility, not a primary CTA. The same rules form the basis of the upcoming in-app PDF download (Stage 8 item #2) — anything that prints clean will save clean.
+
+## The `.no-print` contract
+
+A single global `@media print { .no-print { display: none !important; } }` rule in [src/index.css](../src/index.css) hides any element tagged at the call site. New components that contain interactive chrome (buttons, banners, drawers) should tag themselves with `no-print` so the printout stays focused on content.
+
+Currently tagged: top action row (Back, Like, Bookmark, Print button itself), servings ± / reset buttons, author actions (Edit / Delete), admin moderation panel, comments section wrapper, env banner. The "Servings: N" text + number is kept since the printout should reflect the scaled servings.
+
+## What's kept vs. dropped
+
+| Kept | Dropped |
+|---|---|
+| Title (ink, no rule decoration changes) | Top action row (Back / Like / Bookmark / Print) |
+| Description (italic, dark-grey) | Servings ± / reset buttons (the number stays) |
+| Private badge / tags | Author actions (Edit / Delete) |
+| Hero image, capped at 180px | Admin moderation panel |
+| Servings text + final number | Comments section |
+| Ingredient list (with multiplied quantities + notes) | Env banner |
+| Step list (numbered) | Interactive checkboxes inside ingredient/step lists |
+| ✦ section divider | Paper-grain texture, card shadows, card borders |
+
+## Page-break rules
+- `page-break-after: avoid` on `.recipe-content h3` — section headings stick with their first item.
+- `page-break-inside: avoid` on every ingredient/step `<li>` — a single line never splits across pages.
+
+## Surface
+Background goes white, text goes black, paper-grain texture and card chrome (shadows, borders, padding) disappear. The page itself becomes the surface. The ✦ ornament between sections keeps its mask-trick background — switched from `#fbf6f1` to `#fff` so the rule line still gets covered.
+
+## Why no header/footer URL
+Browsers add their own URL / date header on print by default — re-adding one would double up. If the eventual PDF download (next item) wants a branded footer, that's its own decision to make there, not in the shared CSS.
+
+---
+
 # Navigation IA — proposed *(not implemented)*
 
 A directional sketch of where the app's navigation could evolve. Currently top-level navigation is a flat row of buttons in the header (Bookmarks · Profile · Logout for signed-in users); the proposal here reframes those around two top-level spaces — **Public Hub** and **Personal Hub** — to give the app a clearer mental model.

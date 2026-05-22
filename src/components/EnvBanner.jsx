@@ -11,7 +11,7 @@ export default function EnvBanner() {
         <div
             role="status"
             aria-label={`${label} environment — not production`}
-            className="fixed top-0 inset-x-0 z-[60] bg-rust-dark text-paper text-xs font-semibold tracking-wide text-center py-1 shadow-sm"
+            className="no-print fixed top-0 inset-x-0 z-[60] bg-rust-dark text-paper text-xs font-semibold tracking-wide text-center py-1 shadow-sm"
         >
             {label.toUpperCase()} ENVIRONMENT · use seeded test accounts only
         </div>
