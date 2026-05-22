@@ -28,6 +28,7 @@ export default function RecipeDetail({
     const [targetServings, setTargetServings] = useState(recipe.servings || 1)
     const [checkedIngredients, setCheckedIngredients] = useState(() => new Set())
     const [checkedSteps, setCheckedSteps] = useState(() => new Set())
+    const [pdfLoading, setPdfLoading] = useState(false)
 
     const isAuthor = userId === recipe.author_id
     const baseServings = recipe.servings || 1
@@ -151,6 +152,49 @@ export default function RecipeDetail({
         window.print()
     }
 
+    // In-app PDF download. Library choice: html2pdf.js (wraps html2canvas +
+    // jsPDF). Alternative considered: jsPDF alone — would require manually
+    // parsing ingredient/step state and building the layout from scratch;
+    // more code, no reuse of the print CSS. html2pdf.js captures the DOM
+    // directly so the @media print layout work carries over automatically.
+    // Dynamic import keeps the ~2.7 MB bundle off the initial load — it's
+    // only fetched on first button click. ignoreElements mirrors the
+    // .no-print contract so the PDF excludes the same chrome as browser
+    // print (action row, servings ±, admin panel, comments). backgroundColor
+    // matches --color-paper (#f2e9e4) so the output reads as a cookbook
+    // page rather than a white office document. useCORS: true allows
+    // Supabase Storage images (public CDN, permissive CORS) to render.
+    const handleDownloadPdf = async () => {
+        setPdfLoading(true)
+        const toastId = toast.loading('Generating PDF…')
+        try {
+            const { default: html2pdf } = await import('html2pdf.js')
+            const element = document.querySelector('.recipe-detail-container')
+            await html2pdf()
+                .set({
+                    filename: `${recipe.title}.pdf`,
+                    margin: 10,
+                    image: { type: 'jpeg', quality: 0.95 },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#f2e9e4',
+                        ignoreElements: el => el.classList.contains('no-print'),
+                    },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                })
+                .from(element)
+                .save()
+            toast.dismiss(toastId)
+            toast.success('Recipe saved as PDF')
+        } catch (error) {
+            toast.dismiss(toastId)
+            toast.error('Could not generate PDF: ' + error.message)
+        } finally {
+            setPdfLoading(false)
+        }
+    }
+
     const handleAdminDeleteAuthor = async () => {
         if (recipe.author_id === userId) {
             toast.error('Admins cannot delete their own account here.')
@@ -190,6 +234,19 @@ export default function RecipeDetail({
                                 <rect x="6" y="14" width="12" height="8" />
                             </svg>
                             <span className="hidden sm:inline">Print</span>
+                        </button>
+                        <button
+                            onClick={handleDownloadPdf}
+                            disabled={pdfLoading}
+                            aria-label="Download recipe as PDF"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span className="hidden sm:inline">{pdfLoading ? 'Generating…' : 'PDF'}</span>
                         </button>
                     </div>
                 </div>

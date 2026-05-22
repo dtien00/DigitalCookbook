@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Local test output (generated PDFs, print exports, etc.)
+print_tests/
+
 
 # Build output
 dist/
