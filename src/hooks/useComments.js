@@ -36,7 +36,7 @@ import { supabase } from '../lib/supabaseClient'
 // When userId is null/undefined (anonymous), addComment and deleteComment
 // are no-ops. The Comments component gates the input UI itself and calls
 // onRequireAuth to prompt sign-in.
-export function useComments(recipeId, userId) {
+export function useComments(recipeId, userId, isAdmin = false) {
     const [comments, setComments] = useState([])
     const [loading, setLoading] = useState(true)
 
@@ -111,18 +111,21 @@ export function useComments(recipeId, userId) {
         setComments(prev => prev.filter(c => c.id !== commentId))
 
         try {
-            const { error } = await supabase
-                .from('comments')
-                .delete()
-                .eq('id', commentId)
-                .eq('user_id', userId) // belt-and-suspenders; RLS also enforces
+            // Admins delete by id only — the admin-override DELETE policy
+            // on `comments` (migration 008) gates by `public.is_admin()`,
+            // not by user_id, so the belt-and-suspenders user_id filter
+            // would prevent admin moderation. RLS still enforces the
+            // correct authorization in both branches.
+            let query = supabase.from('comments').delete().eq('id', commentId)
+            if (!isAdmin) query = query.eq('user_id', userId)
+            const { error } = await query
 
             if (error) throw error
         } catch (e) {
             console.error('Failed to delete comment:', e.message)
             setComments(snapshot)
         }
-    }, [userId, comments])
+    }, [userId, isAdmin, comments])
 
     return { comments, addComment, deleteComment, loading }
 }

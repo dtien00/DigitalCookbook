@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { toast } from 'react-hot-toast'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
+import { useAdmin } from './hooks/useAdmin'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -80,8 +82,9 @@ function App() {
         }
     }, [menuOpen])
 
-    const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
-    const { likeCount, userLiked, toggleLike } = useLikes(session?.user.id)
+    const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
+    const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
+    const { isAdmin } = useAdmin(session?.user.id)
 
     useEffect(() => {
         // Check initial session
@@ -98,6 +101,14 @@ function App() {
             // Close the auth view once a session is established
             if (session) {
                 setShowAuth(false)
+            }
+            // On sign-out (including token expiry), reset all view state so
+            // re-login always returns to the home grid, not a stale sub-page.
+            if (!session) {
+                setShowProfile(false)
+                setShowBookmarks(false)
+                setShowCreate(false)
+                setMenuOpen(false)
             }
         })
 
@@ -165,7 +176,21 @@ function App() {
     }
 
     const handleLogout = async () => {
-        await supabase.auth.signOut()
+        const { error } = await supabase.auth.signOut()
+        // "AuthSessionMissingError" means the JWT already expired and Supabase
+        // cleared it from localStorage before we called signOut — treat it as a
+        // successful logout. Any other error is unexpected and worth surfacing.
+        if (error && error.name !== 'AuthSessionMissingError') {
+            toast.error('Sign-out failed: ' + error.message)
+            return
+        }
+        // Force-clear React state in case onAuthStateChange doesn't fire
+        // (it won't if the session was already missing on Supabase's side).
+        setSession(null)
+        setShowProfile(false)
+        setShowBookmarks(false)
+        setShowCreate(false)
+        setMenuOpen(false)
     }
 
     const handleEditRecipe = (recipe) => {
@@ -253,6 +278,7 @@ function App() {
             return <RecipeDetail
                 recipe={selectedRecipe}
                 userId={session?.user.id}
+                isAdmin={isAdmin}
                 onBack={() => setSelectedRecipe(null)}
                 onEdit={handleEditRecipe}
                 onDelete={handleRecipeDeleted}
@@ -261,6 +287,8 @@ function App() {
                 liked={userLiked(selectedRecipe.id)}
                 likeCount={likeCount(selectedRecipe.id)}
                 onToggleLike={() => handleLikeClick(selectedRecipe.id)}
+                refetchLikes={refetchLikes}
+                refetchFavorites={refetchFavorites}
                 onRequireAuth={() => setShowAuth(true)}
             />
         }
@@ -448,6 +476,11 @@ function App() {
                                 {menuOpen && (
                                     <div
                                         role="menu"
+                                        // Stop pointerdown from bubbling to the document
+                                        // outside-click handler — prevents a race on desktop
+                                        // where the handler could close the menu before the
+                                        // button's click event fires.
+                                        onPointerDown={e => e.stopPropagation()}
                                         className="absolute right-0 mt-1 w-44 bg-white border border-paper-shade rounded-md shadow-md overflow-hidden z-50"
                                     >
                                         <button
@@ -467,7 +500,7 @@ function App() {
                                         <div className="border-t border-paper-shade" aria-hidden="true" />
                                         <button
                                             role="menuitem"
-                                            onClick={() => { handleLogout(); setMenuOpen(false) }}
+                                            onClick={async () => { await handleLogout(); setMenuOpen(false) }}
                                             className="w-full text-left px-4 py-2.5 text-rose font-medium hover:bg-paper-shade transition-colors"
                                         >
                                             Log out

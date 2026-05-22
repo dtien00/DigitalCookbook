@@ -18,6 +18,26 @@ export function useFavorites(userId) {
     const [favoritedIds, setFavoritedIds] = useState(() => new Set())
     const [loading, setLoading] = useState(false)
 
+    // Re-fetches the user's favorited recipe IDs. Used by the admin
+    // "Reset bookmarks" path on RecipeDetail — wipes server-side rows
+    // across all users for a given recipe, and refetch refreshes the
+    // current user's own set (which will no longer include that recipe).
+    const refetch = useCallback(async () => {
+        if (!userId) {
+            setFavoritedIds(new Set())
+            return
+        }
+        const { data, error } = await supabase
+            .from('favorites')
+            .select('recipe_id')
+            .eq('user_id', userId)
+        if (error) {
+            console.error('Failed to fetch favorites:', error.message)
+            return
+        }
+        setFavoritedIds(new Set(data.map(f => f.recipe_id)))
+    }, [userId])
+
     useEffect(() => {
         if (!userId) {
             setFavoritedIds(new Set())
@@ -92,5 +112,5 @@ export function useFavorites(userId) {
         }
     }, [userId, favoritedIds])
 
-    return { isFavorited, toggleFavorite, loading }
+    return { isFavorited, toggleFavorite, refetch, loading }
 }

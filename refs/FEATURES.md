@@ -15,12 +15,14 @@ Features to possible implement during development
 - Old Recipe Book
 - Lined Notepad/Notebook
 
-# Introduce an Admin Account
-- Delete any recipe
-- Delete any user
-- Delete any comment on a recipe
-- Reset likes
-- Reset bookmarks
+# Introduce an Admin Account *(done)*
+- [x] Delete any recipe
+- [x] Delete any user
+- [x] Delete any comment on a recipe
+- [x] Reset likes
+- [x] Reset bookmarks
+
+*Implemented on the `admin` branch. Schema (is_admin flag, override RLS, SECURITY DEFINER user-delete RPC) lives in [supabase_migration_008_admin.sql](../supabase_migration_008_admin.sql); UI controls land inline on RecipeDetail and Comments. See [refs/ROADMAP.md](./ROADMAP.md) Stage 7 entry for the full rationale and [refs/TESTING.md](./TESTING.md) for the admin test account.*
 
 # Implement a "Fridge" mechanic
 - Stores any inputted ingredients from the user that can be used to narrow down catalogue

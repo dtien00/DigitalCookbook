@@ -1,13 +1,17 @@
-// Seed 4 test accounts with varying recipe counts to exercise the
-// library-size-adaptive grid density tiers (see refs/COSMETICS.md).
+// Seed test accounts to exercise the library-size-adaptive grid density
+// tiers (see refs/COSMETICS.md) plus an admin account for moderation
+// testing.
 //
 // Requires:
 //   - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local
 //   - "Confirm email" DISABLED in Supabase Auth settings, so signup
 //     returns a session immediately (no email click-through needed).
+//   - Migration 008 applied (admin schema + bootstrap_admin RPC).
+//     Without it, the admin account is created but never promoted —
+//     log lines will note this so it's recoverable.
 //
 // Idempotent: re-running clears each test account's existing recipes
-// before inserting fresh ones. Only operates on the 4 hardcoded test
+// before inserting fresh ones. Only operates on the hardcoded test
 // emails — never touches your real account.
 //
 // Usage: npm run seed:test
@@ -44,13 +48,20 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 const TEST_PASSWORD = 'TestPass123!'
+const ADMIN_PASSWORD = 'AdminPass123!'
 
 const ACCOUNTS = [
-  { email: 'test-tiny@example.com',   username: 'tiny_tim',     full_name: 'Tiny Tim',     recipeCount: 2,  bio: 'Just getting started.',                isPublic: false },
-  { email: 'test-small@example.com',  username: 'small_sam',    full_name: 'Small Sam',    recipeCount: 6,  bio: 'Cooks on weekends.',                   isPublic: false },
-  { email: 'test-medium@example.com', username: 'medium_mia',   full_name: 'Medium Mia',   recipeCount: 14, bio: 'Has a few go-tos.',                    isPublic: false },
-  { email: 'test-large@example.com',  username: 'large_lou',    full_name: 'Large Lou',    recipeCount: 28, bio: 'Recipe collector.',                    isPublic: false },
-  { email: 'test-public@example.com', username: 'public_paula', full_name: 'Public Paula', recipeCount: 6,  bio: 'Shares everything she cooks.',         isPublic: true  },
+  { email: 'test-tiny@example.com',   username: 'tiny_tim',     full_name: 'Tiny Tim',     recipeCount: 2,  bio: 'Just getting started.',                isPublic: false, password: TEST_PASSWORD },
+  { email: 'test-small@example.com',  username: 'small_sam',    full_name: 'Small Sam',    recipeCount: 6,  bio: 'Cooks on weekends.',                   isPublic: false, password: TEST_PASSWORD },
+  { email: 'test-medium@example.com', username: 'medium_mia',   full_name: 'Medium Mia',   recipeCount: 14, bio: 'Has a few go-tos.',                    isPublic: false, password: TEST_PASSWORD },
+  { email: 'test-large@example.com',  username: 'large_lou',    full_name: 'Large Lou',    recipeCount: 28, bio: 'Recipe collector.',                    isPublic: false, password: TEST_PASSWORD },
+  { email: 'test-public@example.com', username: 'public_paula', full_name: 'Public Paula', recipeCount: 6,  bio: 'Shares everything she cooks.',         isPublic: true,  password: TEST_PASSWORD },
+  // Admin account — no recipes of its own, used to exercise moderation
+  // controls (delete any recipe / comment, reset likes & bookmarks per
+  // recipe, delete any user). Promoted to admin via the bootstrap_admin
+  // RPC after signup; the RPC's email allowlist gates self-promotion to
+  // exactly this seed email. See supabase_migration_008_admin.sql.
+  { email: 'admin@example.com',       username: 'admin_aria',   full_name: 'Admin Aria',   recipeCount: 0,  bio: 'Site moderator.',                      isPublic: false, password: ADMIN_PASSWORD, isAdmin: true },
 ]
 
 const RECIPE_TEMPLATES = [
@@ -95,13 +106,13 @@ function makeRecipes(account) {
 }
 
 async function seedAccount(account, index) {
-  console.log(`\n[${index + 1}/${ACCOUNTS.length}] ${account.email} (${account.recipeCount} recipes)`)
+  console.log(`\n[${index + 1}/${ACCOUNTS.length}] ${account.email} (${account.recipeCount} recipes${account.isAdmin ? ', admin' : ''})`)
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   // Try signup. If email-confirm is enabled, Supabase returns user-no-session.
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email: account.email,
-    password: TEST_PASSWORD,
+    password: account.password,
     options: {
       data: {
         username: account.username,
@@ -127,7 +138,7 @@ async function seedAccount(account, index) {
   // Sign in to make sure we have a session for the inserts below
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
     email: account.email,
-    password: TEST_PASSWORD,
+    password: account.password,
   })
   if (signInError) {
     console.error(`  ✗ Sign-in failed: ${signInError.message}`)
@@ -148,6 +159,21 @@ async function seedAccount(account, index) {
     console.warn(`  ⚠ Couldn't update bio: ${profileError.message}`)
   }
 
+  // Promote to admin via the SECURITY DEFINER bootstrap_admin RPC. The
+  // RPC's email allowlist gates self-promotion to known seed emails only;
+  // any other caller gets RAISE EXCEPTION. Idempotent — running it on a
+  // already-admin account is a no-op UPDATE.
+  if (account.isAdmin) {
+    const { error: bootstrapError } = await supabase.rpc('bootstrap_admin')
+    if (bootstrapError) {
+      console.warn(`  ⚠ Couldn't promote to admin: ${bootstrapError.message}`)
+      console.warn(`    Likely cause: migration 008 hasn't been applied yet.`)
+      console.warn(`    Run supabase_migration_008_admin.sql in the SQL editor, then re-run this script.`)
+    } else {
+      console.log(`  ✓ Promoted to admin`)
+    }
+  }
+
   // Clear existing recipes for this user — keeps the script idempotent.
   // Scoped to author_id = userId, so only this test account's data is touched.
   const { error: deleteError } = await supabase
@@ -159,14 +185,16 @@ async function seedAccount(account, index) {
     return false
   }
 
-  // Insert fresh recipes
-  const recipes = makeRecipes(account).map(r => ({ ...r, author_id: userId }))
-  const { error: insertError } = await supabase.from('recipes').insert(recipes)
-  if (insertError) {
-    console.error(`  ✗ Insert failed: ${insertError.message}`)
-    return false
+  // Insert fresh recipes (skipped when recipeCount = 0, e.g. the admin)
+  if (account.recipeCount > 0) {
+    const recipes = makeRecipes(account).map(r => ({ ...r, author_id: userId }))
+    const { error: insertError } = await supabase.from('recipes').insert(recipes)
+    if (insertError) {
+      console.error(`  ✗ Insert failed: ${insertError.message}`)
+      return false
+    }
+    console.log(`  ✓ Inserted ${recipes.length} recipes`)
   }
-  console.log(`  ✓ Inserted ${recipes.length} recipes`)
 
   await supabase.auth.signOut()
   return true
@@ -184,9 +212,10 @@ async function main() {
   const succeeded = results.filter(Boolean).length
   console.log(`\n--- ${succeeded}/${ACCOUNTS.length} accounts seeded ---`)
   if (succeeded === ACCOUNTS.length) {
-    console.log(`\nAll accounts share the same password: ${TEST_PASSWORD}\n`)
+    console.log(`\nTest accounts share the password: ${TEST_PASSWORD}`)
+    console.log(`Admin account password: ${ADMIN_PASSWORD}\n`)
     ACCOUNTS.forEach(a => {
-      const visibility = a.isPublic ? 'public ' : 'private'
+      const visibility = a.isAdmin ? '  admin' : (a.isPublic ? 'public ' : 'private')
       console.log(`  ${a.email.padEnd(28)} — ${a.recipeCount.toString().padStart(2)} ${visibility} recipes (${a.username})`)
     })
     console.log('\nLog in with any of these to see the corresponding density tier,')
