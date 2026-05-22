@@ -47,20 +47,22 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   process.exit(1)
 }
 
-const TEST_PASSWORD = 'TestPass123!'
-// Admin credentials live in .env.local (gitignored) rather than the
-// repo because the admin account has elevated privileges in the live
-// Supabase project. The repo previously embedded the literal — that
-// password has been rotated and removed from source. The seed script
-// fails loudly if either var is missing so silent seed-as-non-admin
-// runs are caught immediately.
+// All seed-account credentials live in .env.local (gitignored) rather
+// than the repo. The literals were previously embedded; once the repo
+// went public on GitHub anyone reading the diff could sign into the
+// live Supabase project as any of the seeded users (admin included).
+// The accounts have since been rotated in Supabase and the literals
+// removed from source. The seed script fails loudly if any var is
+// missing so silent partial-seed runs are caught immediately.
+const TEST_PASSWORD = env.TEST_PASSWORD
 const ADMIN_EMAIL = env.ADMIN_EMAIL
 const ADMIN_PASSWORD = env.ADMIN_PASSWORD
-if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
-  console.error('Missing ADMIN_EMAIL or ADMIN_PASSWORD in .env.local — the admin account cannot be seeded without them.')
+if (!TEST_PASSWORD || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error('Missing seed credentials in .env.local — cannot seed.')
   console.error('Add these lines to .env.local (use the current values from the Supabase Dashboard):')
-  console.error('  ADMIN_EMAIL=admin@yourdomain.example')
-  console.error('  ADMIN_PASSWORD=<the rotated admin password>')
+  console.error('  TEST_PASSWORD=<password shared by the five test-* accounts>')
+  console.error('  ADMIN_EMAIL=<admin account email>')
+  console.error('  ADMIN_PASSWORD=<admin account password>')
   process.exit(1)
 }
 
