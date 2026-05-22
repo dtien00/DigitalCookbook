@@ -102,6 +102,8 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens
 - [ ] **Search stability** — filters the grid without changing card size
 - [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow
+- [ ] **Mobile swipe-back (Stage 9)** — on a real phone (touch events don't fire from desktop trackpads), thumb-swipe right from any recipe detail page returns to the home grid; vertical scroll within the recipe still works; pinch-zoom doesn't trigger a navigation
+- [ ] **Mobile swipe-resume (Stage 9)** — after swiping back to the home grid, thumb-swipe left → re-opens the recipe you just left; in a fresh tab (no `lastViewedRecipeId`), the same left-swipe does nothing and the page doesn't visibly slide
 
 ## Bookmarks checklist
 

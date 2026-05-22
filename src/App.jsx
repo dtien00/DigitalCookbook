@@ -352,6 +352,61 @@ function HomeView({
 }) {
     const navigate = useNavigate()
 
+    // Swipe-left-to-resume-last-recipe (Stage 9). Mirrors the swipe-right
+    // gesture on RecipeDetail (same 80px / <40px thresholds, same
+    // touchAction: 'pan-y' contract). Reads `lastViewedRecipeId` from
+    // sessionStorage on touchstart so a recipe viewed seconds ago is
+    // resumable even if HomeView mounted earlier. No-ops when the key is
+    // absent (fresh tab or never opened a recipe) — the visual peek is
+    // suppressed in that case so the user doesn't see an unexplained
+    // translateX with no follow-through.
+    const [swipeX, setSwipeX] = useState(0)
+    const homeTouchRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, tracking: false, resumeId: null })
+
+    const handleHomeTouchStart = (e) => {
+        if (e.touches.length !== 1) return
+        const t = e.touches[0]
+        homeTouchRef.current = {
+            startX: t.clientX, startY: t.clientY, lastX: t.clientX, lastY: t.clientY,
+            tracking: true,
+            resumeId: sessionStorage.getItem('lastViewedRecipeId'),
+        }
+    }
+
+    const handleHomeTouchMove = (e) => {
+        if (!homeTouchRef.current.tracking || e.touches.length !== 1) return
+        const t = e.touches[0]
+        homeTouchRef.current.lastX = t.clientX
+        homeTouchRef.current.lastY = t.clientY
+        const dx = t.clientX - homeTouchRef.current.startX
+        const dy = Math.abs(t.clientY - homeTouchRef.current.startY)
+        if (dy > 40 && dy > Math.abs(dx)) {
+            homeTouchRef.current.tracking = false
+            setSwipeX(0)
+            return
+        }
+        // Only follow leftward motion, and only if there's a recipe to resume.
+        if (dx < -10 && homeTouchRef.current.resumeId) {
+            setSwipeX(Math.max(dx, -200))
+        }
+    }
+
+    const handleHomeTouchEnd = () => {
+        if (!homeTouchRef.current.tracking) {
+            setSwipeX(0)
+            return
+        }
+        const dx = homeTouchRef.current.lastX - homeTouchRef.current.startX
+        const dy = Math.abs(homeTouchRef.current.lastY - homeTouchRef.current.startY)
+        const { resumeId } = homeTouchRef.current
+        homeTouchRef.current.tracking = false
+        if (dx <= -80 && dy < 40 && resumeId) {
+            navigate(`/recipe/${resumeId}`)
+        } else {
+            setSwipeX(0)
+        }
+    }
+
     // Search supports two modes:
     //   - tag mode: any comma in the input → split, trim, lowercase the
     //     tokens; recipes must include EVERY token in their tags array
@@ -469,7 +524,18 @@ function HomeView({
     const densityAriaLabel = doubled ? 'Show fewer columns' : 'Show more columns'
 
     return (
-        <div className="paper-grain min-h-screen">
+        <div
+            className="paper-grain min-h-screen"
+            onTouchStart={handleHomeTouchStart}
+            onTouchMove={handleHomeTouchMove}
+            onTouchEnd={handleHomeTouchEnd}
+            onTouchCancel={handleHomeTouchEnd}
+            style={{
+                transform: swipeX < 0 ? `translateX(${swipeX}px)` : undefined,
+                transition: swipeX < 0 ? 'none' : 'transform 200ms ease-out',
+                touchAction: 'pan-y',
+            }}
+        >
         {/* Density toggle. Rendered in two places that share state and
             visual treatment: an inline copy in the action row below
             (always visible at the top of the page, sits in normal flow),
@@ -736,6 +802,14 @@ function RecipeDetailRoute({
 
     const cached = recipes.find(r => r.id === id)
     const recipe = cached || fetchedRecipe
+
+    // Remember the last recipe we successfully landed on so a left-swipe
+    // from the home grid can resume to it (Stage 9). sessionStorage scope
+    // matches the kitchen-session lifetime — survives back-button hops,
+    // resets when the tab closes.
+    useEffect(() => {
+        if (recipe?.id) sessionStorage.setItem('lastViewedRecipeId', recipe.id)
+    }, [recipe?.id])
 
     useEffect(() => {
         if (cached) {
