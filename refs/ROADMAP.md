@@ -168,6 +168,39 @@ Things explicitly *not* in the early roadmap. Each is reasonable, none is urgent
 
 ---
 
+## Stage 8 — Sharing & Export
+
+Goal: a recipe can leave the app — shared as a link that opens anonymously, printed as a kitchen card, or downloaded as a PDF.
+
+**Tasks**
+- [ ] Print-friendly view. Add a Print button on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx); `@media print` styles hide chrome (header, action buttons, comments, admin panel, env banner) and reflow ingredients + steps into a single-column kitchen card. Reuses the browser's native Ctrl+P / Save-as-PDF path — zero new dependencies, immediate user value. Print rules captured in [refs/COSMETICS.md](./refs/COSMETICS.md) once they settle.
+- [ ] PDF download. A "Download as PDF" button that produces a polished single-file recipe card. Build on the print stylesheet (`html2pdf.js` or `jsPDF` + DOM cloning — decide during impl based on output quality, capture rationale in a code comment).
+- [ ] Routing foundation. Install `react-router-dom`. Convert state-driven view dispatch in [App.jsx](./src/App.jsx) (`showAuth` / `showProfile` / `showBookmarks` / `selectedRecipe` / `editingRecipe`) into routes: `/`, `/auth`, `/profile`, `/bookmarks`, `/recipe/:id`, `/recipe/:id/edit`, `/new`. RLS already permits anon reads of public recipes, so `/recipe/:id` works for anonymous deep links automatically. Vercel needs a SPA rewrite rule (`vercel.json` with `{ "rewrites": [{ "source": "/(.*)", "destination": "/" }] }`) so deep links resolve in Production.
+- [ ] Share button. New `<ShareButton>` on RecipeDetail. Uses `navigator.share({ title, url })` when available (mobile / supported browsers), falls back to `navigator.clipboard.writeText(url)` + toast on desktop. URL is the canonical `/recipe/:id` route from the previous task. Hidden on private recipes (`is_public === false`) — sharing a link to something RLS blocks is a UX dead-end.
+
+**Schema**: none — all four items are client-only.
+
+**Anonymous behavior**: shared links open the recipe for any visitor (RLS public-read already permits it). Print + PDF download require no auth. The Share button itself is visible to everyone.
+
+**Exit criteria**: a friend you sent a recipe URL to opens it directly on the recipe page (not the home grid) without signing in; print preview shows only the recipe content; the PDF saves clean.
+
+---
+
+## Stage 9 — Mobile Navigation Polish
+
+Goal: phone navigation feels native, not webby. Swipe gestures, not just back buttons.
+
+**Tasks**
+- [ ] Swipe-right-to-go-back on RecipeDetail. Custom `onTouchStart` / `onTouchMove` / `onTouchEnd` handlers detect a horizontal swipe (initial threshold: ≥ 80px horizontal travel with < 40px vertical drift) and navigate back to the home grid using the router primitive from Stage 8. Optional translate animation while swiping to telegraph the gesture. Final threshold values tuned during implementation and captured in a code comment. Must not fire on accidental vertical scrolls or when a child element (e.g. a horizontally-scrollable ingredient row, if ever added) consumes the touch.
+
+**Schema**: none.
+
+**Anonymous behavior**: identical for anon and signed-in users — the gesture is a navigation primitive.
+
+**Exit criteria**: thumb-swiping right from any recipe detail page on a phone returns you to the home grid without hunting for the back button. Gesture doesn't trigger on accidental vertical scrolls.
+
+---
+
 ## Working Style
 
 - Each stage is a branch + PR mentally, not a months-long epic. Aim to finish one before starting the next.

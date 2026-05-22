@@ -1041,3 +1041,101 @@ textarea {
     margin-bottom: 16px;
   }
 }
+
+/* Print stylesheet — kitchen-card output for the Recipe Detail page.
+   Triggered by browser Print / Ctrl+P / Save-as-PDF (Stage 8, first item).
+   Elements tagged .no-print at the call site disappear; everything else
+   reflows for paper. Same rules will form the basis of the in-app PDF
+   download in the next Stage 8 item — anything that prints clean will save
+   clean. */
+@media print {
+  /* White page, ink text, no paper-grain texture or card chrome. */
+  body,
+  .paper-grain {
+    background-color: #fff !important;
+    background-image: none !important;
+    color: #000;
+  }
+
+  /* Universal opt-out — any element tagged at the call site disappears. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Container fills the page. */
+  .recipe-detail-container {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Header — ink title, drop the gold rule (decoration only), title can
+     keep the rule actually since it's printed-paper-friendly. Description
+     stays italic. */
+  .recipe-detail-header {
+    margin: 0 0 16pt;
+  }
+
+  .recipe-detail-header h1 {
+    color: #000;
+    margin-top: 0;
+  }
+
+  .recipe-detail-header .description {
+    color: #333;
+  }
+
+  /* Hero image kept but capped small so it doesn't eat the first page —
+     ink-saving + the first thing the user wants on a kitchen card is the
+     ingredient list, not a photo. */
+  .detail-image {
+    max-height: 180px;
+    box-shadow: none;
+    border: 0;
+    margin-bottom: 12pt;
+  }
+
+  /* Content card loses card chrome — the page itself is the surface. */
+  .recipe-content {
+    background: #fff;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    color: #000;
+  }
+
+  .recipe-content h3 {
+    color: #000;
+    /* Don't strand a section heading at the bottom of a page. */
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* The ✦ ornament between sections uses a paper-card background fill to
+     mask the rule line; switch to white so the mask still works on print. */
+  .recipe-content hr::after {
+    background: #fff;
+    color: #666;
+  }
+
+  /* Keep each ingredient + step item together; don't split mid-line. */
+  .ingredient-list li,
+  .step-list li {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Hide the interactive checkboxes — the printout is the take-along
+     reference, not the interactive surface. Label content (text + scaled
+     quantity + notes) renders normally. */
+  .ingredient-list input[type="checkbox"],
+  .step-list input[type="checkbox"] {
+    display: none;
+  }
+
+  /* Reset label cursor/select since they're no longer interactive on paper. */
+  .ingredient-list label,
+  .step-list label {
+    cursor: default;
+  }
+}

@@ -135,6 +135,22 @@ export default function RecipeDetail({
         }
     }
 
+    // Set document.title to the recipe title around window.print() so the
+    // browser's "Save as PDF" dialog suggests the recipe name as the filename
+    // (browsers derive the default filename from document.title). Restored
+    // on afterprint so tab + bookmark labels return to normal when the
+    // dialog closes — works whether the user prints or cancels.
+    const handlePrint = () => {
+        const originalTitle = document.title
+        document.title = recipe.title
+        const restore = () => {
+            document.title = originalTitle
+            window.removeEventListener('afterprint', restore)
+        }
+        window.addEventListener('afterprint', restore)
+        window.print()
+    }
+
     const handleAdminDeleteAuthor = async () => {
         if (recipe.author_id === userId) {
             toast.error('Admins cannot delete their own account here.')
@@ -154,7 +170,7 @@ export default function RecipeDetail({
     return (
         <div className="paper-grain min-h-screen">
             <div className="recipe-detail-container">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4 no-print">
                     <button onClick={onBack} className="px-4 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">← Back to List</button>
                     <div className="flex items-center gap-3">
                         {onToggleLike && (
@@ -163,6 +179,18 @@ export default function RecipeDetail({
                         {onToggleFavorite && (
                             <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
                         )}
+                        <button
+                            onClick={handlePrint}
+                            aria-label="Print this recipe"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="6 9 6 2 18 2 18 9" />
+                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                <rect x="6" y="14" width="12" height="8" />
+                            </svg>
+                            <span className="hidden sm:inline">Print</span>
+                        </button>
                     </div>
                 </div>
 
@@ -199,20 +227,20 @@ export default function RecipeDetail({
                         <button
                             onClick={() => setTargetServings(s => Math.max(1, s - 1))}
                             disabled={targetServings <= 1}
-                            className="w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                            className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                             aria-label="Decrease servings"
                         >−</button>
                         <span className="w-6 text-center font-semibold">{targetServings}</span>
                         <button
                             onClick={() => setTargetServings(s => Math.min(99, s + 1))}
                             disabled={targetServings >= 99}
-                            className="w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                            className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                             aria-label="Increase servings"
                         >+</button>
                         {targetServings !== baseServings && (
                             <button
                                 onClick={() => setTargetServings(baseServings)}
-                                className="text-xs text-rose hover:underline underline-offset-2 ml-1 transition-colors"
+                                className="no-print text-xs text-rose hover:underline underline-offset-2 ml-1 transition-colors"
                             >
                                 reset
                             </button>
@@ -221,14 +249,14 @@ export default function RecipeDetail({
                 </div>
 
                 {isAuthor && (
-                    <div className="author-actions">
+                    <div className="author-actions no-print">
                         <button onClick={() => onEdit(recipe)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Edit Recipe</button>
                         <button onClick={handleDelete} className="px-4 py-2.5 bg-rose-dark hover:bg-rose text-paper font-semibold rounded-md transition-colors">Delete Recipe</button>
                     </div>
                 )}
 
                 {isAdmin && (
-                    <div className="mt-4 p-4 bg-paper-shade/60 border border-dashed border-rose-dark/40 rounded-md">
+                    <div className="mt-4 p-4 bg-paper-shade/60 border border-dashed border-rose-dark/40 rounded-md no-print">
                         <div className="flex items-center gap-2 mb-3">
                             <span aria-hidden="true" className="text-rose-dark">⚑</span>
                             <h3 className="font-display text-sm font-semibold text-ink m-0 uppercase tracking-wide">Admin moderation</h3>
@@ -338,12 +366,14 @@ export default function RecipeDetail({
                         )}
                     </section>
 
-                    <Comments
-                        recipeId={recipe.id}
-                        userId={userId}
-                        isAdmin={isAdmin}
-                        onRequireAuth={onRequireAuth}
-                    />
+                    <div className="no-print">
+                        <Comments
+                            recipeId={recipe.id}
+                            userId={userId}
+                            isAdmin={isAdmin}
+                            onRequireAuth={onRequireAuth}
+                        />
+                    </div>
                 </div>
             </div>
         </div>
