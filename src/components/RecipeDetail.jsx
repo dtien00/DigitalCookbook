@@ -9,6 +9,7 @@ import Skeleton from './Skeleton'
 export default function RecipeDetail({
     recipe,
     userId,
+    isAdmin = false,
     onBack,
     onEdit,
     onDelete,
@@ -17,6 +18,8 @@ export default function RecipeDetail({
     liked,
     likeCount = 0,
     onToggleLike,
+    refetchLikes,
+    refetchFavorites,
     onRequireAuth,
 }) {
     const [ingredients, setIngredients] = useState([])
@@ -89,6 +92,62 @@ export default function RecipeDetail({
             } catch (error) {
                 toast.error('Error deleting recipe: ' + error.message)
             }
+        }
+    }
+
+    // Admin moderation actions. Each is gated by `isAdmin` in the UI but
+    // also re-checked server-side: the admin-override RLS policies in
+    // migration 008 only allow these DELETEs when `public.is_admin()`
+    // returns true for the caller, and `admin_delete_user` raises if not.
+    const handleAdminDeleteRecipe = async () => {
+        if (!window.confirm(`Admin: delete "${recipe.title}"? This cannot be undone.`)) return
+        try {
+            const { error } = await supabase.from('recipes').delete().eq('id', recipe.id)
+            if (error) throw error
+            toast.success('Recipe deleted')
+            onDelete()
+        } catch (error) {
+            toast.error('Could not delete recipe: ' + error.message)
+        }
+    }
+
+    const handleResetLikes = async () => {
+        if (!window.confirm(`Admin: reset all likes on "${recipe.title}"?`)) return
+        try {
+            const { error } = await supabase.from('likes').delete().eq('recipe_id', recipe.id)
+            if (error) throw error
+            await refetchLikes?.()
+            toast.success('Likes reset')
+        } catch (error) {
+            toast.error('Could not reset likes: ' + error.message)
+        }
+    }
+
+    const handleResetBookmarks = async () => {
+        if (!window.confirm(`Admin: reset all bookmarks on "${recipe.title}"?`)) return
+        try {
+            const { error } = await supabase.from('favorites').delete().eq('recipe_id', recipe.id)
+            if (error) throw error
+            await refetchFavorites?.()
+            toast.success('Bookmarks reset')
+        } catch (error) {
+            toast.error('Could not reset bookmarks: ' + error.message)
+        }
+    }
+
+    const handleAdminDeleteAuthor = async () => {
+        if (recipe.author_id === userId) {
+            toast.error('Admins cannot delete their own account here.')
+            return
+        }
+        if (!window.confirm('Admin: delete this recipe\'s author? All of their recipes, comments, likes, and bookmarks will be removed. This cannot be undone.')) return
+        try {
+            const { error } = await supabase.rpc('admin_delete_user', { target_id: recipe.author_id })
+            if (error) throw error
+            toast.success('User deleted')
+            onDelete()
+        } catch (error) {
+            toast.error('Could not delete user: ' + error.message)
         }
     }
 
@@ -168,6 +227,45 @@ export default function RecipeDetail({
                     </div>
                 )}
 
+                {isAdmin && (
+                    <div className="mt-4 p-4 bg-paper-shade/60 border border-dashed border-rose-dark/40 rounded-md">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span aria-hidden="true" className="text-rose-dark">⚑</span>
+                            <h3 className="font-display text-sm font-semibold text-ink m-0 uppercase tracking-wide">Admin moderation</h3>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {!isAuthor && (
+                                <button
+                                    onClick={handleAdminDeleteRecipe}
+                                    className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                >
+                                    Delete recipe
+                                </button>
+                            )}
+                            <button
+                                onClick={handleResetLikes}
+                                className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
+                            >
+                                Reset likes
+                            </button>
+                            <button
+                                onClick={handleResetBookmarks}
+                                className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
+                            >
+                                Reset bookmarks
+                            </button>
+                            {!isAuthor && (
+                                <button
+                                    onClick={handleAdminDeleteAuthor}
+                                    className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                >
+                                    Delete author
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="recipe-content">
                     <section>
                         <h3>Ingredients</h3>
@@ -243,6 +341,7 @@ export default function RecipeDetail({
                     <Comments
                         recipeId={recipe.id}
                         userId={userId}
+                        isAdmin={isAdmin}
                         onRequireAuth={onRequireAuth}
                     />
                 </div>

@@ -4,6 +4,7 @@ import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
+import { useAdmin } from './hooks/useAdmin'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -81,8 +82,9 @@ function App() {
         }
     }, [menuOpen])
 
-    const { isFavorited, toggleFavorite } = useFavorites(session?.user.id)
-    const { likeCount, userLiked, toggleLike } = useLikes(session?.user.id)
+    const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
+    const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
+    const { isAdmin } = useAdmin(session?.user.id)
 
     useEffect(() => {
         // Check initial session
@@ -276,6 +278,7 @@ function App() {
             return <RecipeDetail
                 recipe={selectedRecipe}
                 userId={session?.user.id}
+                isAdmin={isAdmin}
                 onBack={() => setSelectedRecipe(null)}
                 onEdit={handleEditRecipe}
                 onDelete={handleRecipeDeleted}
@@ -284,6 +287,8 @@ function App() {
                 liked={userLiked(selectedRecipe.id)}
                 likeCount={likeCount(selectedRecipe.id)}
                 onToggleLike={() => handleLikeClick(selectedRecipe.id)}
+                refetchLikes={refetchLikes}
+                refetchFavorites={refetchFavorites}
                 onRequireAuth={() => setShowAuth(true)}
             />
         }

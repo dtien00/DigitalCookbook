@@ -19,8 +19,8 @@ import { SkeletonComment } from './Skeleton'
 //   userId           — current user's id, or null for anonymous viewers
 //   onRequireAuth()  — invoked when an anonymous user attempts to comment
 
-export default function Comments({ recipeId, userId, onRequireAuth }) {
-    const { comments, addComment, deleteComment, loading } = useComments(recipeId, userId)
+export default function Comments({ recipeId, userId, isAdmin = false, onRequireAuth }) {
+    const { comments, addComment, deleteComment, loading } = useComments(recipeId, userId, isAdmin)
     const [draft, setDraft] = useState('')
     const [submitting, setSubmitting] = useState(false)
 
@@ -95,22 +95,28 @@ export default function Comments({ recipeId, userId, onRequireAuth }) {
                 <p className="font-display italic text-rose">Be the first to comment.</p>
             ) : (
                 <ul className="space-y-4">
-                    {comments.map(c => (
-                        <CommentItem
-                            key={c.id}
-                            comment={c}
-                            isOwn={c.user_id === userId}
-                            onDelete={() => deleteComment(c.id)}
-                        />
-                    ))}
+                    {comments.map(c => {
+                        const isOwn = c.user_id === userId
+                        return (
+                            <CommentItem
+                                key={c.id}
+                                comment={c}
+                                isOwn={isOwn}
+                                canDelete={isOwn || isAdmin}
+                                deleteLabel={isAdmin && !isOwn ? 'Delete (admin)' : 'Delete'}
+                                onDelete={() => deleteComment(c.id)}
+                            />
+                        )
+                    })}
                 </ul>
             )}
         </section>
     )
 }
 
-// Single comment row: avatar + username + relative time + content + own-only delete.
-function CommentItem({ comment, isOwn, onDelete }) {
+// Single comment row: avatar + username + relative time + content + delete
+// (visible to the comment's owner, or to admins as a moderation override).
+function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete }) {
     const username = comment.profiles?.username || 'Unknown user'
     const avatarUrl = comment.profiles?.avatar_url
     const initials = username.slice(0, 2).toUpperCase()
@@ -140,13 +146,13 @@ function CommentItem({ comment, isOwn, onDelete }) {
                     <span className="text-xs text-ink/60">{formatRelativeTime(comment.created_at)}</span>
                 </div>
                 <p className="mt-1 text-ink whitespace-pre-wrap break-words">{comment.content}</p>
-                {isOwn && (
+                {canDelete && (
                     <button
                         onClick={handleDeleteClick}
                         className="mt-1 min-h-[44px] flex items-center text-xs text-rose-dark hover:text-rose transition-colors"
-                        aria-label="Delete this comment"
+                        aria-label={isOwn ? 'Delete this comment' : 'Admin: delete this comment'}
                     >
-                        Delete
+                        {deleteLabel}
                     </button>
                 )}
             </div>

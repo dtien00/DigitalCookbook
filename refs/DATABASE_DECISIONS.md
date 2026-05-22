@@ -91,7 +91,11 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_006_profiles_insert.sql` — adds the INSERT policy on `profiles` that migration 001 forgot. Required so `Profile.jsx`'s `upsert(...)` (which compiles to `INSERT ... ON CONFLICT DO UPDATE`) passes RLS. Idempotent.
 - Future migrations: `supabase_migration_007_*.sql`, etc. *(Note: number 005 is reserved for the `stage-5-comments` branch — `supabase_migration_005_comments.sql` will land in this list when that branch merges.)*
 - `supabase_migration_005_comments.sql` — tightens the comments INSERT policy (same gap as the original likes policy) and adds a covering `(recipe_id, created_at DESC)` index for the per-recipe newest-first list. Idempotent.
-- Future migrations: `supabase_migration_006_*.sql`, etc.
+- `supabase_migration_007_ingredient_notes.sql` — adds nullable `notes TEXT` column to `ingredients`. No RLS changes (the existing ingredients policies gate on parent recipe visibility). Idempotent.
+- `supabase_migration_008_admin.sql` — adds the `is_admin` flag on profiles, admin-override DELETE policies, self-promotion-prevention trigger, and two SECURITY DEFINER RPCs (`admin_delete_user`, `bootstrap_admin`). Idempotent. See "Admin role + moderation policies" below for the rationale.
+- `supabase_migration_009_admin_visibility.sql` — adds additive admin-override SELECT policies on `recipes`, `ingredients`, `steps`. Migration 008 gave admins DELETE rights but not SELECT, so they could moderate content they couldn't see. Idempotent.
+- `supabase_migration_010_admin_trigger_fix.sql` — fixes the over-eager `prevent_self_admin_grant` trigger from migration 008 that was reverting legitimate UPDATEs from the SQL editor (no JWT → `auth.uid()` NULL → `is_admin()` false → trigger reverts) and from `bootstrap_admin()` itself (caller isn't admin *yet* during promotion → same trigger path → no-op). New trigger skips when `auth.uid() IS NULL` and when a transaction-local GUC opts out. Idempotent.
+- Future migrations: `supabase_migration_011_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -195,6 +199,43 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Comments are public.** Anonymous viewers can read every comment on every public recipe. This matches the social model of casual recipe hubs and mirrors the likes policy. If a future requirement wants comments to be visible only to signed-in users (or only to followers), the SELECT policy needs to flip — but no aggregate-count complication, since unlike likes there's no public count to preserve.
 - **No moderation hooks yet.** A comment is `DELETE`-able only by its author or via a manual SQL delete (which RLS doesn't gate for the `service_role`). If the project grows beyond personal use, a `reports` table + admin-only moderation UI is the natural next step.
 - **No edit-comment support.** The schema technically allows it (no policy blocking UPDATE by the author — there's no policy at all, so RLS denies by default). If editing becomes a requirement, add an UPDATE policy `USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` and a `updated_at` column.
+
+## Admin role + moderation policies (migration 008)
+
+**Decision:** Add a binary `is_admin BOOLEAN NOT NULL DEFAULT FALSE` column on `public.profiles` and four additive admin-override DELETE policies (one per moderation-relevant table). Self-promotion is blocked by a BEFORE UPDATE trigger. User deletion runs through a `SECURITY DEFINER` RPC that cascades from `auth.users`.
+
+**Why a column, not a separate table:**
+- A single binary role doesn't need a join table. A future "roles" table with row-per-user-per-role makes sense if we ever introduce moderator/editor/owner distinctions; today there's one moderation role and one column is the cheaper representation.
+- Querying admin status from RLS becomes a one-liner: `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin)`. Wrapped in a helper `public.is_admin()` so policies stay readable.
+
+**Why additive policies, not policy replacement:**
+- Postgres RLS OR's all policies for the same action. Adding `CREATE POLICY "Admins can delete any recipe" FOR DELETE USING (public.is_admin())` to a table that already has `CREATE POLICY "Authors can manage their recipes" FOR ALL USING (auth.uid() = author_id)` means a regular user keeps owner-only delete access AND an admin gains any-row delete access — no behavior change for non-admins.
+- Tables affected: `recipes`, `comments`, `likes`, `favorites`. Profiles is intentionally NOT in this list — deleting a profile row without deleting the underlying `auth.users` row would leave an orphaned auth account; user deletion goes through the RPC instead.
+
+**SELECT side of the same story (migration 009):** The DELETE overrides above only matter if the admin can find the content. The visibility-gated tables (`recipes`, `ingredients`, `steps`) get matching admin-SELECT overrides in migration 009. `likes` and `comments` SELECT is already `USING (true)` (public-read), so no change. `favorites` SELECT stays own-only — admins can wipe a recipe's bookmarks without needing to enumerate who held them.
+
+**Why a self-promotion trigger:**
+- The existing UPDATE policy on profiles is `USING (auth.uid() = id)` — any user can update their own row, including `is_admin`. A naive bad actor could `UPDATE profiles SET is_admin = TRUE WHERE id = auth.uid()` and grant themselves admin. The `prevent_self_admin_grant()` BEFORE UPDATE trigger silently reverts `is_admin` changes from non-admin callers (`NEW.is_admin := OLD.is_admin`), so the existing UPDATE policy doesn't need to be split. Existing admins can still demote each other / themselves through the same trigger path since `public.is_admin()` returns true for them.
+- Alternative considered: dropping the UPDATE policy and replacing it with one that explicitly excludes the `is_admin` column. Postgres RLS doesn't natively gate at the column level for UPDATE policies, so that would require either (a) revoking UPDATE on the `is_admin` column via column-level GRANTs, or (b) the same trigger. Trigger is cleaner.
+
+**Why a SECURITY DEFINER user-delete RPC:**
+- `auth.users` is owned by the `supabase_auth_admin` role; a regular authenticated caller cannot DELETE from it directly. The `admin_delete_user(target_id)` function is `SECURITY DEFINER`, runs as the function owner (typically `postgres`, which has DELETE on `auth.users`), and explicitly checks `public.is_admin()` before executing the delete. Without `SECURITY DEFINER`, the admin would need service_role to delete users, which can't be exposed to the browser.
+- Cascade chain: `auth.users` ON DELETE CASCADE → `profiles` (FK declared in migration 001) → `recipes`, `comments`, `likes`, `favorites` (all FKs declared with ON DELETE CASCADE). One DELETE removes everything the user owned.
+- Self-protection guard: `IF target_id = auth.uid() THEN RAISE EXCEPTION ...`. Prevents an admin from accidentally locking the project out of admin access — the Supabase Dashboard remains the escape hatch for "delete the last admin".
+
+**Why the `bootstrap_admin()` allowlist RPC:**
+- The seed account `admin@example.com` is created via the standard signup flow with the anon key — same path as the test accounts. After signup the account has `is_admin = false` (default). The self-promotion trigger blocks a plain UPDATE.
+- `bootstrap_admin()` is `SECURITY DEFINER` and is gated by a hardcoded email allowlist (`admin@example.com` only) that checks the caller's email from `auth.users`. Anyone else who calls it gets `RAISE EXCEPTION`. Worst-case if an attacker calls it as the seed email: they re-promote an already-promoted account, no-op.
+- Real (non-seed) admin promotion is intentionally a manual SQL step by an existing admin (`UPDATE profiles SET is_admin = TRUE WHERE ...`). For a personal-cookbook project, a self-service admin-promotion UI would be a privilege-escalation footgun without commensurate benefit.
+- **Migration 010 fix:** `SECURITY DEFINER` alone does NOT bypass `BEFORE UPDATE` triggers — they fire regardless of the function's executor role. Migration 008 shipped with `bootstrap_admin` silently no-opping for this reason: its UPDATE ran but `prevent_self_admin_grant` reverted the change because the caller wasn't admin *yet* during promotion. Migration 010 fixes this by having `bootstrap_admin` set a transaction-local GUC (`app.bypass_admin_trigger = 'true'`) right before its UPDATE; the trigger checks for that GUC and skips. The GUC's third-arg `true` (`set_config(..., true)`) makes it transaction-local so it can't leak across requests on a pooled connection. Same migration also teaches the trigger to skip when `auth.uid() IS NULL` so SQL-editor UPDATEs work too — those sessions are inherently privileged.
+
+**Tradeoffs:**
+- **Orphaned auth rows if profiles are deleted directly.** A path that deletes from `public.profiles` (instead of going through `admin_delete_user`) would leave the `auth.users` row intact. The UI doesn't expose such a path; all admin user-deletion routes through the RPC. Documented here in case a future feature needs to delete profile-without-auth.
+- **No audit log.** Admin actions don't write to a moderation log. Acceptable for a portfolio project; would need an `admin_actions` append-only table before this app ever sees real users.
+- **Bucket privacy unchanged.** Admin deletion of a recipe cascades through the DB but does not delete the cover image from the `recipe-images` bucket. This is the same gap noted in "Storage: `recipe-images` bucket" above; orphaned images cost storage but don't leak data beyond what their URL already exposed.
+- **Client-side `isAdmin` is a UI signal, not authorization.** The `useAdmin` hook drives whether buttons render, but every admin action's authorization is re-checked server-side by the `is_admin()` SQL helper inside RLS policies / RPC bodies. Forging `isAdmin = true` in the bundle just renders dead controls.
+
+---
 
 ## Home-grid pagination: offset + count-on-every-page (mobile branch)
 

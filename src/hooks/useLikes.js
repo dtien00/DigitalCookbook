@@ -23,6 +23,30 @@ export function useLikes(userId) {
     const [userLikedIds, setUserLikedIds] = useState(() => new Set())
     const [loading, setLoading] = useState(true)
 
+    // Re-fetches the entire likes table and rebuilds both derived data
+    // structures. Used by the admin "Reset likes" path on RecipeDetail —
+    // a wholesale refetch is the simplest way to reflect a server-side
+    // DELETE ... WHERE recipe_id = X without threading per-recipe
+    // mutations through the hook's internal state. Returns a Promise so
+    // callers can await it.
+    const refetch = useCallback(async () => {
+        const { data, error } = await supabase
+            .from('likes')
+            .select('recipe_id, user_id')
+        if (error) {
+            console.error('Failed to fetch likes:', error.message)
+            return
+        }
+        const counts = new Map()
+        const own = new Set()
+        for (const { recipe_id, user_id } of data) {
+            counts.set(recipe_id, (counts.get(recipe_id) ?? 0) + 1)
+            if (userId && user_id === userId) own.add(recipe_id)
+        }
+        setLikeCounts(counts)
+        setUserLikedIds(own)
+    }, [userId])
+
     useEffect(() => {
         let active = true
         setLoading(true)
@@ -117,5 +141,5 @@ export function useLikes(userId) {
         }
     }, [userId, userLikedIds, likeCounts])
 
-    return { likeCount, userLiked, toggleLike, loading }
+    return { likeCount, userLiked, toggleLike, refetch, loading }
 }

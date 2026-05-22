@@ -15,10 +15,11 @@ Four seeded accounts each exercise one of the four library-size density tiers do
 | `test-medium@example.com`   | `TestPass123!` | 14      | private    | `medium_mia`    | 20 visible → tier 3 (9–20 cols) |
 | `test-large@example.com`    | `TestPass123!` | 28      | private    | `large_lou`     | 34 visible → tier 4 (21+ cols) |
 | `test-public@example.com`   | `TestPass123!` | 6       | **public** | `public_paula`  | 6 visible (own + own, no other public) → tier 2 |
+| `admin@example.com`         | `AdminPass123!`| 0       | n/a        | `admin_aria`    | sees public set + admin moderation controls    |
 
 **Anonymous (not signed in):** sees only `test-public`'s 6 public recipes → tier 2 (4–8 cols).
 
-All five accounts share the password `TestPass123!`. Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
+The five non-admin accounts share the password `TestPass123!`; the admin uses `AdminPass123!` (different on purpose so a Login-as-admin slip is visible in logs). Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
 - Anonymous visitors see 6 recipes (test-public's set).
 - Logged-in test accounts see `their own count + 6` because RLS returns `is_public OR auth.uid() = author_id`.
 
@@ -37,6 +38,11 @@ npm run seed:test
 Runs [scripts/seed-test-accounts.js](../scripts/seed-test-accounts.js) against the Supabase project pointed at by `.env.local`. Re-running is safe — it wipes each test account's existing recipes (scoped by `author_id`) and reinserts a fresh set. Non-test accounts are never touched.
 
 ### Pre-flight requirement
+
+Apply migrations 008, 009, and 010 (`supabase_migration_008_admin.sql`, `supabase_migration_009_admin_visibility.sql`, `supabase_migration_010_admin_trigger_fix.sql`) before seeding.
+- Without 008: the admin account is created but the `bootstrap_admin()` RPC doesn't exist yet, so the admin won't be promoted (the seed log will note this and the recovery is to apply the migration and re-run).
+- Without 009: the admin can log in and moderate but won't see other users' private recipes in the grid — they have DELETE rights without SELECT visibility on private content.
+- Without 010: `bootstrap_admin()` silently no-ops because the migration-008 trigger reverts its UPDATE. The seed log will say "Promoted to admin" but `SELECT is_admin FROM profiles WHERE ...` still returns false. If you applied 008 alone before 010 existed, run 010 then either re-run `npm run seed:test` or `UPDATE public.profiles SET is_admin = TRUE WHERE id = (SELECT id FROM auth.users WHERE email = 'admin@example.com')` in the SQL editor.
 
 The script uses the regular signup flow with the anon key (no `service_role` involvement). For signup to return a session immediately, **"Confirm email" must be disabled** in Supabase Auth:
 
@@ -144,6 +150,52 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Optimistic-add survives network success** — the temp-id row is replaced by the real server row carrying the joined `profiles` data (username + avatar render without a second fetch)
 - [ ] **Multi-line content preserves newlines** — paste a comment with embedded `\n`; rendered with `whitespace-pre-wrap` so line breaks survive
 - [ ] **Long words / URLs don't overflow the column** — `break-words` keeps a 200-character no-spaces string from blowing out the layout
+
+## Admin moderation checklist
+
+> Requires migration 008 applied (`supabase_migration_008_admin.sql`) and the seed admin account promoted via `bootstrap_admin()` (handled by `npm run seed:test`).
+
+**Setup:**
+- [ ] **Log in as `admin@example.com` / `AdminPass123!`** — header shows the same Profile dropdown as any user (no admin badge in this iteration; the controls themselves are the signal)
+- [ ] **Home grid shows every recipe across every account, including other users' private recipes** — proves migration 009 is applied. The private-recipe badge (lock icon) appears on each non-public card. If the grid only shows `test-public`'s 6 recipes, migration 009 hasn't been applied.
+- [ ] **Open any other user's recipe (e.g. one of `test-medium`'s)** — RecipeDetail now shows a dashed-border "Admin moderation" panel below the (hidden, since you're not the author) Edit/Delete row
+
+**Admin-only controls visible:**
+- [ ] **Delete recipe** — moderation-orange button, only on recipes you don't own
+- [ ] **Reset likes** — paper-shade button, always visible to admins (even on your own recipes — admins may want to reset their own counts)
+- [ ] **Reset bookmarks** — same treatment, always visible
+- [ ] **Delete author** — moderation-orange button, only on recipes you don't own
+
+**Action: Delete any recipe**
+- [ ] Confirm dialog quotes the recipe title; click OK → toast "Recipe deleted" + you're returned to the grid; the recipe is gone for everyone (verify by signing in as another account and confirming it no longer appears)
+- [ ] Cancel the confirm → no change
+
+**Action: Delete any comment**
+- [ ] On a recipe with comments from other users, each non-own comment now shows a "Delete (admin)" link (own comments still say plain "Delete")
+- [ ] Click an admin-delete link → confirm dialog → comment disappears immediately; reload to confirm persistence
+- [ ] Log in as the original commenter → their comment is gone
+
+**Action: Reset likes**
+- [ ] Pick a recipe that has likes (give some via other test accounts first if needed)
+- [ ] Click Reset likes → confirm → toast "Likes reset"; the heart pill on the detail page drops to 0 and goes outline
+- [ ] Navigate back to the home grid → the same recipe's card pill also shows 0
+- [ ] Log in as a previous liker → the heart is outline for them too (their like row was actually deleted)
+
+**Action: Reset bookmarks**
+- [ ] Pick a recipe that's bookmarked by other test accounts
+- [ ] Click Reset bookmarks → confirm → toast "Bookmarks reset"
+- [ ] Log in as a previous bookmarker → "My Bookmarks" no longer contains that recipe
+
+**Action: Delete any user**
+- [ ] On a non-admin author's recipe, click Delete author → confirm dialog
+- [ ] Toast "User deleted"; you're returned to the grid; ALL of their recipes are gone (cascade) and any of their comments on other recipes are also gone
+- [ ] Attempt to log in as the deleted user with their old password → "Invalid login credentials" (the `auth.users` row is gone)
+
+**Self-protection guards:**
+- [ ] **Admin cannot delete their own author row** via the Delete author button — the button is hidden on your own recipes, and the RPC raises an exception if called with `target_id = auth.uid()` anyway
+- [ ] **Non-admin cannot self-promote** — log in as `test-tiny`, run `await supabase.from('profiles').update({ is_admin: true }).eq('id', userId)` in the devtools console → the UPDATE returns success but the value silently reverts (the BEFORE-UPDATE trigger). Reload and confirm `is_admin` is still false.
+- [ ] **Non-admin cannot delete others' content** — log in as `test-tiny`, attempt `await supabase.from('recipes').delete().eq('id', '<other-author-recipe-id>')` → success-but-zero-rows-affected (RLS filters the WHERE clause; the row doesn't match for them).
+- [ ] **Non-admin cannot call `admin_delete_user`** — `await supabase.rpc('admin_delete_user', { target_id: '...' })` → returns an error from the RAISE EXCEPTION
 
 ## Servings multiplier checklist
 
