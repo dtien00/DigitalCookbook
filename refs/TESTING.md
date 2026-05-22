@@ -10,22 +10,22 @@ Four seeded accounts each exercise one of the four library-size density tiers do
 
 | Email                       | Password       | Recipes | Visibility | Username        | Tier when logged in (incl. public set) |
 |-----------------------------|----------------|---------|------------|-----------------|---|
-| `test-tiny@example.com`     | `TestPass123!` | 2       | private    | `tiny_tim`      | 8 visible → tier 2 (4–8 cols) |
-| `test-small@example.com`    | `TestPass123!` | 6       | private    | `small_sam`     | 12 visible → tier 3 (9–20 cols) |
-| `test-medium@example.com`   | `TestPass123!` | 14      | private    | `medium_mia`    | 20 visible → tier 3 (9–20 cols) |
-| `test-large@example.com`    | `TestPass123!` | 28      | private    | `large_lou`     | 34 visible → tier 4 (21+ cols) |
-| `test-public@example.com`   | `TestPass123!` | 6       | **public** | `public_paula`  | 6 visible (own + own, no other public) → tier 2 |
-| `admin@example.com`         | `AdminPass123!`| 0       | n/a        | `admin_aria`    | sees public set + admin moderation controls    |
+| `test-tiny@example.com`     | see `.env.local` `TEST_PASSWORD` | 2       | private    | `tiny_tim`      | 8 visible → tier 2 (4–8 cols) |
+| `test-small@example.com`    | see `.env.local` `TEST_PASSWORD` | 6       | private    | `small_sam`     | 12 visible → tier 3 (9–20 cols) |
+| `test-medium@example.com`   | see `.env.local` `TEST_PASSWORD` | 14      | private    | `medium_mia`    | 20 visible → tier 3 (9–20 cols) |
+| `test-large@example.com`    | see `.env.local` `TEST_PASSWORD` | 28      | private    | `large_lou`     | 34 visible → tier 4 (21+ cols) |
+| `test-public@example.com`   | see `.env.local` `TEST_PASSWORD` | 6       | **public** | `public_paula`  | 6 visible (own + own, no other public) → tier 2 |
+| see `.env.local` `ADMIN_EMAIL` | see `.env.local` `ADMIN_PASSWORD` | 0       | n/a        | `admin_aria`    | sees public set + admin moderation controls    |
 
 **Anonymous (not signed in):** sees only `test-public`'s 6 public recipes → tier 2 (4–8 cols).
 
-The five non-admin accounts share the password `TestPass123!`; the admin uses `AdminPass123!` (different on purpose so a Login-as-admin slip is visible in logs). Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
+All seed-account credentials live in `.env.local` (gitignored). The five non-admin accounts share a single `TEST_PASSWORD`; the admin uses a separate `ADMIN_EMAIL` and `ADMIN_PASSWORD`. The literal values were rotated in Supabase and removed from source after the admin branch's public push exposed them. Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
 - Anonymous visitors see 6 recipes (test-public's set).
 - Logged-in test accounts see `their own count + 6` because RLS returns `is_public OR auth.uid() = author_id`.
 
 The density tier *shifts upward* for logged-in accounts vs the original "private-only" model: tier mappings are no longer 1:1 with the account name. The tier-2/3/4 differentiation still holds across accounts, but `test-tiny` no longer demos the ≤3-recipe hero tier when logged in (use the anonymous view for that — log out and refresh).
 
-> ⚠️ **These credentials are documented because the test accounts only exist on the project owner's personal Supabase project.** The same password should never be reused for any project that touches real-user data. If this repo ever gains other contributors or a shared environment, rotate the password and move it out of source control.
+> ⚠️ **Credentials live in `.env.local` rather than this doc.** The literals previously embedded here (`TestPass123!` / `AdminPass123!`) were leaked once the repo went public on GitHub and have since been rotated in Supabase. Never restore them to source. The same password should never be reused for any project that touches real-user data.
 
 ---
 
@@ -156,7 +156,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 > Requires migration 008 applied (`supabase_migration_008_admin.sql`) and the seed admin account promoted via `bootstrap_admin()` (handled by `npm run seed:test`).
 
 **Setup:**
-- [ ] **Log in as `admin@example.com` / `AdminPass123!`** — header shows the same Profile dropdown as any user (no admin badge in this iteration; the controls themselves are the signal)
+- [ ] **Log in as the admin account** (email + password from `.env.local`'s `ADMIN_EMAIL` / `ADMIN_PASSWORD`) — header shows the same Profile dropdown as any user (no admin badge in this iteration; the controls themselves are the signal)
 - [ ] **Home grid shows every recipe across every account, including other users' private recipes** — proves migration 009 is applied. The private-recipe badge (lock icon) appears on each non-public card. If the grid only shows `test-public`'s 6 recipes, migration 009 hasn't been applied.
 - [ ] **Open any other user's recipe (e.g. one of `test-medium`'s)** — RecipeDetail now shows a dashed-border "Admin moderation" panel below the (hidden, since you're not the author) Edit/Delete row
 

@@ -178,7 +178,7 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 
 **Tradeoffs:**
 - Temporary auth-policy change required. Re-enable "Confirm email" after seeding.
-- Test accounts use a known shared password (`TestPass123!`) — fine for local/dev Supabase projects, not for any project that touches real users.
+- Test accounts use a shared password sourced from `.env.local` (`TEST_PASSWORD`) — fine for local/dev Supabase projects, not for any project that touches real users. The literal previously lived in the seed script; once the repo went public on GitHub it was leaked, rotated in Supabase, and moved to `.env.local` so the source is credential-free. Same pattern for the admin account (`ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 - Profile bios are written via a separate `UPDATE` on `profiles` because the `handle_new_user` trigger only handles username/full_name/avatar_url from `raw_user_meta_data`.
 
 ## Comments: INSERT policy hardening + covering index (migration 005)

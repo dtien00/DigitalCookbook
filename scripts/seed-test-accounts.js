@@ -47,8 +47,24 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   process.exit(1)
 }
 
-const TEST_PASSWORD = 'TestPass123!'
-const ADMIN_PASSWORD = 'AdminPass123!'
+// All seed-account credentials live in .env.local (gitignored) rather
+// than the repo. The literals were previously embedded; once the repo
+// went public on GitHub anyone reading the diff could sign into the
+// live Supabase project as any of the seeded users (admin included).
+// The accounts have since been rotated in Supabase and the literals
+// removed from source. The seed script fails loudly if any var is
+// missing so silent partial-seed runs are caught immediately.
+const TEST_PASSWORD = env.TEST_PASSWORD
+const ADMIN_EMAIL = env.ADMIN_EMAIL
+const ADMIN_PASSWORD = env.ADMIN_PASSWORD
+if (!TEST_PASSWORD || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error('Missing seed credentials in .env.local — cannot seed.')
+  console.error('Add these lines to .env.local (use the current values from the Supabase Dashboard):')
+  console.error('  TEST_PASSWORD=<password shared by the five test-* accounts>')
+  console.error('  ADMIN_EMAIL=<admin account email>')
+  console.error('  ADMIN_PASSWORD=<admin account password>')
+  process.exit(1)
+}
 
 const ACCOUNTS = [
   { email: 'test-tiny@example.com',   username: 'tiny_tim',     full_name: 'Tiny Tim',     recipeCount: 2,  bio: 'Just getting started.',                isPublic: false, password: TEST_PASSWORD },
@@ -61,7 +77,7 @@ const ACCOUNTS = [
   // recipe, delete any user). Promoted to admin via the bootstrap_admin
   // RPC after signup; the RPC's email allowlist gates self-promotion to
   // exactly this seed email. See supabase_migration_008_admin.sql.
-  { email: 'admin@example.com',       username: 'admin_aria',   full_name: 'Admin Aria',   recipeCount: 0,  bio: 'Site moderator.',                      isPublic: false, password: ADMIN_PASSWORD, isAdmin: true },
+  { email: ADMIN_EMAIL,                username: 'admin_aria',   full_name: 'Admin Aria',   recipeCount: 0,  bio: 'Site moderator.',                      isPublic: false, password: ADMIN_PASSWORD, isAdmin: true },
 ]
 
 const RECIPE_TEMPLATES = [
@@ -213,7 +229,7 @@ async function main() {
   console.log(`\n--- ${succeeded}/${ACCOUNTS.length} accounts seeded ---`)
   if (succeeded === ACCOUNTS.length) {
     console.log(`\nTest accounts share the password: ${TEST_PASSWORD}`)
-    console.log(`Admin account password: ${ADMIN_PASSWORD}\n`)
+    console.log(`Admin account password: (see .env.local — ADMIN_PASSWORD)\n`)
     ACCOUNTS.forEach(a => {
       const visibility = a.isAdmin ? '  admin' : (a.isPublic ? 'public ' : 'private')
       console.log(`  ${a.email.padEnd(28)} — ${a.recipeCount.toString().padStart(2)} ${visibility} recipes (${a.username})`)
