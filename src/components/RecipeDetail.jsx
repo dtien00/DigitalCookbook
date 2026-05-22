@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
+import ShareButton from './ShareButton'
 import Comments from './Comments'
 import Skeleton from './Skeleton'
 
@@ -206,6 +207,9 @@ export default function RecipeDetail({
                         )}
                         {onToggleFavorite && (
                             <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
+                        )}
+                        {recipe.is_public !== false && (
+                            <ShareButton url={`${window.location.origin}/recipe/${recipe.id}`} />
                         )}
                         <button
                             onClick={handleDownloadPdf}
