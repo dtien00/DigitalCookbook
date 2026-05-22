@@ -314,13 +314,13 @@ Stage 6 replaces every `alert(...)` call with `react-hot-toast`. The library is 
 
 # Print stylesheet (Stage 8)
 
-The Recipe Detail page is printable as a kitchen card via the browser's native Print dialog (Ctrl+P / ⌘+P). A Print button sits next to Like/Bookmark in the top action row — same paper-shade pill treatment as the Back button, since print is a quiet utility, not a primary CTA. The same rules form the basis of the upcoming in-app PDF download (Stage 8 item #2) — anything that prints clean will save clean.
+The Recipe Detail page is printable as a kitchen card via the browser's native Print dialog (Ctrl+P / ⌘+P). No dedicated Print button is shown — an earlier iteration added one but it was removed once the in-app PDF download landed, since `Download PDF` does the same job in one click and the two buttons sitting next to each other felt redundant. The `@media print` rules stay because Ctrl+P still works and the same rules form the basis of the in-app PDF (html2pdf's `ignoreElements` checks the same `.no-print` class).
 
 ## The `.no-print` contract
 
 A single global `@media print { .no-print { display: none !important; } }` rule in [src/index.css](../src/index.css) hides any element tagged at the call site. New components that contain interactive chrome (buttons, banners, drawers) should tag themselves with `no-print` so the printout stays focused on content.
 
-Currently tagged: top action row (Back, Like, Bookmark, Print button itself), servings ± / reset buttons, author actions (Edit / Delete), admin moderation panel, comments section wrapper, env banner. The "Servings: N" text + number is kept since the printout should reflect the scaled servings.
+Currently tagged: top action row (Back, Like, Bookmark, Download PDF), servings ± / reset buttons, author actions (Edit / Delete), admin moderation panel, comments section wrapper, env banner. The "Servings: N" text + number is kept since the printout should reflect the scaled servings.
 
 ## What's kept vs. dropped
 
