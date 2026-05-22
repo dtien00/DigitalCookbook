@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Toaster, ToastBar, toast } from 'react-hot-toast'
 import App from './App.jsx'
+import MaintenancePage from './components/MaintenancePage.jsx'
 import './index.css'
 
 // Toaster lives at the root, outside App, so it stays mounted across every
@@ -20,9 +21,11 @@ import './index.css'
 // enter/exit animations (ToastBar preserves all of that). Particularly
 // useful for the longer-duration error toasts that users may want to clear
 // on demand once they've read the message.
+const inMaintenance = import.meta.env.VITE_MAINTENANCE === 'true'
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <App />
+        {inMaintenance ? <MaintenancePage /> : <App />}
         <Toaster
             position="top-center"
             toastOptions={{
