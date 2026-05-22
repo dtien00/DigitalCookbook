@@ -15,11 +15,11 @@ Four seeded accounts each exercise one of the four library-size density tiers do
 | `test-medium@example.com`   | `TestPass123!` | 14      | private    | `medium_mia`    | 20 visible → tier 3 (9–20 cols) |
 | `test-large@example.com`    | `TestPass123!` | 28      | private    | `large_lou`     | 34 visible → tier 4 (21+ cols) |
 | `test-public@example.com`   | `TestPass123!` | 6       | **public** | `public_paula`  | 6 visible (own + own, no other public) → tier 2 |
-| `admin@example.com`         | `AdminPass123!`| 0       | n/a        | `admin_aria`    | sees public set + admin moderation controls    |
+| see `.env.local` `ADMIN_EMAIL` | see `.env.local` `ADMIN_PASSWORD` | 0       | n/a        | `admin_aria`    | sees public set + admin moderation controls    |
 
 **Anonymous (not signed in):** sees only `test-public`'s 6 public recipes → tier 2 (4–8 cols).
 
-The five non-admin accounts share the password `TestPass123!`; the admin uses `AdminPass123!` (different on purpose so a Login-as-admin slip is visible in logs). Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
+The five non-admin accounts share the password `TestPass123!`. The admin account's email and password live in `.env.local` as `ADMIN_EMAIL` and `ADMIN_PASSWORD` — the literal credentials were rotated and removed from source after the admin branch's public push exposed them. Accounts 1–4 are private (`is_public = false`) so each only sees its own recipes plus whatever is public. The 5th account's recipes are public, which means:
 - Anonymous visitors see 6 recipes (test-public's set).
 - Logged-in test accounts see `their own count + 6` because RLS returns `is_public OR auth.uid() = author_id`.
 
@@ -156,7 +156,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 > Requires migration 008 applied (`supabase_migration_008_admin.sql`) and the seed admin account promoted via `bootstrap_admin()` (handled by `npm run seed:test`).
 
 **Setup:**
-- [ ] **Log in as `admin@example.com` / `AdminPass123!`** — header shows the same Profile dropdown as any user (no admin badge in this iteration; the controls themselves are the signal)
+- [ ] **Log in as the admin account** (email + password from `.env.local`'s `ADMIN_EMAIL` / `ADMIN_PASSWORD`) — header shows the same Profile dropdown as any user (no admin badge in this iteration; the controls themselves are the signal)
 - [ ] **Home grid shows every recipe across every account, including other users' private recipes** — proves migration 009 is applied. The private-recipe badge (lock icon) appears on each non-public card. If the grid only shows `test-public`'s 6 recipes, migration 009 hasn't been applied.
 - [ ] **Open any other user's recipe (e.g. one of `test-medium`'s)** — RecipeDetail now shows a dashed-border "Admin moderation" panel below the (hidden, since you're not the author) Edit/Delete row
 
