@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
@@ -30,6 +30,8 @@ export default function RecipeDetail({
     const [checkedIngredients, setCheckedIngredients] = useState(() => new Set())
     const [checkedSteps, setCheckedSteps] = useState(() => new Set())
     const [pdfLoading, setPdfLoading] = useState(false)
+    const [swipeX, setSwipeX] = useState(0)
+    const touchRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, tracking: false })
 
     const isAuthor = userId === recipe.author_id
     const baseServings = recipe.servings || 1
@@ -180,6 +182,51 @@ export default function RecipeDetail({
         }
     }
 
+    // Swipe-right-to-go-back (Stage 9). Thresholds tuned during impl:
+    //   - 80px minimum horizontal travel — short enough to feel reachable with
+    //     a thumb, long enough to dismiss accidental jitter.
+    //   - 40px maximum vertical drift on commit — anything more reads as a
+    //     diagonal scroll, not an intentional sideways gesture.
+    //   - Tracking is abandoned mid-gesture if dy exceeds dx, so vertical
+    //     scrolling is never hijacked. `touchAction: 'pan-y'` reinforces this
+    //     by telling the browser horizontal pans are ours.
+    //   - Multi-touch (pinch-zoom) is ignored to avoid spurious navigation.
+    const handleTouchStart = (e) => {
+        if (e.touches.length !== 1) return
+        const t = e.touches[0]
+        touchRef.current = { startX: t.clientX, startY: t.clientY, lastX: t.clientX, lastY: t.clientY, tracking: true }
+    }
+
+    const handleTouchMove = (e) => {
+        if (!touchRef.current.tracking || e.touches.length !== 1) return
+        const t = e.touches[0]
+        touchRef.current.lastX = t.clientX
+        touchRef.current.lastY = t.clientY
+        const dx = t.clientX - touchRef.current.startX
+        const dy = Math.abs(t.clientY - touchRef.current.startY)
+        if (dy > 40 && dy > Math.abs(dx)) {
+            touchRef.current.tracking = false
+            setSwipeX(0)
+            return
+        }
+        if (dx > 10) setSwipeX(Math.min(dx, 200))
+    }
+
+    const handleTouchEnd = () => {
+        if (!touchRef.current.tracking) {
+            setSwipeX(0)
+            return
+        }
+        const dx = touchRef.current.lastX - touchRef.current.startX
+        const dy = Math.abs(touchRef.current.lastY - touchRef.current.startY)
+        touchRef.current.tracking = false
+        if (dx >= 80 && dy < 40) {
+            onBack()
+        } else {
+            setSwipeX(0)
+        }
+    }
+
     const handleAdminDeleteAuthor = async () => {
         if (recipe.author_id === userId) {
             toast.error('Admins cannot delete their own account here.')
@@ -197,7 +244,18 @@ export default function RecipeDetail({
     }
 
     return (
-        <div className="paper-grain min-h-screen">
+        <div
+            className="paper-grain min-h-screen"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            style={{
+                transform: swipeX > 0 ? `translateX(${swipeX}px)` : undefined,
+                transition: swipeX > 0 ? 'none' : 'transform 200ms ease-out',
+                touchAction: 'pan-y',
+            }}
+        >
             <div className="recipe-detail-container">
                 <div className="flex justify-between items-center mb-4 no-print">
                     <button onClick={onBack} className="px-4 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors">← Back to List</button>
