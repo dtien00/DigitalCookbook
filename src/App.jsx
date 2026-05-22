@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
@@ -20,16 +21,18 @@ import EnvBanner from './components/EnvBanner'
 const PAGE_SIZE = 20
 
 function App() {
+    const navigate = useNavigate()
+
     const [session, setSession] = useState(null)
     const [recipes, setRecipes] = useState([])
     const [loading, setLoading] = useState(true)
-    const [showCreate, setShowCreate] = useState(false)
-    const [showProfile, setShowProfile] = useState(false)
-    const [showBookmarks, setShowBookmarks] = useState(false)
-    const [showAuth, setShowAuth] = useState(false)
-    const [selectedRecipe, setSelectedRecipe] = useState(null)
-    const [editingRecipe, setEditingRecipe] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Auth STAYS as overlay state — not a route — so its slide-in motion
+    // (fixed inset-0 z-50, 450ms ease-out from translate-x-full) can layer
+    // over any underlying route without disturbing the address bar.
+    // Documented in refs/COSMETICS.md → "Routing".
+    const [showAuth, setShowAuth] = useState(false)
 
     // Grid density toggle. `doubled` flips between the library-size-adaptive
     // default and a 2x-denser variant of the same tier at every breakpoint —
@@ -97,24 +100,27 @@ function App() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             setSession(session)
             if (event === 'PASSWORD_RECOVERY') {
-                setShowProfile(true)
+                navigate('/profile')
             }
             // Close the auth view once a session is established
             if (session) {
                 setShowAuth(false)
             }
-            // On sign-out (including token expiry), reset all view state so
-            // re-login always returns to the home grid, not a stale sub-page.
-            if (!session) {
-                setShowProfile(false)
-                setShowBookmarks(false)
-                setShowCreate(false)
+            // On sign-out specifically, route back to home so re-login
+            // always lands on a clean grid, not a stale sub-page. Gated
+            // on `event === 'SIGNED_OUT'` rather than `!session` because
+            // onAuthStateChange ALSO fires `INITIAL_SESSION` with a null
+            // session on every page load for anonymous users — without
+            // the event check, every deep link (e.g. /recipe/:id pasted
+            // into a fresh tab) would bounce to / immediately on mount.
+            if (event === 'SIGNED_OUT') {
+                navigate('/')
                 setMenuOpen(false)
             }
         })
 
         return () => subscription.unsubscribe()
-    }, [])
+    }, [navigate])
 
     // Fetch recipes for everyone, including anonymous visitors.
     // RLS filters: `is_public OR auth.uid() = author_id`, so anon users
@@ -188,30 +194,21 @@ function App() {
         // Force-clear React state in case onAuthStateChange doesn't fire
         // (it won't if the session was already missing on Supabase's side).
         setSession(null)
-        setShowProfile(false)
-        setShowBookmarks(false)
-        setShowCreate(false)
+        navigate('/')
         setMenuOpen(false)
     }
 
     const handleEditRecipe = (recipe) => {
-        setEditingRecipe(recipe)
-        setShowCreate(true)
-        setSelectedRecipe(null)
-        setShowProfile(false)
-        setShowBookmarks(false)
+        navigate(`/recipe/${recipe.id}/edit`)
     }
 
     const handleRecipeDeleted = () => {
-        setSelectedRecipe(null)
-        fetchRecipes()
+        navigate('/')
+        fetchRecipes({ page: 0, append: false })
     }
 
     const handleRecipeClick = (recipe) => {
-        setSelectedRecipe(recipe)
-        setShowProfile(false)
-        setShowCreate(false)
-        setShowBookmarks(false)
+        navigate(`/recipe/${recipe.id}`)
     }
 
     // Bookmark click handler — anonymous users get the sign-in CTA, signed-in users toggle.
@@ -232,432 +229,101 @@ function App() {
         toggleLike(recipeId)
     }
 
-    // Build the main content first; Auth is then layered as a fixed-position
-    // overlay sibling so it can slide in/out over whatever's currently shown.
-    // Auth was previously an early-return that wholesale replaced the view —
-    // an overlay keeps the underlying page rendered behind it during the slide.
-    const renderMainView = () => {
-        if (showProfile && session) {
-            return <Profile
-                session={session}
-                onBack={() => setShowProfile(false)}
-                onRecipeClick={handleRecipeClick}
-                isFavorited={isFavorited}
-                onToggleFavorite={handleBookmarkClick}
-                likeCount={likeCount}
-                userLiked={userLiked}
-                onToggleLike={handleLikeClick}
-            />
-        }
+    // Bundled "shared" props for the home view + recipe detail wrapper.
+    // Defined once so each <Route> JSX is short and changes to the shape
+    // (e.g. adding a new handler) only need one update, not five.
+    const homeViewProps = {
+        session, recipes, loading, totalCount, hasMore, loadingMore,
+        searchTerm, setSearchTerm,
+        doubled, setDoubled, scrolled,
+        tagsExpanded, setTagsExpanded,
+        menuOpen, setMenuOpen, menuRef,
+        sentinelRef,
+        isFavorited, likeCount, userLiked,
+        onRecipeClick: handleRecipeClick,
+        onBookmarkClick: handleBookmarkClick,
+        onLikeClick: handleLikeClick,
+        onLogout: handleLogout,
+        onSignIn: () => setShowAuth(true),
+    }
 
-        if (showBookmarks && session) {
-            return <MyBookmarks
-                session={session}
-                onBack={() => setShowBookmarks(false)}
-                onRecipeClick={handleRecipeClick}
-                isFavorited={isFavorited}
-                onToggleFavorite={handleBookmarkClick}
-                likeCount={likeCount}
-                userLiked={userLiked}
-                onToggleLike={handleLikeClick}
-            />
-        }
+    const recipeDetailProps = {
+        session, recipes, isAdmin,
+        isFavorited, likeCount, userLiked,
+        refetchLikes, refetchFavorites,
+        onEditRecipe: handleEditRecipe,
+        onRecipeDeleted: handleRecipeDeleted,
+        onBookmarkClick: handleBookmarkClick,
+        onLikeClick: handleLikeClick,
+        onRequireAuth: () => setShowAuth(true),
+    }
 
-        if (showCreate && session) {
-            return <CreateRecipe
-                userId={session.user.id}
-                recipeToEdit={editingRecipe}
-                onComplete={() => {
-                    setShowCreate(false)
-                    setEditingRecipe(null)
-                    fetchRecipes()
-                }}
-            />
-        }
-
-        if (selectedRecipe) {
-            return <RecipeDetail
-                recipe={selectedRecipe}
-                userId={session?.user.id}
-                isAdmin={isAdmin}
-                onBack={() => setSelectedRecipe(null)}
-                onEdit={handleEditRecipe}
-                onDelete={handleRecipeDeleted}
-                favorited={isFavorited(selectedRecipe.id)}
-                onToggleFavorite={() => handleBookmarkClick(selectedRecipe.id)}
-                liked={userLiked(selectedRecipe.id)}
-                likeCount={likeCount(selectedRecipe.id)}
-                onToggleLike={() => handleLikeClick(selectedRecipe.id)}
-                refetchLikes={refetchLikes}
-                refetchFavorites={refetchFavorites}
-                onRequireAuth={() => setShowAuth(true)}
-            />
-        }
-
-        // Search supports two modes:
-        //   - tag mode: any comma in the input → split, trim, lowercase the
-        //     tokens; recipes must include EVERY token in their tags array
-        //     (AND match). Empty tokens (e.g. trailing comma) are dropped, so
-        //     "italian," with one token still works as a single-tag filter.
-        //   - text mode: no comma → existing substring match on title /
-        //     description, case-insensitive.
-        // Whitespace is trimmed around every token so "  italian , pasta  "
-        // behaves identically to "italian,pasta".
-        const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
-
-        const filteredRecipes = recipes.filter(recipe => {
-            if (searchMode === 'none') return true
-            if (searchMode === 'tag') {
-                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-                return searchTokens.every(token => recipeTagsLower.includes(token))
-            }
-            const q = searchTokens[0]
-            if (searchMode === 'hybrid') {
-                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-                if (recipeTagsLower.includes(q)) return true
-            }
-            return recipe.title.toLowerCase().includes(q) ||
-                recipe.description?.toLowerCase().includes(q)
-        })
-
-        // Tags from currently loaded recipes, sorted by frequency desc with
-        // alphabetical tiebreak. Frequency-sort surfaces the most actionable
-        // chips first; alphabetical tiebreak keeps the order stable across
-        // re-renders (objects with identical counts would otherwise jitter).
-        // Limitation: tags that only exist on unloaded pages won't appear
-        // until the user scrolls — acceptable for the current corpus size.
-        const tagCounts = new Map()
-        recipes.forEach(r => (r.tags || []).forEach(t => {
-            tagCounts.set(t, (tagCounts.get(t) || 0) + 1)
-        }))
-        const availableTags = Array.from(tagCounts.keys()).sort((a, b) => {
-            const diff = tagCounts.get(b) - tagCounts.get(a)
-            return diff !== 0 ? diff : a.localeCompare(b)
-        })
-
-        // Hybrid mode is also "tag-active" for chip display purposes: the
-        // single token IS being matched against tags (alongside title/desc),
-        // so the corresponding chip should render in its active state and
-        // clicking it should deactivate the filter.
-        const activeTags = (searchMode === 'tag' || searchMode === 'hybrid')
-            ? new Set(searchTokens)
-            : new Set()
-
-        // Collapsed chip row shows the top N by frequency. Any currently
-        // active tags (from a typed comma-list or prior chip clicks) are
-        // pinned into view even if they'd otherwise be hidden, so a filter
-        // never appears to "vanish" from the row.
-        const TAG_CHIP_LIMIT = 12
-        const overLimit = availableTags.length > TAG_CHIP_LIMIT
-        const visibleTags = (tagsExpanded || !overLimit)
-            ? availableTags
-            : (() => {
-                const top = availableTags.slice(0, TAG_CHIP_LIMIT)
-                const topSet = new Set(top.map(t => t.toLowerCase()))
-                const pinned = availableTags.filter(t =>
-                    activeTags.has(t.toLowerCase()) && !topSet.has(t.toLowerCase())
-                )
-                return [...top, ...pinned]
-            })()
-
-        const toggleTagFilter = (tag) => {
-            const tagLower = tag.toLowerCase()
-            const current = new Set(activeTags)
-            if (current.has(tagLower)) current.delete(tagLower)
-            else current.add(tagLower)
-            const arr = Array.from(current)
-            if (arr.length === 0) setSearchTerm('')
-            // Trailing comma on a single tag forces tag-mode parsing rather
-            // than falling back to text mode (since text mode would substring-
-            // match titles/descriptions, not the tags array).
-            else if (arr.length === 1) setSearchTerm(arr[0] + ',')
-            else setSearchTerm(arr.join(', '))
-        }
-
-        // Density scales with the user's full library size (totalCount from
-        // Supabase), not the loaded subset, so the column count stays stable
-        // as infinity scroll appends more pages. Two parallel ladders: the
-        // default tiering (xl:columns-5 floor) and a 2x-denser variant
-        // exposed via the floating toggle. Doubled values are literal class
-        // names so Tailwind's content scanner picks them up at build time.
-        const gridColumnsClass = doubled ? (
-            totalCount <= 3  ? 'columns-2 md:columns-4 xl:columns-4' :
-            totalCount <= 8  ? 'columns-2 sm:columns-4 lg:columns-6 xl:columns-6' :
-            totalCount <= 20 ? 'columns-2 sm:columns-4 md:columns-6 xl:columns-8' :
-                               'columns-4 md:columns-6 lg:columns-8 xl:columns-10'
-        ) : (
-            totalCount <= 3  ? 'columns-1 md:columns-2 xl:columns-2' :
-            totalCount <= 8  ? 'columns-1 sm:columns-2 lg:columns-3 xl:columns-3' :
-            totalCount <= 20 ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4' :
-                               'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
-        )
-
-        // Icon for the density toggle — reused by both the inline and floating
-        // copies of the button. Previews the destination state: 2×2 grid means
-        // "tap to densify", two wide bars means "tap to return to default".
-        const densityIcon = !doubled ? (
-            <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="4"  y="4"  width="7" height="7" rx="1" />
-                <rect x="13" y="4"  width="7" height="7" rx="1" />
-                <rect x="4"  y="13" width="7" height="7" rx="1" />
-                <rect x="13" y="13" width="7" height="7" rx="1" />
-            </svg>
-        ) : (
-            <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="4"  y="4" width="7" height="16" rx="1" />
-                <rect x="13" y="4" width="7" height="16" rx="1" />
-            </svg>
-        )
-        const densityAriaLabel = doubled ? 'Show fewer columns' : 'Show more columns'
-
-        return (
-            <div className="paper-grain min-h-screen">
-            {/* Density toggle. Rendered in two places that share state and
-                visual treatment: an inline copy in the action row below
-                (always visible at the top of the page, sits in normal flow),
-                and a floating copy that fades in once the user has scrolled
-                past the inline one. Both flip between the default library-size
-                tiering and a 2x-denser variant of the same tier. The icon
-                previews the destination state. */}
-            <button
-                type="button"
-                onClick={() => setDoubled(d => !d)}
-                aria-label={densityAriaLabel}
-                aria-pressed={doubled}
-                aria-hidden={!scrolled}
-                tabIndex={scrolled ? 0 : -1}
-                className={`fixed top-4 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            >
-                {densityIcon}
-            </button>
-
-            {/* Scroll-to-top button. Mirrors the density toggle on the
-                right edge. Same scroll-trigger as the toggle so the two
-                appear and disappear together. */}
-            <button
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                aria-label="Scroll to top"
-                aria-hidden={!scrolled}
-                tabIndex={scrolled ? 0 : -1}
-                className={`fixed top-4 right-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            >
-                <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="18 15 12 9 6 15" />
-                </svg>
-            </button>
-            <div className="max-w-7xl mx-auto px-5 py-5">
-                <header className="flex justify-between items-center mb-10 pb-6 border-b border-paper-shade gap-3">
-                    <h1 className="font-display text-base sm:text-2xl md:text-3xl font-semibold text-ink tracking-tight min-w-0 truncate">
-                        {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
-                    </h1>
-                    <div className="flex gap-3 flex-shrink-0">
-                        {session ? (
-                            // Single "Profile" trigger that expands into a dropdown
-                            // containing My Profile, Bookmarks, and Log out. Collapsed
-                            // by default; closes on outside click or Escape.
-                            <div className="relative" ref={menuRef}>
-                                <button
-                                    type="button"
-                                    onClick={() => setMenuOpen(o => !o)}
-                                    aria-haspopup="menu"
-                                    aria-expanded={menuOpen}
-                                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors flex items-center gap-1.5"
-                                >
-                                    Profile
-                                    <svg
-                                        className={`w-4 h-4 stroke-ink fill-none transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`}
-                                        viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                        aria-hidden="true"
-                                    >
-                                        <polyline points="6 9 12 15 18 9" />
-                                    </svg>
-                                </button>
-
-                                {menuOpen && (
-                                    <div
-                                        role="menu"
-                                        // Stop pointerdown from bubbling to the document
-                                        // outside-click handler — prevents a race on desktop
-                                        // where the handler could close the menu before the
-                                        // button's click event fires.
-                                        onPointerDown={e => e.stopPropagation()}
-                                        className="absolute right-0 mt-1 w-44 bg-white border border-paper-shade rounded-md shadow-md overflow-hidden z-50"
-                                    >
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => { setShowProfile(true); setMenuOpen(false) }}
-                                            className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
-                                        >
-                                            My Profile
-                                        </button>
-                                        <button
-                                            role="menuitem"
-                                            onClick={() => { setShowBookmarks(true); setMenuOpen(false) }}
-                                            className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
-                                        >
-                                            Bookmarks
-                                        </button>
-                                        <div className="border-t border-paper-shade" aria-hidden="true" />
-                                        <button
-                                            role="menuitem"
-                                            onClick={async () => { await handleLogout(); setMenuOpen(false) }}
-                                            className="w-full text-left px-4 py-2.5 text-rose font-medium hover:bg-paper-shade transition-colors"
-                                        >
-                                            Log out
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <button onClick={() => setShowAuth(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Sign In</button>
-                        )}
-                    </div>
-                </header>
-
-                <div className="flex gap-3 items-center mb-8">
-                    {/* Inline density toggle — same control as the floating copy
-                        above. Lives in document flow so it's always reachable at
-                        the top of the page; scrolls off naturally as the user
-                        scrolls down, at which point the floating copy takes over. */}
-                    <button
-                        type="button"
-                        onClick={() => setDoubled(d => !d)}
-                        aria-label={densityAriaLabel}
-                        aria-pressed={doubled}
-                        className="flex-shrink-0 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center hover:bg-paper-shade transition-colors"
-                    >
-                        {densityIcon}
-                    </button>
-                    <div className="flex-1 min-w-0 relative">
-                        <input
-                            type="text"
-                            placeholder="Search recipes — or tag1, tag2 for tag filter…"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full px-4 py-3 pr-11 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
-                        />
-                        {searchTerm && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchTerm('')}
-                                aria-label="Clear search"
-                                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-paper-shade hover:bg-tan/40 text-ink flex items-center justify-center transition-colors"
-                            >
-                                <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                    <path d="M4 4l8 8M12 4l-8 8" />
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-                    {session && (
-                        <button onClick={() => setShowCreate(true)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
-                    )}
-                </div>
-
-                {/* Tag chip row — discoverability layer over the tag-mode
-                    search syntax. Each chip toggles its tag into the search
-                    input as a comma-separated token; the chip's active state
-                    is derived from the input so typed and clicked filters
-                    stay visually in sync. Hidden when no tags exist on the
-                    loaded recipes. */}
-                {availableTags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-6 items-center" role="group" aria-label="Filter by tag">
-                        {visibleTags.map(tag => {
-                            const isActive = activeTags.has(tag.toLowerCase())
-                            return (
-                                <button
-                                    key={tag}
-                                    type="button"
-                                    onClick={() => toggleTagFilter(tag)}
-                                    aria-pressed={isActive}
-                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                                        isActive
-                                            ? 'bg-rust text-paper hover:bg-rust-dark'
-                                            : 'bg-tan-soft text-ink hover:bg-tan/40'
-                                    }`}
-                                >
-                                    {tag}
-                                </button>
-                            )
-                        })}
-                        {overLimit && (
-                            <button
-                                type="button"
-                                onClick={() => setTagsExpanded(e => !e)}
-                                aria-expanded={tagsExpanded}
-                                className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
-                            >
-                                {tagsExpanded
-                                    ? 'Show less'
-                                    : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                {loading ? (
-                    <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                            <SkeletonCard key={i} index={i} />
-                        ))}
-                    </div>
-                ) : filteredRecipes.length === 0 ? (
-                    <EmptyGridState
-                        searchTerm={searchTerm}
-                        hasAnyRecipes={totalCount > 0}
-                        session={session}
-                        onClearSearch={() => setSearchTerm('')}
-                        onSignIn={() => setShowAuth(true)}
-                        onCreate={() => setShowCreate(true)}
-                    />
-                ) : (
-                    <>
-                        <div className={`${gridColumnsClass} gap-4 mt-6`}>
-                            {filteredRecipes.map(recipe => (
-                                <RecipeCard
-                                    key={recipe.id}
-                                    recipe={recipe}
-                                    onClick={() => handleRecipeClick(recipe)}
-                                    favorited={isFavorited(recipe.id)}
-                                    onToggleFavorite={() => handleBookmarkClick(recipe.id)}
-                                    liked={userLiked(recipe.id)}
-                                    likeCount={likeCount(recipe.id)}
-                                    onToggleLike={() => handleLikeClick(recipe.id)}
-                                />
-                            ))}
-                        </div>
-
-                        {/* Infinity-scroll sentinel + indicators. The sentinel
-                            triggers the next page fetch as it approaches the
-                            viewport. When we know we've reached the end
-                            (hasMore=false AND we've loaded more than one
-                            page), show a quiet ✦ marker. Sentinel skipped
-                            during search-filtering since the filter is
-                            client-side and "more recipes" don't necessarily
-                            match the search anyway. */}
-                        {!searchTerm && hasMore && (
-                            <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
-                        )}
-                        {loadingMore && (
-                            <p className="text-center font-display italic text-rose py-6" role="status">
-                                Loading more recipes…
-                            </p>
-                        )}
-                        {!searchTerm && !hasMore && recipes.length > PAGE_SIZE && (
-                            <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
-                        )}
-                    </>
-                    )}
-                </div>
-            </div>
-        )
+    const handleCreateComplete = () => {
+        navigate('/')
+        fetchRecipes({ page: 0, append: false })
     }
 
     return (
         <>
             <EnvBanner />
-            {renderMainView()}
+            <Routes>
+                <Route path="/" element={<HomeView {...homeViewProps} />} />
+                <Route path="/recipe/:id" element={<RecipeDetailRoute {...recipeDetailProps} />} />
+                <Route
+                    path="/recipe/:id/edit"
+                    element={
+                        session
+                            ? <EditRecipeRoute recipes={recipes} session={session} onComplete={handleCreateComplete} />
+                            : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/new"
+                    element={
+                        session
+                            ? <CreateRecipe userId={session.user.id} onComplete={handleCreateComplete} />
+                            : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/profile"
+                    element={
+                        session
+                            ? <Profile
+                                session={session}
+                                onBack={() => navigate('/')}
+                                onRecipeClick={handleRecipeClick}
+                                isFavorited={isFavorited}
+                                onToggleFavorite={handleBookmarkClick}
+                                likeCount={likeCount}
+                                userLiked={userLiked}
+                                onToggleLike={handleLikeClick}
+                            />
+                            : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/bookmarks"
+                    element={
+                        session
+                            ? <MyBookmarks
+                                session={session}
+                                onBack={() => navigate('/')}
+                                onRecipeClick={handleRecipeClick}
+                                isFavorited={isFavorited}
+                                onToggleFavorite={handleBookmarkClick}
+                                likeCount={likeCount}
+                                userLiked={userLiked}
+                                onToggleLike={handleLikeClick}
+                            />
+                            : <Navigate to="/" replace />
+                    }
+                />
+                {/* Unknown route → home. Keeps the URL bar from displaying a 404
+                    that the app can't render. Replaces in history so the back
+                    button doesn't trap the user on the bad URL. */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
             <div
                 aria-hidden={!showAuth}
                 className={`fixed inset-0 z-50 transition-transform duration-[450ms] ease-out ${showAuth ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
@@ -666,6 +332,528 @@ function App() {
             </div>
         </>
     )
+}
+
+// Home grid view. Extracted from App's previous renderMainView() and pinned
+// here OUTSIDE App so the component identity is stable across App re-renders
+// — React diffs <Route element> by component type; an inline-defined function
+// would be a new type each render, causing unmount/remount churn that would
+// wipe local state like search input, scroll position, and tag-row expansion.
+function HomeView({
+    session, recipes, loading, totalCount, hasMore, loadingMore,
+    searchTerm, setSearchTerm,
+    doubled, setDoubled, scrolled,
+    tagsExpanded, setTagsExpanded,
+    menuOpen, setMenuOpen, menuRef,
+    sentinelRef,
+    isFavorited, likeCount, userLiked,
+    onRecipeClick, onBookmarkClick, onLikeClick,
+    onLogout, onSignIn,
+}) {
+    const navigate = useNavigate()
+
+    // Search supports two modes:
+    //   - tag mode: any comma in the input → split, trim, lowercase the
+    //     tokens; recipes must include EVERY token in their tags array
+    //     (AND match). Empty tokens (e.g. trailing comma) are dropped, so
+    //     "italian," with one token still works as a single-tag filter.
+    //   - text mode: no comma → existing substring match on title /
+    //     description, case-insensitive.
+    // Whitespace is trimmed around every token so "  italian , pasta  "
+    // behaves identically to "italian,pasta".
+    const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
+
+    const filteredRecipes = recipes.filter(recipe => {
+        if (searchMode === 'none') return true
+        if (searchMode === 'tag') {
+            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+            return searchTokens.every(token => recipeTagsLower.includes(token))
+        }
+        const q = searchTokens[0]
+        if (searchMode === 'hybrid') {
+            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+            if (recipeTagsLower.includes(q)) return true
+        }
+        return recipe.title.toLowerCase().includes(q) ||
+            recipe.description?.toLowerCase().includes(q)
+    })
+
+    // Tags from currently loaded recipes, sorted by frequency desc with
+    // alphabetical tiebreak. Frequency-sort surfaces the most actionable
+    // chips first; alphabetical tiebreak keeps the order stable across
+    // re-renders (objects with identical counts would otherwise jitter).
+    // Limitation: tags that only exist on unloaded pages won't appear
+    // until the user scrolls — acceptable for the current corpus size.
+    const tagCounts = new Map()
+    recipes.forEach(r => (r.tags || []).forEach(t => {
+        tagCounts.set(t, (tagCounts.get(t) || 0) + 1)
+    }))
+    const availableTags = Array.from(tagCounts.keys()).sort((a, b) => {
+        const diff = tagCounts.get(b) - tagCounts.get(a)
+        return diff !== 0 ? diff : a.localeCompare(b)
+    })
+
+    // Hybrid mode is also "tag-active" for chip display purposes: the
+    // single token IS being matched against tags (alongside title/desc),
+    // so the corresponding chip should render in its active state and
+    // clicking it should deactivate the filter.
+    const activeTags = (searchMode === 'tag' || searchMode === 'hybrid')
+        ? new Set(searchTokens)
+        : new Set()
+
+    // Collapsed chip row shows the top N by frequency. Any currently
+    // active tags (from a typed comma-list or prior chip clicks) are
+    // pinned into view even if they'd otherwise be hidden, so a filter
+    // never appears to "vanish" from the row.
+    const TAG_CHIP_LIMIT = 12
+    const overLimit = availableTags.length > TAG_CHIP_LIMIT
+    const visibleTags = (tagsExpanded || !overLimit)
+        ? availableTags
+        : (() => {
+            const top = availableTags.slice(0, TAG_CHIP_LIMIT)
+            const topSet = new Set(top.map(t => t.toLowerCase()))
+            const pinned = availableTags.filter(t =>
+                activeTags.has(t.toLowerCase()) && !topSet.has(t.toLowerCase())
+            )
+            return [...top, ...pinned]
+        })()
+
+    const toggleTagFilter = (tag) => {
+        const tagLower = tag.toLowerCase()
+        const current = new Set(activeTags)
+        if (current.has(tagLower)) current.delete(tagLower)
+        else current.add(tagLower)
+        const arr = Array.from(current)
+        if (arr.length === 0) setSearchTerm('')
+        // Trailing comma on a single tag forces tag-mode parsing rather
+        // than falling back to text mode (since text mode would substring-
+        // match titles/descriptions, not the tags array).
+        else if (arr.length === 1) setSearchTerm(arr[0] + ',')
+        else setSearchTerm(arr.join(', '))
+    }
+
+    // Density scales with the user's full library size (totalCount from
+    // Supabase), not the loaded subset, so the column count stays stable
+    // as infinity scroll appends more pages. Two parallel ladders: the
+    // default tiering (xl:columns-5 floor) and a 2x-denser variant
+    // exposed via the floating toggle. Doubled values are literal class
+    // names so Tailwind's content scanner picks them up at build time.
+    const gridColumnsClass = doubled ? (
+        totalCount <= 3  ? 'columns-2 md:columns-4 xl:columns-4' :
+        totalCount <= 8  ? 'columns-2 sm:columns-4 lg:columns-6 xl:columns-6' :
+        totalCount <= 20 ? 'columns-2 sm:columns-4 md:columns-6 xl:columns-8' :
+                           'columns-4 md:columns-6 lg:columns-8 xl:columns-10'
+    ) : (
+        totalCount <= 3  ? 'columns-1 md:columns-2 xl:columns-2' :
+        totalCount <= 8  ? 'columns-1 sm:columns-2 lg:columns-3 xl:columns-3' :
+        totalCount <= 20 ? 'columns-1 sm:columns-2 md:columns-3 xl:columns-4' :
+                           'columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5'
+    )
+
+    // Icon for the density toggle — reused by both the inline and floating
+    // copies of the button. Previews the destination state: 2×2 grid means
+    // "tap to densify", two wide bars means "tap to return to default".
+    const densityIcon = !doubled ? (
+        <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="4"  y="4"  width="7" height="7" rx="1" />
+            <rect x="13" y="4"  width="7" height="7" rx="1" />
+            <rect x="4"  y="13" width="7" height="7" rx="1" />
+            <rect x="13" y="13" width="7" height="7" rx="1" />
+        </svg>
+    ) : (
+        <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="4"  y="4" width="7" height="16" rx="1" />
+            <rect x="13" y="4" width="7" height="16" rx="1" />
+        </svg>
+    )
+    const densityAriaLabel = doubled ? 'Show fewer columns' : 'Show more columns'
+
+    return (
+        <div className="paper-grain min-h-screen">
+        {/* Density toggle. Rendered in two places that share state and
+            visual treatment: an inline copy in the action row below
+            (always visible at the top of the page, sits in normal flow),
+            and a floating copy that fades in once the user has scrolled
+            past the inline one. Both flip between the default library-size
+            tiering and a 2x-denser variant of the same tier. The icon
+            previews the destination state. */}
+        <button
+            type="button"
+            onClick={() => setDoubled(d => !d)}
+            aria-label={densityAriaLabel}
+            aria-pressed={doubled}
+            aria-hidden={!scrolled}
+            tabIndex={scrolled ? 0 : -1}
+            className={`fixed top-4 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+            {densityIcon}
+        </button>
+
+        {/* Scroll-to-top button. Mirrors the density toggle on the
+            right edge. Same scroll-trigger as the toggle so the two
+            appear and disappear together. */}
+        <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            aria-label="Scroll to top"
+            aria-hidden={!scrolled}
+            tabIndex={scrolled ? 0 : -1}
+            className={`fixed top-4 right-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+            <svg className="w-5 h-5 stroke-ink fill-none" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="18 15 12 9 6 15" />
+            </svg>
+        </button>
+        <div className="max-w-7xl mx-auto px-5 py-5">
+            <header className="flex justify-between items-center mb-10 pb-6 border-b border-paper-shade gap-3">
+                <h1 className="font-display text-base sm:text-2xl md:text-3xl font-semibold text-ink tracking-tight min-w-0 truncate">
+                    {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
+                </h1>
+                <div className="flex gap-3 flex-shrink-0">
+                    {session ? (
+                        // Single "Profile" trigger that expands into a dropdown
+                        // containing My Profile, Bookmarks, and Log out. Collapsed
+                        // by default; closes on outside click or Escape.
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                type="button"
+                                onClick={() => setMenuOpen(o => !o)}
+                                aria-haspopup="menu"
+                                aria-expanded={menuOpen}
+                                className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors flex items-center gap-1.5"
+                            >
+                                Profile
+                                <svg
+                                    className={`w-4 h-4 stroke-ink fill-none transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`}
+                                    viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                            </button>
+
+                            {menuOpen && (
+                                <div
+                                    role="menu"
+                                    // Stop pointerdown from bubbling to the document
+                                    // outside-click handler — prevents a race on desktop
+                                    // where the handler could close the menu before the
+                                    // button's click event fires.
+                                    onPointerDown={e => e.stopPropagation()}
+                                    className="absolute right-0 mt-1 w-44 bg-white border border-paper-shade rounded-md shadow-md overflow-hidden z-50"
+                                >
+                                    <button
+                                        role="menuitem"
+                                        onClick={() => { navigate('/profile'); setMenuOpen(false) }}
+                                        className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
+                                    >
+                                        My Profile
+                                    </button>
+                                    <button
+                                        role="menuitem"
+                                        onClick={() => { navigate('/bookmarks'); setMenuOpen(false) }}
+                                        className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
+                                    >
+                                        Bookmarks
+                                    </button>
+                                    <div className="border-t border-paper-shade" aria-hidden="true" />
+                                    <button
+                                        role="menuitem"
+                                        onClick={async () => { await onLogout(); setMenuOpen(false) }}
+                                        className="w-full text-left px-4 py-2.5 text-rose font-medium hover:bg-paper-shade transition-colors"
+                                    >
+                                        Log out
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <button onClick={onSignIn} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Sign In</button>
+                    )}
+                </div>
+            </header>
+
+            <div className="flex gap-3 items-center mb-8">
+                {/* Inline density toggle — same control as the floating copy
+                    above. Lives in document flow so it's always reachable at
+                    the top of the page; scrolls off naturally as the user
+                    scrolls down, at which point the floating copy takes over. */}
+                <button
+                    type="button"
+                    onClick={() => setDoubled(d => !d)}
+                    aria-label={densityAriaLabel}
+                    aria-pressed={doubled}
+                    className="flex-shrink-0 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center hover:bg-paper-shade transition-colors"
+                >
+                    {densityIcon}
+                </button>
+                <div className="flex-1 min-w-0 relative">
+                    <input
+                        type="text"
+                        placeholder="Search recipes — or tag1, tag2 for tag filter…"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full px-4 py-3 pr-11 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 shadow-sm focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
+                    />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchTerm('')}
+                            aria-label="Clear search"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-paper-shade hover:bg-tan/40 text-ink flex items-center justify-center transition-colors"
+                        >
+                            <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <path d="M4 4l8 8M12 4l-8 8" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+                {session && (
+                    <button onClick={() => navigate('/new')} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
+                )}
+            </div>
+
+            {/* Tag chip row — discoverability layer over the tag-mode
+                search syntax. Each chip toggles its tag into the search
+                input as a comma-separated token; the chip's active state
+                is derived from the input so typed and clicked filters
+                stay visually in sync. Hidden when no tags exist on the
+                loaded recipes. */}
+            {availableTags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6 items-center" role="group" aria-label="Filter by tag">
+                    {visibleTags.map(tag => {
+                        const isActive = activeTags.has(tag.toLowerCase())
+                        return (
+                            <button
+                                key={tag}
+                                type="button"
+                                onClick={() => toggleTagFilter(tag)}
+                                aria-pressed={isActive}
+                                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                                    isActive
+                                        ? 'bg-rust text-paper hover:bg-rust-dark'
+                                        : 'bg-tan-soft text-ink hover:bg-tan/40'
+                                }`}
+                            >
+                                {tag}
+                            </button>
+                        )
+                    })}
+                    {overLimit && (
+                        <button
+                            type="button"
+                            onClick={() => setTagsExpanded(e => !e)}
+                            aria-expanded={tagsExpanded}
+                            className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                        >
+                            {tagsExpanded
+                                ? 'Show less'
+                                : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {loading ? (
+                <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <SkeletonCard key={i} index={i} />
+                    ))}
+                </div>
+            ) : filteredRecipes.length === 0 ? (
+                <EmptyGridState
+                    searchTerm={searchTerm}
+                    hasAnyRecipes={totalCount > 0}
+                    session={session}
+                    onClearSearch={() => setSearchTerm('')}
+                    onSignIn={onSignIn}
+                    onCreate={() => navigate('/new')}
+                />
+            ) : (
+                <>
+                    <div className={`${gridColumnsClass} gap-4 mt-6`}>
+                        {filteredRecipes.map(recipe => (
+                            <RecipeCard
+                                key={recipe.id}
+                                recipe={recipe}
+                                onClick={() => onRecipeClick(recipe)}
+                                favorited={isFavorited(recipe.id)}
+                                onToggleFavorite={() => onBookmarkClick(recipe.id)}
+                                liked={userLiked(recipe.id)}
+                                likeCount={likeCount(recipe.id)}
+                                onToggleLike={() => onLikeClick(recipe.id)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Infinity-scroll sentinel + indicators. The sentinel
+                        triggers the next page fetch as it approaches the
+                        viewport. When we know we've reached the end
+                        (hasMore=false AND we've loaded more than one
+                        page), show a quiet ✦ marker. Sentinel skipped
+                        during search-filtering since the filter is
+                        client-side and "more recipes" don't necessarily
+                        match the search anyway. */}
+                    {!searchTerm && hasMore && (
+                        <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
+                    )}
+                    {loadingMore && (
+                        <p className="text-center font-display italic text-rose py-6" role="status">
+                            Loading more recipes…
+                        </p>
+                    )}
+                    {!searchTerm && !hasMore && recipes.length > PAGE_SIZE && (
+                        <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
+                    )}
+                </>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// RecipeDetail route wrapper. URL is /recipe/:id; the recipe lookup is a
+// two-tier cascade:
+//   1. Cache hit — find by id in the parent's `recipes` array (already
+//      paginated into memory). Most navigations come from clicking a card
+//      in the grid, so the cache will hit ~100% of the time.
+//   2. Cache miss — fetch the recipe by id directly. This is the deep-link
+//      path: a user pastes /recipe/<uuid> into a fresh tab before any
+//      pagination has loaded that recipe, or the recipe sits past the
+//      currently-loaded page count.
+// RLS handles visibility automatically — private recipes belonging to other
+// users return no row, which we surface as a "not found" empty state.
+function RecipeDetailRoute({
+    session, recipes, isAdmin,
+    isFavorited, likeCount, userLiked,
+    refetchLikes, refetchFavorites,
+    onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
+}) {
+    const { id } = useParams()
+    const navigate = useNavigate()
+    const [fetchedRecipe, setFetchedRecipe] = useState(null)
+    const [fetchState, setFetchState] = useState('idle') // 'idle' | 'loading' | 'notfound'
+
+    const cached = recipes.find(r => r.id === id)
+    const recipe = cached || fetchedRecipe
+
+    useEffect(() => {
+        if (cached) {
+            setFetchState('idle')
+            setFetchedRecipe(null)
+            return
+        }
+        let cancelled = false
+        setFetchState('loading')
+        supabase.from('recipes').select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
+            if (cancelled) return
+            if (error || !data) {
+                setFetchState('notfound')
+                setFetchedRecipe(null)
+            } else {
+                setFetchState('idle')
+                setFetchedRecipe(data)
+            }
+        })
+        return () => { cancelled = true }
+    }, [id, cached])
+
+    if (!recipe && fetchState === 'loading') {
+        return (
+            <div className="paper-grain min-h-screen flex items-center justify-center">
+                <p className="font-display italic text-rose" role="status">Loading recipe…</p>
+            </div>
+        )
+    }
+
+    if (!recipe && fetchState === 'notfound') {
+        return (
+            <div className="paper-grain min-h-screen">
+                <div className="recipe-detail-container">
+                    <div className="text-center py-16">
+                        <p className="text-2xl text-tan mb-4">✦</p>
+                        <p className="font-display text-xl text-ink mb-2">Recipe not found</p>
+                        <p className="font-display italic text-rose mb-6">The link may be incorrect, or the recipe is private.</p>
+                        <button
+                            onClick={() => navigate('/')}
+                            className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                        >
+                            ← Back to recipes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    if (!recipe) return null
+
+    return (
+        <RecipeDetail
+            recipe={recipe}
+            userId={session?.user.id}
+            isAdmin={isAdmin}
+            onBack={() => navigate('/')}
+            onEdit={onEditRecipe}
+            onDelete={onRecipeDeleted}
+            favorited={isFavorited(recipe.id)}
+            onToggleFavorite={() => onBookmarkClick(recipe.id)}
+            liked={userLiked(recipe.id)}
+            likeCount={likeCount(recipe.id)}
+            onToggleLike={() => onLikeClick(recipe.id)}
+            refetchLikes={refetchLikes}
+            refetchFavorites={refetchFavorites}
+            onRequireAuth={onRequireAuth}
+        />
+    )
+}
+
+// Edit-recipe route wrapper. Same cache-then-fetch cascade as
+// RecipeDetailRoute, plus an author-only guard: only the recipe's author
+// can edit, so anyone else who lands on /recipe/:id/edit gets bounced to
+// the read-only detail view. The Route-level `session` guard above this
+// component handles the anonymous case.
+function EditRecipeRoute({ recipes, session, onComplete }) {
+    const { id } = useParams()
+    const [fetchedRecipe, setFetchedRecipe] = useState(null)
+    const [fetchState, setFetchState] = useState('idle')
+
+    const cached = recipes.find(r => r.id === id)
+    const recipe = cached || fetchedRecipe
+
+    useEffect(() => {
+        if (cached) {
+            setFetchState('idle')
+            setFetchedRecipe(null)
+            return
+        }
+        let cancelled = false
+        setFetchState('loading')
+        supabase.from('recipes').select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
+            if (cancelled) return
+            if (error || !data) {
+                setFetchState('notfound')
+                setFetchedRecipe(null)
+            } else {
+                setFetchState('idle')
+                setFetchedRecipe(data)
+            }
+        })
+        return () => { cancelled = true }
+    }, [id, cached])
+
+    if (!recipe && fetchState === 'loading') {
+        return (
+            <div className="paper-grain min-h-screen flex items-center justify-center">
+                <p className="font-display italic text-rose" role="status">Loading recipe…</p>
+            </div>
+        )
+    }
+
+    if (!recipe) return <Navigate to="/" replace />
+    if (recipe.author_id !== session.user.id) return <Navigate to={`/recipe/${id}`} replace />
+
+    return <CreateRecipe userId={session.user.id} recipeToEdit={recipe} onComplete={onComplete} />
 }
 
 // Three distinct empty states for the home grid:
