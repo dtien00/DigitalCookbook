@@ -202,9 +202,53 @@ Goal: phone navigation feels native, not webby. Swipe gestures, not just back bu
 
 ---
 
+## Stage 10 - Fridge/Food Basket Component
+
+Goal: Add an additional 'filter' mechanic that is based on available ingredients. Helps user find recipes they can make, or short on ingredients
+
+- [] Dedicated button to the right and inlined with the filter selection bar that opens a modal covering the screen; prevent user accidentally selecting recipes when in the interface
+- [] Allow users to add in ingredients into a cumulative list, as well as a button to 'clear' it
+- [] Based on the ingredients included, look to filter recipes based on ingredients in the shopping cart. Concerns for large database searching in scale; keep note of this for long term
+- [] Confirm button to start search, and exit button to leave interface and see qualifying recipes
+
+---
+
+## Stage 11 - Author Following
+
+Goal: Signed users (not anon) can follow/view another user's recipes and optionally get notified if they produce/post new recipes.
+
+- [] When any user (signed and anon) views recipe details, they also see the author's profile name. User would then be able to select the profile name to only view author's profile and recipes they made; they **cannot** edit others users recipes/credentials.
+- [] When viewing the recipe detail author's profile, they can select a button to follow/connect with the user. Can opt in to get notified when new recipes are posted, which is email sent.
+- [] Followed recipe author's can be viewed in the user's own profile. Include button to unfollow and by default, disable further email notifications when they post recipes in the future.
+
+---
+
+## Stage 12 - OAuth implementation
+
+Goal: Allow new anon users to sign up using their Gmail/Github or other alternate forms of media. Prevents manual email notification that doesn't look as appealing.
+
+- [] Utilize current OAuth buttons already on the Auth.jsx element.
+
 ## Working Style
 
 - Each stage is a branch + PR mentally, not a months-long epic. Aim to finish one before starting the next.
 - Mark items done in this file as they ship so this stays a live document.
 - If reality diverges from the roadmap, update the roadmap — don't pretend.
 - `.context/` is for scratch notes; promote anything durable into this file or a code comment.
+
+---
+
+## Stage N - Allergen/Condition filter
+
+Goal: Add an additional 'filter' mechanic based on user allergies or dietary restrictions. Helps user be assured and looking through recipes without concern of having bodily distress.
+
+- [] Dedicated button to the right and inlined with fridge/food basket button that opens a similar modal covering the screen
+- [] Allow users to select from common allergens/restrictions
+- [] Based on choices, remove recipes that may violate these choices
+- [] Confirm button to start search, and exit button.
+
+** Defer substantial search functionality to long term stretch goal **: This can be argued as a complicated search term that can include many possible ingredients. 
+
+## Stage N+1 - Alternate Author Accounts(?)
+
+Goal: Utilize a bookmark visual at the top of the user's landing page that is colored to indicate other potential alternate/family/following user accounts to view. Still in long term future drafting.
