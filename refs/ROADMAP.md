@@ -206,8 +206,8 @@ Goal: phone navigation feels native, not webby. Swipe gestures, not just back bu
 
 Goal: Add an additional 'filter' mechanic that is based on available ingredients. Helps user find recipes they can make, or short on ingredients
 
-- [] Dedicated button to the right and inlined with the filter selection bar that opens a modal covering the screen; prevent user accidentally selecting recipes when in the interface
-- [] Allow users to add in ingredients into a cumulative list, as well as a button to 'clear' it
+- [x] Dedicated button to the right and inlined with the filter selection bar that opens a modal covering the screen; prevent user accidentally selecting recipes when in the interface. *Done on `stage-10-fridge-basket`. The pre-existing tag chip row was restructured into a flex row with `justify-between`: chips on the left (flex-grow, may wrap to multiple lines) and the new Fridge trigger anchored right (`flex-shrink-0`). The row now always renders on the home view — previously it was gated on `availableTags.length > 0`, but the Fridge button needs a stable home regardless of whether tags exist. Trigger is a paper-shade pill carrying a fridge SVG + "Fridge" label, with a small rust count badge in the top-right corner when the basket is non-empty (singular/plural aria-label so screen readers announce "(1 ingredient)" vs "(2 ingredients)"). Modal mounts at App level (sibling to the Auth overlay) so it overlays any route. Accessibility: `role="dialog" aria-modal="true"`, focus moves to the input on open, Escape + backdrop click close, focus returns to the trigger on close, body scroll is locked via `document.body.style.overflow = 'hidden'` — the cumulative effect is the "prevent accidental selection" intent from the spec.*
+- [x] Allow users to add in ingredients into a cumulative list, as well as a button to 'clear' it. *Done on `stage-10-fridge-basket`. New [src/hooks/useFridgeBasket.js](../src/hooks/useFridgeBasket.js) backs the list with localStorage (`cookbook.fridgeBasket`) so the basket models a real-world inventory — survives reload, tab close, and anon→signed-in transitions. Normalization (trim + lowercase) at the boundary; dedupe on add; empty-after-trim inputs rejected; no item cap (a hypothetical-future-requirement we explicitly chose not to design for — chip container scrolls if it ever needs to). API is `{ basket, addIngredient, removeIngredient, clearBasket }`. UI: ingredient chips with × removers, "Clear all" link in the modal footer (disabled when basket is empty), empty-state copy with the ✦ glyph + serif italic voice consistent with the other empty states from Stage 6.*
 - [] Based on the ingredients included, look to filter recipes based on ingredients in the shopping cart. Concerns for large database searching in scale; keep note of this for long term
 - [] Confirm button to start search, and exit button to leave interface and see qualifying recipes
 
@@ -237,6 +237,13 @@ Goal: Allow new anon users to sign up using their Gmail/Github or other alternat
 - `.context/` is for scratch notes; promote anything durable into this file or a code comment.
 
 ---
+
+## Stage 13 - Metric Sorting
+
+Goal: Users can view recipes by varying metrics to better find something of a particular paradigm;
+includes newest/oldest, most/least likes, most/least bookmarks(?), most/least time(?)
+
+- [] Button inline bewteen search bar and new recipe element to drop down/toggle between different sorting metrics. Should apply on selection.
 
 ## Stage N - Allergen/Condition filter
 

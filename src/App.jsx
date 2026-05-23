@@ -6,6 +6,7 @@ import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
 import { useAdmin } from './hooks/useAdmin'
+import { useFridgeBasket } from './hooks/useFridgeBasket'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -14,6 +15,7 @@ import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
+import FridgeBasket from './components/FridgeBasket'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -89,6 +91,14 @@ function App() {
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin } = useAdmin(session?.user.id)
+
+    // Fridge basket — persistent ingredient list (localStorage). Lives at the
+    // App level so the modal can mount above any route and so basket state
+    // survives route changes. Filter coupling lands in a follow-up Stage 10
+    // item; for now the basket is purely additive.
+    const { basket, addIngredient, removeIngredient, clearBasket } = useFridgeBasket()
+    const [basketOpen, setBasketOpen] = useState(false)
+    const basketTriggerRef = useRef(null)
 
     useEffect(() => {
         // Check initial session
@@ -240,6 +250,9 @@ function App() {
         menuOpen, setMenuOpen, menuRef,
         sentinelRef,
         isFavorited, likeCount, userLiked,
+        basket,
+        basketTriggerRef,
+        onOpenBasket: () => setBasketOpen(true),
         onRecipeClick: handleRecipeClick,
         onBookmarkClick: handleBookmarkClick,
         onLikeClick: handleLikeClick,
@@ -330,6 +343,15 @@ function App() {
             >
                 <Auth onBack={() => setShowAuth(false)} />
             </div>
+            <FridgeBasket
+                isOpen={basketOpen}
+                onClose={() => setBasketOpen(false)}
+                basket={basket}
+                onAdd={addIngredient}
+                onRemove={removeIngredient}
+                onClear={clearBasket}
+                openerRef={basketTriggerRef}
+            />
         </>
     )
 }
@@ -347,6 +369,7 @@ function HomeView({
     menuOpen, setMenuOpen, menuRef,
     sentinelRef,
     isFavorited, likeCount, userLiked,
+    basket, basketTriggerRef, onOpenBasket,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
 }) {
@@ -679,46 +702,82 @@ function HomeView({
                 )}
             </div>
 
-            {/* Tag chip row — discoverability layer over the tag-mode
-                search syntax. Each chip toggles its tag into the search
-                input as a comma-separated token; the chip's active state
-                is derived from the input so typed and clicked filters
-                stay visually in sync. Hidden when no tags exist on the
-                loaded recipes. */}
-            {availableTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6 items-center" role="group" aria-label="Filter by tag">
-                    {visibleTags.map(tag => {
-                        const isActive = activeTags.has(tag.toLowerCase())
-                        return (
+            {/* Filter row — tag chips on the left, fridge basket trigger on
+                the right. Always renders on the home view so the fridge
+                button has a stable home; the chip group inside is hidden
+                when no tags exist on loaded recipes.
+
+                Chips and fridge button live in sibling flex cells so the
+                button stays anchored right even when chips wrap to multiple
+                lines (justify-between on the row + chip group flex-grows). */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+                {availableTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 items-center flex-1 min-w-0" role="group" aria-label="Filter by tag">
+                        {visibleTags.map(tag => {
+                            const isActive = activeTags.has(tag.toLowerCase())
+                            return (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => toggleTagFilter(tag)}
+                                    aria-pressed={isActive}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                                        isActive
+                                            ? 'bg-rust text-paper hover:bg-rust-dark'
+                                            : 'bg-tan-soft text-ink hover:bg-tan/40'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            )
+                        })}
+                        {overLimit && (
                             <button
-                                key={tag}
                                 type="button"
-                                onClick={() => toggleTagFilter(tag)}
-                                aria-pressed={isActive}
-                                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                                    isActive
-                                        ? 'bg-rust text-paper hover:bg-rust-dark'
-                                        : 'bg-tan-soft text-ink hover:bg-tan/40'
-                                }`}
+                                onClick={() => setTagsExpanded(e => !e)}
+                                aria-expanded={tagsExpanded}
+                                className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
                             >
-                                {tag}
+                                {tagsExpanded
+                                    ? 'Show less'
+                                    : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
                             </button>
-                        )
-                    })}
-                    {overLimit && (
-                        <button
-                            type="button"
-                            onClick={() => setTagsExpanded(e => !e)}
-                            aria-expanded={tagsExpanded}
-                            className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex-1 min-w-0" />
+                )}
+                {/* Fridge basket trigger. Count badge appears when the basket
+                    has items — quiet rust dot in the top-right corner. The
+                    ref is forwarded from App so the modal can restore focus
+                    here on close. */}
+                <button
+                    ref={basketTriggerRef}
+                    type="button"
+                    onClick={onOpenBasket}
+                    aria-label={basket.length === 0
+                        ? 'Open fridge basket'
+                        : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
+                    aria-haspopup="dialog"
+                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="3" width="14" height="18" rx="2" />
+                        <line x1="5" y1="11" x2="19" y2="11" />
+                        <line x1="9" y1="7" x2="9" y2="8" />
+                        <line x1="9" y1="15" x2="9" y2="16" />
+                    </svg>
+                    <span>Fridge</span>
+                    {basket.length > 0 && (
+                        <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
                         >
-                            {tagsExpanded
-                                ? 'Show less'
-                                : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
-                        </button>
+                            {basket.length}
+                        </span>
                     )}
-                </div>
-            )}
+                </button>
+            </div>
 
             {loading ? (
                 <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
