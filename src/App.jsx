@@ -11,6 +11,7 @@ import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
+import AuthorProfile from './components/AuthorProfile'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
@@ -182,7 +183,7 @@ function App() {
             // for a public recipe are returned to anonymous viewers too.
             const { data, error, count } = await supabase
                 .from('recipes')
-                .select('*, ingredients(name)', { count: 'exact' })
+                .select('*, ingredients(name), author:profiles!author_id(id, username, full_name, avatar_url)', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(from, to)
 
@@ -321,6 +322,19 @@ function App() {
                                 onToggleLike={handleLikeClick}
                             />
                             : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/profile/:id"
+                    element={
+                        <AuthorProfile
+                            session={session}
+                            isFavorited={isFavorited}
+                            onToggleFavorite={handleBookmarkClick}
+                            likeCount={likeCount}
+                            userLiked={userLiked}
+                            onToggleLike={handleLikeClick}
+                        />
                     }
                 />
                 <Route
@@ -917,16 +931,21 @@ function RecipeDetailRoute({
         }
         let cancelled = false
         setFetchState('loading')
-        supabase.from('recipes').select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
-            if (cancelled) return
-            if (error || !data) {
-                setFetchState('notfound')
-                setFetchedRecipe(null)
-            } else {
-                setFetchState('idle')
-                setFetchedRecipe(data)
-            }
-        })
+        supabase
+            .from('recipes')
+            .select('*, author:profiles!author_id(id, username, full_name, avatar_url)')
+            .eq('id', id)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (cancelled) return
+                if (error || !data) {
+                    setFetchState('notfound')
+                    setFetchedRecipe(null)
+                } else {
+                    setFetchState('idle')
+                    setFetchedRecipe(data)
+                }
+            })
         return () => { cancelled = true }
     }, [id, cached])
 
