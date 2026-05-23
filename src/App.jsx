@@ -172,9 +172,17 @@ function App() {
             // the page. Respected by RLS, so anon users get only the public
             // count. Used to size the column tier so layout doesn't reflow
             // as more pages load.
+            //
+            // Embed `ingredients(name)` so the fridge-basket filter (Stage
+            // 10) can token-match against each recipe's ingredients without
+            // an N+1 fetch per card. PostgREST infers the relationship from
+            // the ingredients.recipe_id FK; the count remains the parent
+            // (recipes) row count, not the joined-row count. Ingredient
+            // visibility piggybacks on the recipe RLS — the embedded rows
+            // for a public recipe are returned to anonymous viewers too.
             const { data, error, count } = await supabase
                 .from('recipes')
-                .select('*', { count: 'exact' })
+                .select('*, ingredients(name)', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(from, to)
 
@@ -441,19 +449,36 @@ function HomeView({
     // behaves identically to "italian,pasta".
     const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
 
+    // Two filters compose with AND semantics (recipe must pass BOTH):
+    //   - search filter (parseSearch result over tags/title/description)
+    //   - fridge-basket filter (token-match basket against ingredients)
+    // Either is a no-op when its input is empty. Putting them in one
+    // .filter() pass means a single iteration over the recipe array
+    // regardless of how many filters are active.
+    const basketActive = basket.length > 0
     const filteredRecipes = recipes.filter(recipe => {
-        if (searchMode === 'none') return true
-        if (searchMode === 'tag') {
-            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-            return searchTokens.every(token => recipeTagsLower.includes(token))
+        // Search side.
+        if (searchMode !== 'none') {
+            if (searchMode === 'tag') {
+                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                if (!searchTokens.every(token => recipeTagsLower.includes(token))) return false
+            } else {
+                const q = searchTokens[0]
+                let textHit = false
+                if (searchMode === 'hybrid') {
+                    const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                    if (recipeTagsLower.includes(q)) textHit = true
+                }
+                if (!textHit) {
+                    textHit = recipe.title.toLowerCase().includes(q) ||
+                        (recipe.description?.toLowerCase().includes(q) ?? false)
+                }
+                if (!textHit) return false
+            }
         }
-        const q = searchTokens[0]
-        if (searchMode === 'hybrid') {
-            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-            if (recipeTagsLower.includes(q)) return true
-        }
-        return recipe.title.toLowerCase().includes(q) ||
-            recipe.description?.toLowerCase().includes(q)
+        // Basket side.
+        if (basketActive && !recipeMatchesBasket(recipe, basket)) return false
+        return true
     })
 
     // Tags from currently loaded recipes, sorted by frequency desc with
@@ -788,9 +813,11 @@ function HomeView({
             ) : filteredRecipes.length === 0 ? (
                 <EmptyGridState
                     searchTerm={searchTerm}
+                    basketActive={basketActive}
                     hasAnyRecipes={totalCount > 0}
                     session={session}
                     onClearSearch={() => setSearchTerm('')}
+                    onOpenBasket={onOpenBasket}
                     onSignIn={onSignIn}
                     onCreate={() => navigate('/new')}
                 />
@@ -816,10 +843,12 @@ function HomeView({
                         viewport. When we know we've reached the end
                         (hasMore=false AND we've loaded more than one
                         page), show a quiet ✦ marker. Sentinel skipped
-                        during search-filtering since the filter is
-                        client-side and "more recipes" don't necessarily
-                        match the search anyway. */}
-                    {!searchTerm && hasMore && (
+                        whenever any client-side filter is active (search
+                        OR basket) since "more recipes" don't necessarily
+                        match the filter and the apparent infinite scroll
+                        would look broken if the next page returned zero
+                        new visible cards. */}
+                    {!searchTerm && !basketActive && hasMore && (
                         <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
                     )}
                     {loadingMore && (
@@ -827,7 +856,7 @@ function HomeView({
                             Loading more recipes…
                         </p>
                     )}
-                    {!searchTerm && !hasMore && recipes.length > PAGE_SIZE && (
+                    {!searchTerm && !basketActive && !hasMore && recipes.length > PAGE_SIZE && (
                         <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
                     )}
                 </>
@@ -989,14 +1018,33 @@ function EditRecipeRoute({ recipes, session, onComplete }) {
     return <CreateRecipe userId={session.user.id} recipeToEdit={recipe} onComplete={onComplete} />
 }
 
-// Three distinct empty states for the home grid:
+// Distinct empty states for the home grid:
+//   - fridge basket filter matches nothing (offer to edit the basket)
 //   - search returned nothing (offer to clear)
 //   - no recipes exist at all, viewer is signed in (offer to create)
 //   - no recipes exist at all, viewer is anonymous (offer to sign in)
 // Each carries the same ornamental layout — centered, generous padding,
 // the rustic ✦ glyph as a small visual anchor — so empty space reads
-// as intentional rather than broken.
-function EmptyGridState({ searchTerm, hasAnyRecipes, session, onClearSearch, onSignIn, onCreate }) {
+// as intentional rather than broken. Basket branch wins over search when
+// both are active and yield nothing — opening the fridge is the cheaper
+// fix (one click) vs retyping the search.
+function EmptyGridState({ searchTerm, basketActive, hasAnyRecipes, session, onClearSearch, onOpenBasket, onSignIn, onCreate }) {
+    if (basketActive && hasAnyRecipes) {
+        return (
+            <div className="text-center py-16">
+                <p className="text-2xl text-tan mb-4">✦</p>
+                <p className="font-display text-xl text-ink mb-2">Nothing in your fridge matches.</p>
+                <p className="font-display italic text-rose mb-6">Add more ingredients, or open the fridge to clear it.</p>
+                <button
+                    onClick={onOpenBasket}
+                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                >
+                    Open fridge
+                </button>
+            </div>
+        )
+    }
+
     if (searchTerm && hasAnyRecipes) {
         return (
             <div className="text-center py-16">
@@ -1068,6 +1116,42 @@ function parseSearch(raw) {
     const trimmed = raw.trim().toLowerCase()
     if (!/\s/.test(trimmed)) return { mode: 'hybrid', tokens: [trimmed] }
     return { mode: 'text', tokens: [trimmed] }
+}
+
+// Lowercase word-boundary tokenize. "Cherry Tomatoes!" → ["cherry", "tomatoes"].
+// Used by the fridge-basket matcher — splitting on /\W+/ is the v1 false-
+// positive killer ("egg" in the basket matches "2 eggs" in a recipe but
+// NOT "eggplant", because eggplant tokenizes to ["eggplant"] which doesn't
+// contain the standalone token "egg"). Pure helper, no React dependency.
+function tokenizeIngredient(s) {
+    if (!s) return []
+    return s.toLowerCase().split(/\W+/).filter(Boolean)
+}
+
+// True iff every basket entry's tokens all appear in the recipe's combined
+// ingredient-name token set. Multi-word basket entries ("olive oil") split
+// into ["olive", "oil"] and BOTH must appear — so "olive oil" in the basket
+// matches a recipe ingredient like "extra-virgin olive oil" but NOT a
+// recipe that only has "olives".
+//
+// Empty basket trivially passes — caller should still check basket.length
+// before deciding whether to filter, to skip the per-recipe token-set
+// build for the common no-basket case.
+//
+// Pure function so the filter strategy is swappable. When this moves
+// server-side (likely a `tsvector` column on ingredients + a single SQL
+// query with all basket tokens), this helper disappears and the call site
+// changes to a server query — the basket hook's API stays unchanged.
+function recipeMatchesBasket(recipe, basket) {
+    if (basket.length === 0) return true
+    const recipeTokens = new Set()
+    ;(recipe.ingredients || []).forEach(ing => {
+        tokenizeIngredient(ing.name).forEach(t => recipeTokens.add(t))
+    })
+    return basket.every(basketItem => {
+        const itemTokens = tokenizeIngredient(basketItem)
+        return itemTokens.length > 0 && itemTokens.every(t => recipeTokens.has(t))
+    })
 }
 
 export default App
