@@ -79,12 +79,19 @@ The script uses the regular signup flow with the anon key (no `service_role` inv
 
 Re-enable it after seeding if you want real signups to require email verification again. See [DATABASE_DECISIONS.md](./DATABASE_DECISIONS.md) → *Test-account seeding* for the rationale behind this approach.
 
+### What gets seeded
+
+The script's 15 recipe templates each carry full **ingredients** (8–14 each, with `quantity`, `unit`, and optional `notes`) and full **steps** (5–7 each, with `instruction` text). Templates cycle for accounts with more than 15 recipes — repeats are suffixed with `(v2)`, `(v3)`, etc. so the title list stays unique. A full re-seed inserts ~570 ingredient rows and ~360 step rows across the 5 content accounts.
+
+This enrichment was added so the Stage 10 fridge-basket filter is exercisable end-to-end against seeded data — without ingredients, the basket would match nothing regardless of what you typed. The earlier seed only populated titles + descriptions + tags.
+
 ### When to re-seed
 
 - After a schema change that adds new recipe columns — to populate them with sensible defaults
 - After tweaking the image-URL strategy in the script (e.g. swapping picsum.photos for real food photos)
 - If a test account's data gets corrupted by manual edits
 - Whenever the density-tier thresholds in [src/App.jsx](../src/App.jsx) change — re-tune `recipeCount` in the script to land each account squarely in its tier
+- After editing `RECIPE_TEMPLATES` (adding/removing recipes, editing ingredient lists) — the script is the only path that gets the new shape into the DB
 
 ---
 
@@ -241,6 +248,35 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Reset link** — appears as soon as `targetServings ≠ baseServings`; disappears when you return to baseline; clicking it restores `baseServings`
 - [ ] **No persistence** — navigate away and back; servings resets to the recipe's original value. Refresh the page; same result. (The author's recipe contract is preserved.)
 - [ ] **Anonymous users** — stepper works for signed-out viewers too (no auth gate on a client-side cooking aid)
+
+---
+
+## Fridge basket checklist
+
+> Verifies the Stage 10 fridge basket — modal shell, cumulative ingredient list, and the token-match filter against recipe ingredients. localStorage-backed (no schema needed; migration 011 is a forward-compat hook only).
+
+- [ ] **Trigger button visible** at the right of the tag chip row on the home view (paper-shade pill with fridge icon + "Fridge" label); count badge appears in the top-right corner once the basket has items
+- [ ] **Trigger button always present** even when no tag chips exist (e.g. fresh anonymous view of a tagless library)
+- [ ] **Open modal** — click trigger → modal opens, focus lands in the ingredient input, body scroll locks
+- [ ] **Add ingredient** — type `garlic` + Enter (or Add button) → chip appears, preview line updates to `N of M loaded recipes match.`, badge on the trigger increments
+- [ ] **Normalize on add** — type `  TOMATO  ` → chip stored as `tomato`; verify via the chip text or `localStorage.getItem('cookbook.fridgeBasket')`
+- [ ] **Dedupe** — add `eggs` twice → only one chip; basket size stays the same
+- [ ] **Empty-after-trim rejected** — submit `   ` (whitespace only) → no chip added, input retains its value
+- [ ] **Remove via ×** — click the × on a chip → chip disappears, preview + badge update
+- [ ] **Clear all** — adds wipe all chips; button disabled when basket is empty
+- [ ] **Egg ≠ eggplant** — add `egg` (singular) → does NOT match a recipe that only has `eggplant` (word-boundary tokenization, not substring). Easiest way to verify: edit a test recipe to have only "1 eggplant" as an ingredient, basket `egg` excludes it.
+- [ ] **Multi-word ingredient** — `olive oil` matches `extra-virgin olive oil`; does NOT match a recipe with only `kalamata olives` (the token `oil` is missing)
+- [ ] **AND with tag filter** — add a basket ingredient + click a tag chip → grid shows recipes that pass BOTH filters; empty state copy mentions the fridge
+- [ ] **Empty-state copy** — non-matching basket on a non-empty library → "Nothing in your fridge matches." with an "Open fridge" button
+- [ ] **CTA label** — empty basket: `Done`; basket with N matches: `Show N recipe(s)` (singular/plural); basket with zero matches: `Back to recipes`
+- [ ] **CTA closes modal, no filter mutation** — pressing the CTA just closes; the filter applies regardless of how the modal exits (CTA, ×, Escape, backdrop click)
+- [ ] **Escape closes** — pressing Escape closes the modal and restores focus to the trigger button
+- [ ] **Backdrop closes** — clicking outside the dialog card closes the modal
+- [ ] **Persistence across reload** — add ingredients, refresh the page → basket survives (localStorage)
+- [ ] **Persistence across routes** — add ingredients, navigate into a recipe detail and back → basket still present, badge still showing
+- [ ] **Anonymous works** — log out, basket interactions still function (no auth gate; client-side only)
+- [ ] **Loading-more sentinel hidden when basket active** — with basket items, scroll to bottom → no "Loading more recipes…" appears even if `hasMore` is true (matches the search-filter behavior)
+- [ ] **Mobile (≤ 640px)** — modal is full-screen height; tap targets ≥ 44px; chip removers are reachable with a thumb
 
 ---
 
