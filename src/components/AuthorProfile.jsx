@@ -23,6 +23,10 @@ export default function AuthorProfile({
     likeCount,
     userLiked,
     onToggleLike,
+    isFollowing,
+    getNotifyPref,
+    onToggleFollow,
+    onSetNotifyPref,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -138,6 +142,46 @@ export default function AuthorProfile({
                     )}
                     {profile.bio && (
                         <p className="font-serif text-ink/80 mt-4 max-w-xl mx-auto leading-relaxed">{profile.bio}</p>
+                    )}
+
+                    {/* Follow control. Hidden when viewing your own profile
+                        (the self-id redirect at the top of the component
+                        already covers this for signed-in users, but the
+                        guard belongs here too for clarity). Anonymous click
+                        is routed by App's wrapper to open the Auth overlay.
+                        Notify toggle only renders when following — opt-in
+                        for new-recipe pings (Stage 11 in-app notifications). */}
+                    {onToggleFollow && session?.user.id !== profile.id && (
+                        <div className="mt-6 flex flex-col items-center gap-2">
+                            {isFollowing?.(profile.id) ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleFollow(profile.id)}
+                                        className="px-5 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-semibold rounded-full transition-colors border border-paper-shade min-h-[44px]"
+                                    >
+                                        Following
+                                    </button>
+                                    <label className="inline-flex items-center gap-2 mt-1 text-sm text-ink/70 font-serif cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={getNotifyPref?.(profile.id) ?? false}
+                                            onChange={(e) => onSetNotifyPref?.(profile.id, e.target.checked)}
+                                            className="accent-rust w-4 h-4 cursor-pointer"
+                                        />
+                                        Notify me when {displayName} posts a new recipe
+                                    </label>
+                                </>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => onToggleFollow(profile.id)}
+                                    className="px-5 py-2 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-full transition-colors min-h-[44px]"
+                                >
+                                    Follow
+                                </button>
+                            )}
+                        </div>
                     )}
                 </header>
 

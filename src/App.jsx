@@ -6,6 +6,8 @@ import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
 import { useAdmin } from './hooks/useAdmin'
+import { useFollowing } from './hooks/useFollowing'
+import { useNotifications } from './hooks/useNotifications'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
@@ -17,6 +19,7 @@ import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
+import NotificationsBell from './components/NotificationsBell'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -92,6 +95,8 @@ function App() {
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin } = useAdmin(session?.user.id)
+    const { isFollowing, getNotifyPref, toggleFollow, setNotifyPref } = useFollowing(session?.user.id)
+    const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session?.user.id)
 
     // Fridge basket — persistent ingredient list (localStorage). Lives at the
     // App level so the modal can mount above any route and so basket state
@@ -261,6 +266,7 @@ function App() {
         isFavorited, likeCount, userLiked,
         basket,
         basketTriggerRef,
+        notifications, unreadCount, markRead, markAllRead,
         onOpenBasket: () => setBasketOpen(true),
         onRecipeClick: handleRecipeClick,
         onBookmarkClick: handleBookmarkClick,
@@ -334,6 +340,13 @@ function App() {
                             likeCount={likeCount}
                             userLiked={userLiked}
                             onToggleLike={handleLikeClick}
+                            isFollowing={isFollowing}
+                            getNotifyPref={getNotifyPref}
+                            onToggleFollow={(authorId) => {
+                                if (!session) { setShowAuth(true); return }
+                                toggleFollow(authorId)
+                            }}
+                            onSetNotifyPref={setNotifyPref}
                         />
                     }
                 />
@@ -402,6 +415,7 @@ function HomeView({
     sentinelRef,
     isFavorited, likeCount, userLiked,
     basket, basketTriggerRef, onOpenBasket,
+    notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
 }) {
@@ -647,7 +661,15 @@ function HomeView({
                 <h1 className="font-display text-base sm:text-2xl md:text-3xl font-semibold text-ink tracking-tight min-w-0 truncate">
                     {session ? `${session.user.email}'s Cookbook` : 'Digital Cookbook'}
                 </h1>
-                <div className="flex gap-3 flex-shrink-0">
+                <div className="flex gap-3 flex-shrink-0 items-center">
+                    {session && (
+                        <NotificationsBell
+                            notifications={notifications}
+                            unreadCount={unreadCount}
+                            markRead={markRead}
+                            markAllRead={markAllRead}
+                        />
+                    )}
                     {session ? (
                         // Single "Profile" trigger that expands into a dropdown
                         // containing My Profile, Bookmarks, and Log out. Collapsed

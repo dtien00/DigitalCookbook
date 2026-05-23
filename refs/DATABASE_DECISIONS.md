@@ -96,7 +96,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_009_admin_visibility.sql` — adds additive admin-override SELECT policies on `recipes`, `ingredients`, `steps`. Migration 008 gave admins DELETE rights but not SELECT, so they could moderate content they couldn't see. Idempotent.
 - `supabase_migration_010_admin_trigger_fix.sql` — fixes the over-eager `prevent_self_admin_grant` trigger from migration 008 that was reverting legitimate UPDATEs from the SQL editor (no JWT → `auth.uid()` NULL → `is_admin()` false → trigger reverts) and from `bootstrap_admin()` itself (caller isn't admin *yet* during promotion → same trigger path → no-op). New trigger skips when `auth.uid() IS NULL` and when a transaction-local GUC opts out. Idempotent.
 - `supabase_migration_011_canonical_ingredient.sql` — adds nullable `canonical_ingredient_id UUID` column to `ingredients`. No FK target yet (the canonical table doesn't exist), no RLS changes. Forward-compatibility hook for Stage 10's fridge-basket feature — see "Canonical ingredient hook + token-match filter" below for the rationale. Idempotent.
-- Future migrations: `supabase_migration_012_*.sql`, etc.
+- `supabase_migration_012_follows_notifications.sql` — hardens the `follows` INSERT policy (same gap as migrations 004/005), adds `notify_on_new_recipe` + `created_at` columns + covering index + own-only UPDATE policy on `follows`, creates the `notifications` table with own-only SELECT/UPDATE/DELETE (no client INSERT — server trigger only), and adds an AFTER INSERT trigger on `recipes` that fans out notifications to opted-in followers when the recipe is public. See "Follows hardening + in-app notifications (migration 012, Stage 11)" below. Idempotent.
+- Future migrations: `supabase_migration_013_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -276,6 +277,48 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Quantity ignored.** A basket containing "egg" matches a recipe requiring 12 eggs equally well as one requiring 1. Parsing quantities mid-filter is a rabbit hole worth its own stage; for now the basket is presence-only and the modal copy reflects that.
 - **Tokens that only appear on unloaded pagination pages are invisible.** Same limitation as the tag chip row — basket filter works over what's loaded. Acceptable at current corpus size; the server-side upgrade above closes this too.
 - **Empty `canonical_ingredient_id`.** Until a canonical table exists, the column is dead weight (one nullable UUID per ingredient row = 16 bytes/row, negligible). The cost of having it now is far less than the cost of a future migration that has to backfill historical data without a destination FK.
+
+---
+
+## Follows hardening + in-app notifications (migration 012, Stage 11)
+
+**Decision (policy):** Replace the migration-001 follows INSERT policy `WITH CHECK (auth.role() = 'authenticated')` with `WITH CHECK (auth.uid() = follower_id)`.
+
+**Why:** Identical gap to the original likes (migration 004) and comments (migration 005) policies. The original verified that the request came from a signed-in user but did not verify that `follower_id` matched the caller — a crafted client could `INSERT INTO follows (follower_id, following_id) VALUES ('<other-user>', '<author>')` and impersonate a follow. The new policy closes that gap. SELECT (`USING (true)`) and DELETE (`USING (auth.uid() = follower_id)`) were already correct and don't change.
+
+**Decision (mutable preference):** Add `notify_on_new_recipe BOOLEAN NOT NULL DEFAULT FALSE` on `follows`, plus the missing UPDATE policy `USING (auth.uid() = follower_id) WITH CHECK (auth.uid() = follower_id)`.
+
+**Why:**
+- A column on `follows`, not a separate `follow_preferences` join table, because there is exactly one preference per follow row today. A join table is the right shape if/when preferences multiply (mute schedule, digest cadence, per-kind opt-in) — at one bit per row, the column is the cheaper representation.
+- `DEFAULT FALSE` — opt-in by default. Stage 11 reframed the spec's "email sent" to in-app delivery, but the same conservative default applies regardless of channel. Users should not receive unsolicited pings just because they tapped Follow.
+- The migration-001 follows table had no UPDATE policy at all; with RLS enabled that meant any UPDATE was denied. The new policy mirrors the favorites pattern from migration 003 — own row only, both `USING` (for visibility of the target row) and `WITH CHECK` (so the caller can't reassign `follower_id` mid-update).
+
+**Decision (notifications table):** New `public.notifications` table with shape `(id, user_id, kind, actor_id, recipe_id, created_at, read_at)`. RLS policies: own-only SELECT / UPDATE / DELETE, **no INSERT policy** (RLS denies by default — only the SECURITY DEFINER trigger below can create rows).
+
+**Why this shape:**
+- **Generic `kind TEXT`** rather than a `notification_type` enum. Postgres enums require a migration for every new kind, and notifications historically grow in categories the schema couldn't predict (new comment on your recipe, someone replied to your comment, your recipe got a like milestone, etc.). String + a CHECK constraint later if the set stabilises is the cheaper path.
+- **`actor_id` and `recipe_id` both nullable** (well, `recipe_id` is, `actor_id` could be too if a system notification ever fires — left non-null today, can be relaxed). This keeps the schema reusable for future kinds that don't have a recipe context. The `'new_recipe'` kind populates both; a future `'system_announcement'` could populate neither.
+- **`read_at TIMESTAMPTZ` not `is_read BOOLEAN`.** Stores both the boolean (`read_at IS NULL` = unread) and the read timestamp. Cheap, and the timestamp is useful for "you read this 3 days ago" displays later.
+- **No INSERT policy.** The whole point of notifications is that the recipient didn't create them — someone else's action did. Letting clients INSERT would let a malicious follower spam fake notifications into another user's bell. The trigger writes rows from a SECURITY DEFINER context that bypasses RLS; that's the only authorised write path.
+
+**Decision (fan-out trigger):** `AFTER INSERT ON recipes WHEN NEW.is_public = TRUE` invokes `notify_followers_on_new_recipe()`, which inserts one notification per follower with `notify_on_new_recipe = TRUE`. Wrapped in `BEGIN/EXCEPTION WHEN OTHERS/END` so a delivery failure logs a `RAISE WARNING` but does not abort the recipe insert.
+
+**Why:**
+- **AFTER, not BEFORE.** The notification references `NEW.id`, which only exists after the INSERT.
+- **WHERE `is_public = TRUE`.** A follower can't see the author's private recipes (RLS gates them out of the grid), so a notification pointing at one would resolve to a "not found" page. Better to skip the ping entirely than to ship a broken link.
+- **`SECURITY DEFINER` + no INSERT policy.** Together these enforce "only the trigger writes notifications." Running the function with elevated privileges is the standard Postgres pattern when an RLS table needs server-controlled inserts; the alternative (a public INSERT policy with a `WHERE EXISTS (...)` guard against the follows table) is harder to audit and easier to misconfigure.
+- **Wrapped exception handler.** The notification fan-out is auxiliary to the recipe creation. If a follower's row has a bad foreign key reference (which shouldn't happen, but defensively), failing the recipe insert because of a derived hint write would be a usability disaster — the author loses their work for a reason that has nothing to do with their action. The `RAISE WARNING` lands in Postgres logs for diagnosis; the caller never sees the failure.
+
+**Decision (index choice):** Two indexes on notifications:
+- `idx_notifications_user_created ON (user_id, created_at DESC)` — backs the bell-dropdown query (`WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`).
+- `idx_notifications_user_unread ON (user_id) WHERE read_at IS NULL` — partial index for the unread-count badge. The badge re-renders on every notification mutation; the partial index keeps it tiny since most rows are read most of the time, so the count is cheap to compute.
+
+**Tradeoffs:**
+- **Trigger runs synchronously inside the recipe INSERT transaction.** For a recipe author with 10 000 followers all opted-in, the trigger does 10 000 inserts before the author's `POST /recipes` returns. Acceptable at portfolio-project scale (single-digit followers per author at most); upgrade path is to flip the trigger to write to a `notification_outbox` table and process the fan-out via a background worker (Supabase Edge Function or `pg_cron`).
+- **No `UPDATE` trigger.** Changing a recipe from private → public after creation does NOT retroactively notify followers. Deliberate: the user might toggle visibility multiple times during editing, and re-triggering on every public flip would spam. A separate "publish" action could be the trigger source later if visibility-toggle becomes a common publish workflow.
+- **Cascade interaction.** `notifications` FKs to `profiles(id)` (actor) and `recipes(id)` both with `ON DELETE CASCADE`. So when an admin deletes a user via `admin_delete_user()` (migration 008), every notification mentioning them as the actor disappears too. That's the right behaviour — the link is dead. The downside is the recipient loses the notification's read/unread state for those rows; for a moderation action this is fine.
+- **`actor_id NOT NULL`.** Could be relaxed later if system-generated notifications need to exist. Tightening NOT NULL now keeps the immediate kind (`'new_recipe'`) honest; loosening is one migration line away.
+- **No realtime channel.** The bell badge doesn't update live — the user sees new notifications when they refresh or remount the App. Realtime via Supabase channels (`postgres_changes` on `notifications` filtered by `user_id`) is a clean upgrade; held off to keep Stage 11 scoped.
 
 ---
 
