@@ -6,6 +6,7 @@ import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
 import { useAdmin } from './hooks/useAdmin'
+import { useFridgeBasket } from './hooks/useFridgeBasket'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -14,6 +15,7 @@ import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
+import FridgeBasket from './components/FridgeBasket'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -90,6 +92,14 @@ function App() {
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin } = useAdmin(session?.user.id)
 
+    // Fridge basket — persistent ingredient list (localStorage). Lives at the
+    // App level so the modal can mount above any route and so basket state
+    // survives route changes. Filter coupling lands in a follow-up Stage 10
+    // item; for now the basket is purely additive.
+    const { basket, addIngredient, removeIngredient, clearBasket } = useFridgeBasket()
+    const [basketOpen, setBasketOpen] = useState(false)
+    const basketTriggerRef = useRef(null)
+
     useEffect(() => {
         // Check initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -162,9 +172,17 @@ function App() {
             // the page. Respected by RLS, so anon users get only the public
             // count. Used to size the column tier so layout doesn't reflow
             // as more pages load.
+            //
+            // Embed `ingredients(name)` so the fridge-basket filter (Stage
+            // 10) can token-match against each recipe's ingredients without
+            // an N+1 fetch per card. PostgREST infers the relationship from
+            // the ingredients.recipe_id FK; the count remains the parent
+            // (recipes) row count, not the joined-row count. Ingredient
+            // visibility piggybacks on the recipe RLS — the embedded rows
+            // for a public recipe are returned to anonymous viewers too.
             const { data, error, count } = await supabase
                 .from('recipes')
-                .select('*', { count: 'exact' })
+                .select('*, ingredients(name)', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(from, to)
 
@@ -240,6 +258,9 @@ function App() {
         menuOpen, setMenuOpen, menuRef,
         sentinelRef,
         isFavorited, likeCount, userLiked,
+        basket,
+        basketTriggerRef,
+        onOpenBasket: () => setBasketOpen(true),
         onRecipeClick: handleRecipeClick,
         onBookmarkClick: handleBookmarkClick,
         onLikeClick: handleLikeClick,
@@ -330,6 +351,25 @@ function App() {
             >
                 <Auth onBack={() => setShowAuth(false)} />
             </div>
+            <FridgeBasket
+                isOpen={basketOpen}
+                onClose={() => setBasketOpen(false)}
+                basket={basket}
+                onAdd={addIngredient}
+                onRemove={removeIngredient}
+                onClear={clearBasket}
+                openerRef={basketTriggerRef}
+                // Live preview of how many loaded recipes the current basket
+                // narrows to. Scoped to basket-only (ignores the active
+                // search) so the modal stays conceptually about the fridge
+                // rather than mirroring the home view's combined filters.
+                // Counts against the loaded set, same scope as the filter
+                // itself — documented in the modal copy.
+                matchCount={basket.length === 0
+                    ? recipes.length
+                    : recipes.filter(r => recipeMatchesBasket(r, basket)).length}
+                loadedCount={recipes.length}
+            />
         </>
     )
 }
@@ -347,6 +387,7 @@ function HomeView({
     menuOpen, setMenuOpen, menuRef,
     sentinelRef,
     isFavorited, likeCount, userLiked,
+    basket, basketTriggerRef, onOpenBasket,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
 }) {
@@ -418,19 +459,36 @@ function HomeView({
     // behaves identically to "italian,pasta".
     const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
 
+    // Two filters compose with AND semantics (recipe must pass BOTH):
+    //   - search filter (parseSearch result over tags/title/description)
+    //   - fridge-basket filter (token-match basket against ingredients)
+    // Either is a no-op when its input is empty. Putting them in one
+    // .filter() pass means a single iteration over the recipe array
+    // regardless of how many filters are active.
+    const basketActive = basket.length > 0
     const filteredRecipes = recipes.filter(recipe => {
-        if (searchMode === 'none') return true
-        if (searchMode === 'tag') {
-            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-            return searchTokens.every(token => recipeTagsLower.includes(token))
+        // Search side.
+        if (searchMode !== 'none') {
+            if (searchMode === 'tag') {
+                const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                if (!searchTokens.every(token => recipeTagsLower.includes(token))) return false
+            } else {
+                const q = searchTokens[0]
+                let textHit = false
+                if (searchMode === 'hybrid') {
+                    const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
+                    if (recipeTagsLower.includes(q)) textHit = true
+                }
+                if (!textHit) {
+                    textHit = recipe.title.toLowerCase().includes(q) ||
+                        (recipe.description?.toLowerCase().includes(q) ?? false)
+                }
+                if (!textHit) return false
+            }
         }
-        const q = searchTokens[0]
-        if (searchMode === 'hybrid') {
-            const recipeTagsLower = (recipe.tags || []).map(t => t.toLowerCase())
-            if (recipeTagsLower.includes(q)) return true
-        }
-        return recipe.title.toLowerCase().includes(q) ||
-            recipe.description?.toLowerCase().includes(q)
+        // Basket side.
+        if (basketActive && !recipeMatchesBasket(recipe, basket)) return false
+        return true
     })
 
     // Tags from currently loaded recipes, sorted by frequency desc with
@@ -679,46 +737,82 @@ function HomeView({
                 )}
             </div>
 
-            {/* Tag chip row — discoverability layer over the tag-mode
-                search syntax. Each chip toggles its tag into the search
-                input as a comma-separated token; the chip's active state
-                is derived from the input so typed and clicked filters
-                stay visually in sync. Hidden when no tags exist on the
-                loaded recipes. */}
-            {availableTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6 items-center" role="group" aria-label="Filter by tag">
-                    {visibleTags.map(tag => {
-                        const isActive = activeTags.has(tag.toLowerCase())
-                        return (
+            {/* Filter row — tag chips on the left, fridge basket trigger on
+                the right. Always renders on the home view so the fridge
+                button has a stable home; the chip group inside is hidden
+                when no tags exist on loaded recipes.
+
+                Chips and fridge button live in sibling flex cells so the
+                button stays anchored right even when chips wrap to multiple
+                lines (justify-between on the row + chip group flex-grows). */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+                {availableTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 items-center flex-1 min-w-0" role="group" aria-label="Filter by tag">
+                        {visibleTags.map(tag => {
+                            const isActive = activeTags.has(tag.toLowerCase())
+                            return (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => toggleTagFilter(tag)}
+                                    aria-pressed={isActive}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                                        isActive
+                                            ? 'bg-rust text-paper hover:bg-rust-dark'
+                                            : 'bg-tan-soft text-ink hover:bg-tan/40'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            )
+                        })}
+                        {overLimit && (
                             <button
-                                key={tag}
                                 type="button"
-                                onClick={() => toggleTagFilter(tag)}
-                                aria-pressed={isActive}
-                                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                                    isActive
-                                        ? 'bg-rust text-paper hover:bg-rust-dark'
-                                        : 'bg-tan-soft text-ink hover:bg-tan/40'
-                                }`}
+                                onClick={() => setTagsExpanded(e => !e)}
+                                aria-expanded={tagsExpanded}
+                                className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
                             >
-                                {tag}
+                                {tagsExpanded
+                                    ? 'Show less'
+                                    : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
                             </button>
-                        )
-                    })}
-                    {overLimit && (
-                        <button
-                            type="button"
-                            onClick={() => setTagsExpanded(e => !e)}
-                            aria-expanded={tagsExpanded}
-                            className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex-1 min-w-0" />
+                )}
+                {/* Fridge basket trigger. Count badge appears when the basket
+                    has items — quiet rust dot in the top-right corner. The
+                    ref is forwarded from App so the modal can restore focus
+                    here on close. */}
+                <button
+                    ref={basketTriggerRef}
+                    type="button"
+                    onClick={onOpenBasket}
+                    aria-label={basket.length === 0
+                        ? 'Open fridge basket'
+                        : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
+                    aria-haspopup="dialog"
+                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="3" width="14" height="18" rx="2" />
+                        <line x1="5" y1="11" x2="19" y2="11" />
+                        <line x1="9" y1="7" x2="9" y2="8" />
+                        <line x1="9" y1="15" x2="9" y2="16" />
+                    </svg>
+                    <span>Fridge</span>
+                    {basket.length > 0 && (
+                        <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
                         >
-                            {tagsExpanded
-                                ? 'Show less'
-                                : `+${availableTags.length - TAG_CHIP_LIMIT} more`}
-                        </button>
+                            {basket.length}
+                        </span>
                     )}
-                </div>
-            )}
+                </button>
+            </div>
 
             {loading ? (
                 <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
@@ -729,9 +823,11 @@ function HomeView({
             ) : filteredRecipes.length === 0 ? (
                 <EmptyGridState
                     searchTerm={searchTerm}
+                    basketActive={basketActive}
                     hasAnyRecipes={totalCount > 0}
                     session={session}
                     onClearSearch={() => setSearchTerm('')}
+                    onOpenBasket={onOpenBasket}
                     onSignIn={onSignIn}
                     onCreate={() => navigate('/new')}
                 />
@@ -757,10 +853,12 @@ function HomeView({
                         viewport. When we know we've reached the end
                         (hasMore=false AND we've loaded more than one
                         page), show a quiet ✦ marker. Sentinel skipped
-                        during search-filtering since the filter is
-                        client-side and "more recipes" don't necessarily
-                        match the search anyway. */}
-                    {!searchTerm && hasMore && (
+                        whenever any client-side filter is active (search
+                        OR basket) since "more recipes" don't necessarily
+                        match the filter and the apparent infinite scroll
+                        would look broken if the next page returned zero
+                        new visible cards. */}
+                    {!searchTerm && !basketActive && hasMore && (
                         <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
                     )}
                     {loadingMore && (
@@ -768,7 +866,7 @@ function HomeView({
                             Loading more recipes…
                         </p>
                     )}
-                    {!searchTerm && !hasMore && recipes.length > PAGE_SIZE && (
+                    {!searchTerm && !basketActive && !hasMore && recipes.length > PAGE_SIZE && (
                         <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
                     )}
                 </>
@@ -930,14 +1028,33 @@ function EditRecipeRoute({ recipes, session, onComplete }) {
     return <CreateRecipe userId={session.user.id} recipeToEdit={recipe} onComplete={onComplete} />
 }
 
-// Three distinct empty states for the home grid:
+// Distinct empty states for the home grid:
+//   - fridge basket filter matches nothing (offer to edit the basket)
 //   - search returned nothing (offer to clear)
 //   - no recipes exist at all, viewer is signed in (offer to create)
 //   - no recipes exist at all, viewer is anonymous (offer to sign in)
 // Each carries the same ornamental layout — centered, generous padding,
 // the rustic ✦ glyph as a small visual anchor — so empty space reads
-// as intentional rather than broken.
-function EmptyGridState({ searchTerm, hasAnyRecipes, session, onClearSearch, onSignIn, onCreate }) {
+// as intentional rather than broken. Basket branch wins over search when
+// both are active and yield nothing — opening the fridge is the cheaper
+// fix (one click) vs retyping the search.
+function EmptyGridState({ searchTerm, basketActive, hasAnyRecipes, session, onClearSearch, onOpenBasket, onSignIn, onCreate }) {
+    if (basketActive && hasAnyRecipes) {
+        return (
+            <div className="text-center py-16">
+                <p className="text-2xl text-tan mb-4">✦</p>
+                <p className="font-display text-xl text-ink mb-2">Nothing in your fridge matches.</p>
+                <p className="font-display italic text-rose mb-6">Add more ingredients, or open the fridge to clear it.</p>
+                <button
+                    onClick={onOpenBasket}
+                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                >
+                    Open fridge
+                </button>
+            </div>
+        )
+    }
+
     if (searchTerm && hasAnyRecipes) {
         return (
             <div className="text-center py-16">
@@ -1009,6 +1126,42 @@ function parseSearch(raw) {
     const trimmed = raw.trim().toLowerCase()
     if (!/\s/.test(trimmed)) return { mode: 'hybrid', tokens: [trimmed] }
     return { mode: 'text', tokens: [trimmed] }
+}
+
+// Lowercase word-boundary tokenize. "Cherry Tomatoes!" → ["cherry", "tomatoes"].
+// Used by the fridge-basket matcher — splitting on /\W+/ is the v1 false-
+// positive killer ("egg" in the basket matches "2 eggs" in a recipe but
+// NOT "eggplant", because eggplant tokenizes to ["eggplant"] which doesn't
+// contain the standalone token "egg"). Pure helper, no React dependency.
+function tokenizeIngredient(s) {
+    if (!s) return []
+    return s.toLowerCase().split(/\W+/).filter(Boolean)
+}
+
+// True iff every basket entry's tokens all appear in the recipe's combined
+// ingredient-name token set. Multi-word basket entries ("olive oil") split
+// into ["olive", "oil"] and BOTH must appear — so "olive oil" in the basket
+// matches a recipe ingredient like "extra-virgin olive oil" but NOT a
+// recipe that only has "olives".
+//
+// Empty basket trivially passes — caller should still check basket.length
+// before deciding whether to filter, to skip the per-recipe token-set
+// build for the common no-basket case.
+//
+// Pure function so the filter strategy is swappable. When this moves
+// server-side (likely a `tsvector` column on ingredients + a single SQL
+// query with all basket tokens), this helper disappears and the call site
+// changes to a server query — the basket hook's API stays unchanged.
+function recipeMatchesBasket(recipe, basket) {
+    if (basket.length === 0) return true
+    const recipeTokens = new Set()
+    ;(recipe.ingredients || []).forEach(ing => {
+        tokenizeIngredient(ing.name).forEach(t => recipeTokens.add(t))
+    })
+    return basket.every(basketItem => {
+        const itemTokens = tokenizeIngredient(basketItem)
+        return itemTokens.length > 0 && itemTokens.every(t => recipeTokens.has(t))
+    })
 }
 
 export default App

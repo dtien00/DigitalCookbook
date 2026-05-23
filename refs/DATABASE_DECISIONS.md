@@ -95,7 +95,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_008_admin.sql` — adds the `is_admin` flag on profiles, admin-override DELETE policies, self-promotion-prevention trigger, and two SECURITY DEFINER RPCs (`admin_delete_user`, `bootstrap_admin`). Idempotent. See "Admin role + moderation policies" below for the rationale.
 - `supabase_migration_009_admin_visibility.sql` — adds additive admin-override SELECT policies on `recipes`, `ingredients`, `steps`. Migration 008 gave admins DELETE rights but not SELECT, so they could moderate content they couldn't see. Idempotent.
 - `supabase_migration_010_admin_trigger_fix.sql` — fixes the over-eager `prevent_self_admin_grant` trigger from migration 008 that was reverting legitimate UPDATEs from the SQL editor (no JWT → `auth.uid()` NULL → `is_admin()` false → trigger reverts) and from `bootstrap_admin()` itself (caller isn't admin *yet* during promotion → same trigger path → no-op). New trigger skips when `auth.uid() IS NULL` and when a transaction-local GUC opts out. Idempotent.
-- Future migrations: `supabase_migration_011_*.sql`, etc.
+- `supabase_migration_011_canonical_ingredient.sql` — adds nullable `canonical_ingredient_id UUID` column to `ingredients`. No FK target yet (the canonical table doesn't exist), no RLS changes. Forward-compatibility hook for Stage 10's fridge-basket feature — see "Canonical ingredient hook + token-match filter" below for the rationale. Idempotent.
+- Future migrations: `supabase_migration_012_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -250,6 +251,31 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Offset drift.** If a recipe is inserted or deleted between page fetches, the offsets shift and the user could see a duplicate (or skip a row). Acceptable for a solo cookbook without realtime. Switch to cursor pagination on `created_at` if/when the app gains concurrent writers.
 - **Search is still client-side.** The search box filters loaded pages only; "Loading more" is hidden during search to avoid surfacing recipes the user can't see. The eventual full-fidelity fix is server-side `ilike` filtering with pagination reset on each keystroke — listed in Stage 7 as part of "Tags filtering UI + ingredient search".
 - **Count cost.** Each fetch runs an extra `SELECT COUNT(*)` against the visible row set. Fast (indexed), but if the recipes table ever grows past ~100k rows the per-page count starts to dominate. Switch to `count: 'estimated'` (a planner-stats fast estimate, accurate enough for tier-sizing) before then.
+
+---
+
+## Canonical ingredient hook + token-match filter (migration 011, Stage 10 fridge basket)
+
+**Decision (schema):** Add nullable `canonical_ingredient_id UUID` to `public.ingredients` with no FK target and no consumer reading it today.
+
+**Decision (filter):** Client-side word-boundary token match — tokenize each ingredient `name` on `/\W+/`, lowercase, and require every basket token to appear in some ingredient's token set. AND-combined with the existing tag/text search filter.
+
+**Decision (fetch):** The home-grid `recipes` query embeds `ingredients(name)` via PostgREST relationship inference (`select('*, ingredients(name)', { count: 'exact' })`) so the filter has ingredient data to match against without N+1 round-trips.
+
+**Why this hybrid:**
+- **Token match (not substring) kills the egg/eggplant bug.** A raw substring filter would match "egg" against "eggplant"; tokenizing on `/\W+/` produces `["eggplant"]` for "eggplant" so the standalone token "egg" doesn't hit. The user explicitly called this out as the false-positive that mattered for v1 UX.
+- **Multi-word basket entries decompose into all-must-match.** "olive oil" in the basket tokenizes to `["olive", "oil"]` and both tokens must appear in the recipe's ingredient token set — so "olive oil" matches "extra-virgin olive oil" but NOT a recipe that only has "olives".
+- **No canonical table today, but the column exists.** Building a canonical ingredients table + seed data + fuzzy-match UI before validating the MVP is exactly the "design for hypothetical future" the project's CLAUDE.md warns against. Defaulting `canonical_ingredient_id` to NULL keeps the schema ready for a later backfill (script or LLM-assisted parse) without a painful migration when normalization actually pays off — grocery-list aggregation, nutrition lookups, substitution graphs.
+- **Client-side over server-side for v1.** PostgREST doesn't expose `to_tsvector` filtering through the JS client cleanly, and at current corpus size (~50 recipes × ~6 ingredients × ~2 tokens) a per-recipe token-set build runs in <1ms per filter recompute. Moving to server-side is a swap of the call site — the basket hook's API and the `recipeMatchesBasket` boundary are designed so the implementation behind them can change without rippling.
+- **Embedding ingredients in the grid query** trades ~6KB extra per page (5–8 ingredients × ~30 bytes name × 20 recipes) for eliminating N+1 fetches. The count: 'exact' value continues to refer to the parent `recipes` row count, not the embedded-rows count — PostgREST handles this correctly.
+- **Visibility piggybacks on recipe RLS.** Embedded ingredient rows inherit the parent recipe's visibility — anonymous viewers see ingredients for public recipes only, just as they see the recipes themselves. No new policies needed.
+
+**Tradeoffs:**
+- **Pagination still client-side.** Like the existing search filter, the basket filter only operates over recipes already paginated into memory. "Loading more" is hidden whenever search OR basket is active so the infinite-scroll sentinel doesn't appear broken (the next page might add zero visible cards). The eventual full-fidelity fix is the server-side `tsvector` path — a `to_tsvector('simple', name)` GIN-indexed column on `ingredients` + a single SQL query that ANDs all basket tokens with `@@`. Punted until corpus size justifies it.
+- **Plural/singular forms are distinct tokens.** "eggs" matches "eggs" but not "egg" (and vice versa). Stemming (Porter, snowball) or the canonical_ingredient_id path is the long-term fix; for v1 the user can add both forms if they care. Documented in the UI's placeholder voice ("Add an ingredient (e.g. eggs)").
+- **Quantity ignored.** A basket containing "egg" matches a recipe requiring 12 eggs equally well as one requiring 1. Parsing quantities mid-filter is a rabbit hole worth its own stage; for now the basket is presence-only and the modal copy reflects that.
+- **Tokens that only appear on unloaded pagination pages are invisible.** Same limitation as the tag chip row — basket filter works over what's loaded. Acceptable at current corpus size; the server-side upgrade above closes this too.
+- **Empty `canonical_ingredient_id`.** Until a canonical table exists, the column is dead weight (one nullable UUID per ingredient row = 16 bytes/row, negligible). The cost of having it now is far less than the cost of a future migration that has to backfill historical data without a destination FK.
 
 ---
 
