@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
@@ -303,6 +304,17 @@ export default function RecipeDetail({
                         </div>
                     )}
                     <h1>{recipe.title}</h1>
+                    {recipe.author_id && (
+                        <p className="font-display italic text-ink/70 text-sm mt-1 mb-2">
+                            by{' '}
+                            <Link
+                                to={`/profile/${recipe.author_id}`}
+                                className="text-rust hover:text-rust-dark underline underline-offset-2 transition-colors"
+                            >
+                                {authorDisplayName(recipe.author)}
+                            </Link>
+                        </p>
+                    )}
                     <p className="description">{recipe.description}</p>
                     {recipe.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 justify-center mt-4 mb-2">
@@ -469,6 +481,16 @@ export default function RecipeDetail({
             </div>
         </div>
     )
+}
+
+// Fallback chain for the author byline: username → full_name → a generic
+// label. Username is the chosen handle; full_name is the legal/display name
+// the user typed during profile edit; if both are empty (new accounts that
+// never visited Profile.jsx) the label keeps the byline non-empty rather
+// than leaking the raw UUID.
+function authorDisplayName(author) {
+    if (!author) return 'Anonymous chef'
+    return author.username?.trim() || author.full_name?.trim() || 'Anonymous chef'
 }
 
 // Scale a numeric ingredient quantity by the current multiplier and render
