@@ -155,13 +155,32 @@ export default function AuthorProfile({
                         <div className="mt-6 flex flex-col items-center gap-2">
                             {isFollowing?.(profile.id) ? (
                                 <>
-                                    <button
-                                        type="button"
-                                        onClick={() => onToggleFollow(profile.id)}
-                                        className="px-5 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-semibold rounded-full transition-colors border border-paper-shade min-h-[44px]"
-                                    >
-                                        Following
-                                    </button>
+                                    {/* Following status + explicit Unfollow. Two distinct
+                                        controls: "Following" reads as the current state
+                                        (paper-shade, neutral, with a checkmark glyph) and
+                                        "Unfollow" reads as the action (rose-tinted,
+                                        destructive). Splitting them avoids the discoverability
+                                        gap where a single "Following" button silently
+                                        toggled off on click. */}
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            aria-label={`Currently following ${displayName}`}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-paper-shade text-ink font-semibold rounded-full border border-paper-shade min-h-[44px]"
+                                        >
+                                            <svg aria-hidden="true" viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="3 8 7 12 13 4" />
+                                            </svg>
+                                            Following
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => onToggleFollow(profile.id)}
+                                            aria-label={`Unfollow ${displayName}`}
+                                            className="px-4 py-2 bg-rose-dark hover:bg-rose text-paper font-semibold rounded-full transition-colors min-h-[44px]"
+                                        >
+                                            Unfollow
+                                        </button>
+                                    </div>
                                     <label className="inline-flex items-center gap-2 mt-1 text-sm text-ink/70 font-serif cursor-pointer select-none">
                                         <input
                                             type="checkbox"
