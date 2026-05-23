@@ -21,6 +21,12 @@ export default function FridgeBasket({
     onRemove,
     onClear,
     openerRef,
+    // Live preview counters supplied by the parent. matchCount is how many
+    // of the currently-loaded recipes the basket narrows the grid to;
+    // loadedCount is the size of that loaded set. Empty basket → matchCount
+    // equals loadedCount and no preview line renders.
+    matchCount = 0,
+    loadedCount = 0,
 }) {
     const [draft, setDraft] = useState('')
     const inputRef = useRef(null)
@@ -125,28 +131,41 @@ export default function FridgeBasket({
                             </p>
                         </div>
                     ) : (
-                        <ul
-                            className="flex flex-wrap gap-2"
-                            aria-label="Ingredients in your fridge"
-                        >
-                            {basket.map(item => (
-                                <li key={item}>
-                                    <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 bg-tan-soft text-ink rounded-full text-sm">
-                                        {item}
-                                        <button
-                                            type="button"
-                                            onClick={() => onRemove(item)}
-                                            aria-label={`Remove ${item}`}
-                                            className="w-6 h-6 rounded-full hover:bg-rose/20 text-ink/60 hover:text-rose-dark flex items-center justify-center transition-colors"
-                                        >
-                                            <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                                <path d="M4 4l8 8M12 4l-8 8" />
-                                            </svg>
-                                        </button>
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
+                        <>
+                            {/* Live preview — narrows or widens as the basket
+                                changes. Live region so screen readers announce
+                                the count update without needing to refocus. */}
+                            <p
+                                className="font-serif italic text-sm text-ink/60 mb-3"
+                                aria-live="polite"
+                            >
+                                {matchCount === 0
+                                    ? 'No loaded recipes match — try fewer or different ingredients.'
+                                    : `${matchCount} of ${loadedCount} loaded recipe${loadedCount === 1 ? '' : 's'} match.`}
+                            </p>
+                            <ul
+                                className="flex flex-wrap gap-2"
+                                aria-label="Ingredients in your fridge"
+                            >
+                                {basket.map(item => (
+                                    <li key={item}>
+                                        <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 bg-tan-soft text-ink rounded-full text-sm">
+                                            {item}
+                                            <button
+                                                type="button"
+                                                onClick={() => onRemove(item)}
+                                                aria-label={`Remove ${item}`}
+                                                className="w-6 h-6 rounded-full hover:bg-rose/20 text-ink/60 hover:text-rose-dark flex items-center justify-center transition-colors"
+                                            >
+                                                <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                                    <path d="M4 4l8 8M12 4l-8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
                     )}
                 </div>
 
@@ -159,12 +178,24 @@ export default function FridgeBasket({
                     >
                         Clear all
                     </button>
+                    {/* Primary CTA. Empty basket is just "Done" (close). Once
+                        the basket has items, the label previews what the user
+                        will see when the modal closes — softens the "is
+                        anything actually happening?" anxiety of a filter
+                        that affects the underlying view. Match-count is
+                        scoped to currently-loaded recipes, same as the
+                        filter itself; the in-body preview line carries the
+                        "loaded" qualifier so this label can stay short. */}
                     <button
                         type="button"
                         onClick={onClose}
                         className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors min-h-[44px]"
                     >
-                        Done
+                        {basket.length === 0
+                            ? 'Done'
+                            : matchCount === 0
+                                ? 'Back to recipes'
+                                : `Show ${matchCount} ${matchCount === 1 ? 'recipe' : 'recipes'}`}
                     </button>
                 </div>
             </div>

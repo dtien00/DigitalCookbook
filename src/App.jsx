@@ -359,6 +359,16 @@ function App() {
                 onRemove={removeIngredient}
                 onClear={clearBasket}
                 openerRef={basketTriggerRef}
+                // Live preview of how many loaded recipes the current basket
+                // narrows to. Scoped to basket-only (ignores the active
+                // search) so the modal stays conceptually about the fridge
+                // rather than mirroring the home view's combined filters.
+                // Counts against the loaded set, same scope as the filter
+                // itself — documented in the modal copy.
+                matchCount={basket.length === 0
+                    ? recipes.length
+                    : recipes.filter(r => recipeMatchesBasket(r, basket)).length}
+                loadedCount={recipes.length}
             />
         </>
     )
