@@ -59,6 +59,24 @@ export default function FridgeBasket({
         return () => window.removeEventListener('keydown', onKey)
     }, [isOpen, onClose])
 
+    // Commit any tokens before the last comma, leaving the tail in the input.
+    // Called from onChange so typing/pasting "eggs, garlic," pops two chips
+    // immediately without requiring a form submit for each one.
+    const handleChange = (e) => {
+        const val = e.target.value
+        if (!val.includes(',')) {
+            setDraft(val)
+            return
+        }
+        const parts = val.split(',')
+        // Everything before the last comma is a finished token
+        parts.slice(0, -1).forEach(t => { if (t.trim()) onAdd(t) })
+        // Whatever is after the last comma stays in the input
+        setDraft(parts[parts.length - 1].trimStart())
+    }
+
+    // Submit commits the remaining draft (the tail after the last comma, or
+    // the full string when the user never typed a comma).
     const handleAdd = (e) => {
         e.preventDefault()
         if (onAdd(draft)) setDraft('')
@@ -107,9 +125,9 @@ export default function FridgeBasket({
                         ref={inputRef}
                         type="text"
                         value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        placeholder="Add an ingredient (e.g. eggs)"
-                        aria-label="Add an ingredient"
+                        onChange={handleChange}
+                        placeholder="Add ingredients (e.g. eggs, garlic)"
+                        aria-label="Add ingredients, separated by commas"
                         className="flex-1 min-w-0 px-4 py-2.5 border border-paper-shade rounded-full text-base bg-white/70 text-ink placeholder:text-rose/60 focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust"
                     />
                     <button
