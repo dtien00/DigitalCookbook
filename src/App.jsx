@@ -34,6 +34,14 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
 
+    // Sort metric for the home grid. Drives the server-side `.order()` clause
+    // in fetchRecipes, so changing it must reset pagination to page 0 — see
+    // the useEffect below. v1 ships date-based sorts only (newest/oldest);
+    // popularity-based sorts (most-liked, most-bookmarked) need migration
+    // 014's counter columns to avoid client-side aggregation that can't see
+    // unloaded pages.
+    const [sortMode, setSortMode] = useState('newest')
+
     // Auth STAYS as overlay state — not a route — so its slide-in motion
     // (fixed inset-0 z-50, 450ms ease-out from translate-x-full) can layer
     // over any underlying route without disturbing the address bar.
@@ -141,13 +149,17 @@ function App() {
     // Fetch recipes for everyone, including anonymous visitors.
     // RLS filters: `is_public OR auth.uid() = author_id`, so anon users
     // see only public recipes; logged-in users see public + their own.
-    // Refetch on session change so private recipes appear/disappear —
-    // resets pagination back to page 0.
+    // Refetch on session OR sort change so:
+    //   - private recipes appear/disappear with session
+    //   - the order flips correctly when the user switches sort
+    // Both cases reset pagination back to page 0 — appending a page from
+    // the new sort onto cached rows from the old sort would mix two
+    // orderings into one visually indistinguishable list.
     useEffect(() => {
         pageRef.current = 0
         setHasMore(true)
-        fetchRecipes({ page: 0, append: false })
-    }, [session])
+        fetchRecipes({ page: 0, append: false, sort: sortMode })
+    }, [session, sortMode])
 
     // Infinity scroll: an IntersectionObserver watches a sentinel placed
     // below the grid. When the sentinel scrolls into the viewport (with
@@ -159,20 +171,28 @@ function App() {
         if (!el) return
         const obs = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-                fetchRecipes({ page: pageRef.current + 1, append: true })
+                fetchRecipes({ page: pageRef.current + 1, append: true, sort: sortMode })
             }
         }, { rootMargin: '200px' })
         obs.observe(el)
         return () => obs.disconnect()
-    }, [hasMore, loading, loadingMore])
+    }, [hasMore, loading, loadingMore, sortMode])
 
-    async function fetchRecipes({ page = 0, append = false } = {}) {
+    async function fetchRecipes({ page = 0, append = false, sort = 'newest' } = {}) {
         try {
             if (append) setLoadingMore(true)
             else setLoading(true)
 
             const from = page * PAGE_SIZE
             const to = from + PAGE_SIZE - 1
+
+            // Sort metric → `.order()` clause. v1: date-based only.
+            // 'newest' is the existing default (created_at DESC); 'oldest'
+            // flips the direction. Popularity-based sorts (most-liked,
+            // most-bookmarked) are deferred until migration 014 adds the
+            // counter columns — without them, sort-by-likes would require
+            // client-side aggregation that can't see unloaded pages.
+            const ascending = sort === 'oldest'
 
             // `count: 'exact'` returns the full visible row count alongside
             // the page. Respected by RLS, so anon users get only the public
@@ -189,7 +209,8 @@ function App() {
             const { data, error, count } = await supabase
                 .from('recipes')
                 .select('*, ingredients(name), author:profiles!author_id(id, username, full_name, avatar_url)', { count: 'exact' })
-                .order('created_at', { ascending: false })
+                .order('created_at', { ascending })
+                .order('id', { ascending })
                 .range(from, to)
 
             if (error) throw error
@@ -259,6 +280,7 @@ function App() {
     const homeViewProps = {
         session, recipes, loading, totalCount, hasMore, loadingMore,
         searchTerm, setSearchTerm,
+        sortMode, setSortMode,
         doubled, setDoubled, scrolled,
         tagsExpanded, setTagsExpanded,
         menuOpen, setMenuOpen, menuRef,
@@ -413,6 +435,7 @@ function App() {
 function HomeView({
     session, recipes, loading, totalCount, hasMore, loadingMore,
     searchTerm, setSearchTerm,
+    sortMode, setSortMode,
     doubled, setDoubled, scrolled,
     tagsExpanded, setTagsExpanded,
     menuOpen, setMenuOpen, menuRef,
@@ -737,7 +760,7 @@ function HomeView({
                 </div>
             </header>
 
-            <div className="flex gap-3 items-center mb-8">
+            <div className="flex flex-wrap gap-3 items-center mb-8">
                 {/* Inline density toggle — same control as the floating copy
                     above. Lives in document flow so it's always reachable at
                     the top of the page; scrolls off naturally as the user
@@ -751,7 +774,7 @@ function HomeView({
                 >
                     {densityIcon}
                 </button>
-                <div className="flex-1 min-w-0 relative">
+                <div className="flex-1 min-w-[180px] relative">
                     <input
                         type="text"
                         placeholder="Search recipes — or tag1, tag2 for tag filter…"
@@ -772,6 +795,34 @@ function HomeView({
                         </button>
                     )}
                 </div>
+                {/* Sort dropdown. Native <select> so mobile gets the OS
+                    picker for free; styled with palette tokens so it reads
+                    as part of the rustic-paper system rather than browser
+                    chrome. Changing the value triggers a refetch from page
+                    0 via the sortMode useEffect in App — see the comment
+                    on fetchRecipes for the ordering+pagination interaction.
+                    v1 ships date-based sorts only; popularity-based sorts
+                    are deferred to a v2 sub-stage with migration 014. */}
+                <label className="flex-shrink-0 relative">
+                    <span className="sr-only">Sort recipes</span>
+                    <select
+                        value={sortMode}
+                        onChange={(e) => setSortMode(e.target.value)}
+                        aria-label="Sort recipes"
+                        className="appearance-none pl-4 pr-9 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-rust/40 min-h-[44px]"
+                    >
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                    </select>
+                    <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-ink fill-none pointer-events-none"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                        <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                </label>
                 {session && (
                     <button onClick={() => navigate('/new')} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
                 )}
