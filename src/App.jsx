@@ -326,6 +326,10 @@ function App() {
                                 likeCount={likeCount}
                                 userLiked={userLiked}
                                 onToggleLike={handleLikeClick}
+                                isFollowing={isFollowing}
+                                getNotifyPref={getNotifyPref}
+                                onUnfollow={toggleFollow}
+                                onSetNotifyPref={setNotifyPref}
                             />
                             : <Navigate to="/" replace />
                     }
