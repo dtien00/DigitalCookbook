@@ -97,7 +97,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_010_admin_trigger_fix.sql` — fixes the over-eager `prevent_self_admin_grant` trigger from migration 008 that was reverting legitimate UPDATEs from the SQL editor (no JWT → `auth.uid()` NULL → `is_admin()` false → trigger reverts) and from `bootstrap_admin()` itself (caller isn't admin *yet* during promotion → same trigger path → no-op). New trigger skips when `auth.uid() IS NULL` and when a transaction-local GUC opts out. Idempotent.
 - `supabase_migration_011_canonical_ingredient.sql` — adds nullable `canonical_ingredient_id UUID` column to `ingredients`. No FK target yet (the canonical table doesn't exist), no RLS changes. Forward-compatibility hook for Stage 10's fridge-basket feature — see "Canonical ingredient hook + token-match filter" below for the rationale. Idempotent.
 - `supabase_migration_012_follows_notifications.sql` — hardens the `follows` INSERT policy (same gap as migrations 004/005), adds `notify_on_new_recipe` + `created_at` columns + covering index + own-only UPDATE policy on `follows`, creates the `notifications` table with own-only SELECT/UPDATE/DELETE (no client INSERT — server trigger only), and adds an AFTER INSERT trigger on `recipes` that fans out notifications to opted-in followers when the recipe is public. See "Follows hardening + in-app notifications (migration 012, Stage 11)" below. Idempotent.
-- Future migrations: `supabase_migration_013_*.sql`, etc.
+- `supabase_migration_013_oauth_profile_trigger.sql` — patches `handle_new_user()` to correctly populate `username` and `avatar_url` for OAuth signups (Google and GitHub), which use different metadata key names than email/password. See "OAuth provider metadata mapping in `handle_new_user()`" below for the key-mapping rationale. Idempotent (`CREATE OR REPLACE FUNCTION`).
+- Future migrations: `supabase_migration_014_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -319,6 +320,57 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Cascade interaction.** `notifications` FKs to `profiles(id)` (actor) and `recipes(id)` both with `ON DELETE CASCADE`. So when an admin deletes a user via `admin_delete_user()` (migration 008), every notification mentioning them as the actor disappears too. That's the right behaviour — the link is dead. The downside is the recipient loses the notification's read/unread state for those rows; for a moderation action this is fine.
 - **`actor_id NOT NULL`.** Could be relaxed later if system-generated notifications need to exist. Tightening NOT NULL now keeps the immediate kind (`'new_recipe'`) honest; loosening is one migration line away.
 - **No realtime channel.** The bell badge doesn't update live — the user sees new notifications when they refresh or remount the App. Realtime via Supabase channels (`postgres_changes` on `notifications` filtered by `user_id`) is a clean upgrade; held off to keep Stage 11 scoped.
+
+---
+
+## OAuth provider metadata mapping in `handle_new_user()` (migration 013, Stage 12)
+
+**Decision:** Replace the fixed `raw_user_meta_data->>'username'` and `raw_user_meta_data->>'avatar_url'` reads in `handle_new_user()` with COALESCE chains that try each provider's key before falling back.
+
+**The mapping problem:**
+
+| Field populated | Email/password signup | Google OAuth | GitHub OAuth |
+|---|---|---|---|
+| `username` | ✅ `username` (set by `useAuthForm`) | ❌ not provided | ❌ `user_name` (different key) |
+| `full_name` | ❌ not set | ✅ `full_name` | ✅ `full_name` |
+| `avatar_url` | ❌ not set | ❌ `picture` (different key) | ✅ `avatar_url` |
+
+Without the patch, every OAuth signup produced a profile row with `username = NULL` and `avatar_url = NULL` (for Google), breaking the recipe card byline ("Anonymous chef" fallback) and the comment avatar chip.
+
+**COALESCE order chosen:**
+
+```sql
+-- username
+COALESCE(
+  NULLIF(TRIM(raw_user_meta_data->>'username'),  ''),   -- email/password
+  NULLIF(TRIM(raw_user_meta_data->>'user_name'), ''),   -- GitHub
+  NULLIF(TRIM(SPLIT_PART(raw_user_meta_data->>'email', '@', 1)), ''),  -- Google fallback
+  SUBSTRING(new.id::text, 1, 8)                         -- UUID prefix (last resort)
+)
+
+-- avatar_url
+COALESCE(
+  NULLIF(TRIM(raw_user_meta_data->>'avatar_url'), ''),  -- GitHub / manually set
+  NULLIF(TRIM(raw_user_meta_data->>'picture'),    '')   -- Google
+)
+```
+
+**Why email prefix for Google username:**
+- Google provides `email` in `raw_user_meta_data` but no `username` field.
+- `email.split('@')[0]` is the same heuristic `useAuthForm.js` already uses for email/password signups — familiar to any user who's seen their own profile.
+- NULLIF(TRIM(...), '') guards against blank strings from any provider that returns an empty field instead of omitting it.
+
+**Why UUID prefix as last resort:**
+- `username` is `UNIQUE` on the profiles table. Falling back to NULL would let multiple OAuth signups stack up with username = NULL (Postgres UNIQUE doesn't constrain NULLs), silently degrading the display.
+- `SUBSTRING(new.id::text, 1, 8)` is always non-null, always unique (UUIDs are unique by construction), and makes it obvious the username is auto-generated (a user who sees `a3f8b2c1` in their profile will know to update it).
+
+**Why `CREATE OR REPLACE FUNCTION`:**
+- The trigger binding (`on_auth_user_created`) already exists and remains unchanged. Replacing only the function body is the cleanest idempotent path — no DROP/CREATE cycle that could leave a window without the trigger.
+
+**Tradeoffs:**
+- **Email prefix collisions.** Two users with email prefixes `john@gmail.com` and `john@yahoo.com` would both derive username `john` — the second signup would hit the UNIQUE constraint and fail at the DB level. The UUID-prefix last resort only activates if SPLIT_PART itself returns empty (i.e., no email at all in metadata), not on a uniqueness collision. Real fix: catch the unique violation in the trigger and append a short random suffix (e.g. `john_a3f8`). Deferred — collision probability at portfolio scale is negligible and the UUID fallback exists as a safety net.
+- **`full_name` stays uncoalesced.** Both Google and GitHub use `full_name` so no chain is needed. Email/password signups don't set it; that's intentional — the Profile edit screen is where those users fill it in.
+- **Existing OAuth rows are not backfilled.** The trigger only fires on new signups. Any OAuth account created before migration 013 keeps its null username/avatar_url until the user visits the Profile edit screen and saves. A backfill script (reading `auth.users.raw_user_meta_data` via the service-role key) could patch historical rows; held off since the table is empty in dev and the live app had no OAuth users prior to this stage.
 
 ---
 

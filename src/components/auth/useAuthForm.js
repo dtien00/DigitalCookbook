@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../../lib/supabaseClient'
+import { getAuthRedirectURL } from '../../lib/authRedirect'
 
 // Shared auth state + handlers. Any visual style under src/components/auth/styles/
 // consumes this hook and renders its own chrome — keeps the network/Supabase
@@ -43,13 +44,16 @@ export function useAuthForm() {
 
     // OAuth handler. Provider must be enabled in the Supabase project's Auth
     // settings; if it isn't, signInWithOAuth surfaces a clear error which we
-    // toast back to the user. Redirects to the app origin on success.
+    // toast back to the user. `getAuthRedirectURL()` preserves the current
+    // pathname so the user lands back on the same recipe they were viewing
+    // when they opened the Auth overlay, and pins the origin to VITE_SITE_URL
+    // on Preview where window.location.origin wouldn't be allowlisted.
     const handleOAuth = async (provider) => {
         setLoading(true)
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider,
-                options: { redirectTo: window.location.origin },
+                options: { redirectTo: getAuthRedirectURL() },
             })
             if (error) throw error
         } catch (error) {
