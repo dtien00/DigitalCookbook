@@ -170,6 +170,28 @@ The asymmetry is intentional: the anonymous header has one obvious next-step (si
 - Old legacy CSS used a 50px gap and a `flex: 8 / flex: 2` ratio; the new layout lets the search field consume available space and the button shrinks to its label, which scales more naturally across viewports.
 - Search input is pill-shaped (`rounded-full`) with a subtle focus ring (`focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500`) — the legacy version had no focus state at all.
 
+## Sort picker (Stage 13 v2)
+
+A custom dropdown that sits between the search input and the "+ New Recipe" button. The trigger is always a plain "Sort" pill (`bg-paper-shade rounded-full px-3 py-1.5`) — it never reflects the current sort state in its label. This is deliberate: the user is assembling a combination of two independent metrics, and a label that tries to summarise both would either be truncated or constantly changing, which is more disorienting than stable.
+
+**Dropdown anatomy:**
+- Two metric rows — Date (ClockIcon) and Likes (HeartIcon) — stacked vertically inside a `paper` background card, `rounded-xl shadow-lg`, 220px wide.
+- Each row is `role="menuitemcheckbox" aria-checked={on}` since multiple metrics can be active simultaneously (this is not a radio group).
+
+**Left-side switch toggle (on/off per metric):**
+The switch is `aria-hidden="true"` — the row itself is the interactive element and carries the ARIA semantics. Visual state:
+- **On:** `bg-rust` track, `bg-paper` thumb at `left-[18px]` — rust fill signals "this metric is in effect," matching the rust primary-action convention elsewhere.
+- **Off:** `bg-paper-shade border border-ink/20` track, `bg-ink/30` thumb at `left-0.5` — muted so inactive metrics read as background controls, not affordances fighting for attention.
+
+Clicking the row body calls `toggleMetric(key)` (independent per-metric on/off). The dropdown intentionally does **not** close on toggle click — the user is expected to configure multiple metrics before dismissing.
+
+**Right-side direction chevron:**
+Clicking the chevron calls `flipDir(key)` and rotates `180deg` when direction is `asc`. Chevron click is `e.stopPropagation()` so it doesn't also trigger the row's `toggleMetric`.
+
+**Compound sort priority (when both on):** likes is primary (popularity is the dominant signal when explicitly requested), `created_at` is the secondary tiebreaker. `id DESC` is always appended as the final tiebreaker for deterministic pagination across pages.
+
+**Outside-click and Escape:** a `useEffect` mirrors the existing `menuOpen` pattern — clicks outside `sortMenuRef` and `keydown === 'Escape'` both close the dropdown.
+
 ## Button variants
 
 All four variants use inline Tailwind utilities at each call site (not extracted to a `<Button>` component). This is intentional for the current scale (~15 button instances total): explicit, no abstraction surface, easy to deviate per-call-site when a button needs `w-full` or extra spacing. Revisit once button instances exceed ~25 or behavior gets richer (icons, loading spinners, etc.).
