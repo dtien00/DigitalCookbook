@@ -223,11 +223,11 @@ Goal: Signed users (not anon) can follow/view another user's recipes and optiona
 
 ---
 
-## Stage 12 - OAuth implementation
+## Stage 12 - OAuth implementation  *(done)*
 
 Goal: Allow new anon users to sign up using their Gmail/Github or other alternate forms of media. Prevents manual email notification that doesn't look as appealing.
 
-- [] Utilize current OAuth buttons already on the Auth.jsx element.
+- [x] Utilize current OAuth buttons already on the Auth.jsx element. *Done on `stage-12-oauth`. Google and GitHub providers enabled in Supabase dashboard. `src/lib/authRedirect.js` — new `getAuthRedirectURL()` helper prefers `VITE_SITE_URL` (set in Vercel Production) over `window.location.origin` so OAuth redirect lands on an allowlisted origin regardless of which Preview deployment initiated the flow; defaults path to `window.location.pathname` so a user on `/recipe/:id` returns to the same recipe after sign-in, not the home grid. `useAuthForm.js` wired to use the helper. Migration 013 patches `handle_new_user()` trigger to COALESCE across OAuth provider metadata keys (`username` → `user_name` → email-prefix → UUID prefix; `avatar_url` → `picture`) so Google and GitHub signups get a non-null username and avatar immediately. Supabase redirect URL allowlist expanded to cover `http://localhost:5173/**`, `https://digital-cookbook-ruddy.vercel.app/**`, and `https://*.vercel.app/**`. Smoke-tested locally: Google OAuth sign-in from `/recipe/:id` returns to that same URL with a profile row correctly populated.*
 
 ## Working Style
 
