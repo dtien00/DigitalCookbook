@@ -26,6 +26,46 @@ import NotificationsBell from './components/NotificationsBell'
 // testing when seed data has < 20 recipes.
 const PAGE_SIZE = 20
 
+// Sort picker model. Each metric (date, likes) has independent on/off
+// AND independent direction, so all four (A,B) × (~A,~B) × (A,~B) ×
+// (~A,B) combinations are reachable. When both are on, ordering is
+// composed: likes is primary (popularity is the dominant signal when
+// the user has asked for it), date is the tiebreaker. When neither is
+// on, fetchRecipes falls back to date-desc so the grid is never
+// nondeterministic. The shape: { date: { on, dir }, likes: { on, dir } }
+// — see fetchRecipes for the ordering composition logic.
+const ClockIcon = (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15 14" />
+    </svg>
+)
+const HeartIcon = (props) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z" />
+    </svg>
+)
+const SORT_METRICS = [
+    {
+        key: 'date',
+        label: 'Date',
+        Icon: ClockIcon,
+        column: 'created_at',
+        labels: { desc: 'Newest first', asc: 'Oldest first' },
+    },
+    {
+        key: 'likes',
+        label: 'Likes',
+        Icon: HeartIcon,
+        column: 'like_count',
+        labels: { desc: 'Most liked', asc: 'Least liked' },
+    },
+]
+const DEFAULT_SORT_CONFIG = {
+    date: { on: true, dir: 'desc' },
+    likes: { on: false, dir: 'desc' },
+}
+
 function App() {
     const navigate = useNavigate()
 
@@ -34,13 +74,17 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
 
-    // Sort metric for the home grid. Drives the server-side `.order()` clause
-    // in fetchRecipes, so changing it must reset pagination to page 0 — see
-    // the useEffect below. v1 ships date-based sorts only (newest/oldest);
-    // popularity-based sorts (most-liked, most-bookmarked) need migration
-    // 014's counter columns to avoid client-side aggregation that can't see
-    // unloaded pages.
-    const [sortMode, setSortMode] = useState('newest')
+    // Sort config for the home grid. Per-metric on/off + direction so the
+    // user can combine metrics (e.g. likes-desc primary + date-desc
+    // tiebreaker) or disable all (fetchRecipes falls back to date-desc).
+    // Drives fetchRecipes' ordering composition; changing it must reset
+    // pagination to page 0, since appending a page from a different sort
+    // onto cached rows would mix two orderings into one visually
+    // indistinguishable list. v1: date-only. v2: adds likes via the
+    // `recipes_with_counts` view (migration 014). Bookmarks-sort deferred
+    // — `favorites` is private (own-only RLS), so a public bookmark-count
+    // aggregate is its own privacy decision.
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT_CONFIG)
 
     // Auth STAYS as overlay state — not a route — so its slide-in motion
     // (fixed inset-0 z-50, 450ms ease-out from translate-x-full) can layer
@@ -64,6 +108,14 @@ function App() {
     // Profile dropdown menu open/closed state.
     const [menuOpen, setMenuOpen] = useState(false)
     const menuRef = useRef(null)
+
+    // Sort picker open/closed state. Direction memory lives inside
+    // sortConfig now (flipping a chevron while the metric is off still
+    // updates its dir, just doesn't trigger a refetch on its own — the
+    // refetch only fires when sortConfig changes meaningfully, which
+    // toggling the chevron does either way).
+    const [sortOpen, setSortOpen] = useState(false)
+    const sortMenuRef = useRef(null)
 
     // Infinity-scroll pagination state.
     // - totalCount: full row count from Supabase (respects RLS). Drives the
@@ -99,6 +151,21 @@ function App() {
             document.removeEventListener('keydown', onKey)
         }
     }, [menuOpen])
+
+    // Same close-on-outside-click + Escape pattern for the sort dropdown.
+    useEffect(() => {
+        if (!sortOpen) return
+        const onPointerDown = (e) => {
+            if (sortMenuRef.current && !sortMenuRef.current.contains(e.target)) setSortOpen(false)
+        }
+        const onKey = (e) => { if (e.key === 'Escape') setSortOpen(false) }
+        document.addEventListener('pointerdown', onPointerDown)
+        document.addEventListener('keydown', onKey)
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown)
+            document.removeEventListener('keydown', onKey)
+        }
+    }, [sortOpen])
 
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
@@ -158,8 +225,8 @@ function App() {
     useEffect(() => {
         pageRef.current = 0
         setHasMore(true)
-        fetchRecipes({ page: 0, append: false, sort: sortMode })
-    }, [session, sortMode])
+        fetchRecipes({ page: 0, append: false, config: sortConfig })
+    }, [session, sortConfig])
 
     // Infinity scroll: an IntersectionObserver watches a sentinel placed
     // below the grid. When the sentinel scrolls into the viewport (with
@@ -171,14 +238,14 @@ function App() {
         if (!el) return
         const obs = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-                fetchRecipes({ page: pageRef.current + 1, append: true, sort: sortMode })
+                fetchRecipes({ page: pageRef.current + 1, append: true, config: sortConfig })
             }
         }, { rootMargin: '200px' })
         obs.observe(el)
         return () => obs.disconnect()
-    }, [hasMore, loading, loadingMore, sortMode])
+    }, [hasMore, loading, loadingMore, sortConfig])
 
-    async function fetchRecipes({ page = 0, append = false, sort = 'newest' } = {}) {
+    async function fetchRecipes({ page = 0, append = false, config = DEFAULT_SORT_CONFIG } = {}) {
         try {
             if (append) setLoadingMore(true)
             else setLoading(true)
@@ -186,32 +253,52 @@ function App() {
             const from = page * PAGE_SIZE
             const to = from + PAGE_SIZE - 1
 
-            // Sort metric → `.order()` clause. v1: date-based only.
-            // 'newest' is the existing default (created_at DESC); 'oldest'
-            // flips the direction. Popularity-based sorts (most-liked,
-            // most-bookmarked) are deferred until migration 014 adds the
-            // counter columns — without them, sort-by-likes would require
-            // client-side aggregation that can't see unloaded pages.
-            const ascending = sort === 'oldest'
-
-            // `count: 'exact'` returns the full visible row count alongside
-            // the page. Respected by RLS, so anon users get only the public
-            // count. Used to size the column tier so layout doesn't reflow
-            // as more pages load.
+            // Sort config → table source + composed `.order()` clauses.
             //
-            // Embed `ingredients(name)` so the fridge-basket filter (Stage
-            // 10) can token-match against each recipe's ingredients without
-            // an N+1 fetch per card. PostgREST infers the relationship from
-            // the ingredients.recipe_id FK; the count remains the parent
-            // (recipes) row count, not the joined-row count. Ingredient
-            // visibility piggybacks on the recipe RLS — the embedded rows
-            // for a public recipe are returned to anonymous viewers too.
-            const { data, error, count } = await supabase
-                .from('recipes')
+            // Source selection: if `likes.on`, query the
+            // `recipes_with_counts` view (migration 014) which exposes
+            // `like_count` for ordering. Otherwise query `recipes` directly.
+            // The view uses security_invoker so the recipes RLS still
+            // filters; embedded relations resolve through the view because
+            // PostgREST detects the inherited FKs (recipes.id →
+            // ingredients.recipe_id, recipes.author_id → profiles.id).
+            //
+            // Ordering composition (priority order):
+            //   1. likes  (if on) — primary when both are on, since
+            //      popularity is the dominant signal once the user has
+            //      asked for it.
+            //   2. date   (if on)
+            //   3. created_at DESC as an implicit fallback if neither is on
+            //   4. id DESC as the final tiebreaker, always applied — keeps
+            //      pagination deterministic when many rows share the same
+            //      key (common at like_count = 0). Without it, Postgres is
+            //      free to reorder ties between pages, leading to repeats
+            //      or skips.
+            //
+            // `count: 'exact'` returns the full visible row count alongside
+            // the page (respected by RLS so anon users get only the public
+            // count). Used to size the column tier so layout doesn't reflow
+            // as more pages load. Embed `ingredients(name)` so the
+            // fridge-basket filter (Stage 10) can token-match without N+1.
+            const source = config.likes.on ? 'recipes_with_counts' : 'recipes'
+
+            let query = supabase
+                .from(source)
                 .select('*, ingredients(name), author:profiles!author_id(id, username, full_name, avatar_url)', { count: 'exact' })
-                .order('created_at', { ascending })
-                .order('id', { ascending })
-                .range(from, to)
+
+            if (config.likes.on) {
+                query = query.order('like_count', { ascending: config.likes.dir === 'asc' })
+            }
+            if (config.date.on) {
+                query = query.order('created_at', { ascending: config.date.dir === 'asc' })
+            } else if (!config.likes.on) {
+                // No metric on — fall back to date-desc so the grid is never
+                // nondeterministic.
+                query = query.order('created_at', { ascending: false })
+            }
+            query = query.order('id', { ascending: false })
+
+            const { data, error, count } = await query.range(from, to)
 
             if (error) throw error
             const newRows = data || []
@@ -280,7 +367,8 @@ function App() {
     const homeViewProps = {
         session, recipes, loading, totalCount, hasMore, loadingMore,
         searchTerm, setSearchTerm,
-        sortMode, setSortMode,
+        sortConfig, setSortConfig,
+        sortOpen, setSortOpen, sortMenuRef,
         doubled, setDoubled, scrolled,
         tagsExpanded, setTagsExpanded,
         menuOpen, setMenuOpen, menuRef,
@@ -435,7 +523,8 @@ function App() {
 function HomeView({
     session, recipes, loading, totalCount, hasMore, loadingMore,
     searchTerm, setSearchTerm,
-    sortMode, setSortMode,
+    sortConfig, setSortConfig,
+    sortOpen, setSortOpen, sortMenuRef,
     doubled, setDoubled, scrolled,
     tagsExpanded, setTagsExpanded,
     menuOpen, setMenuOpen, menuRef,
@@ -795,34 +884,99 @@ function HomeView({
                         </button>
                     )}
                 </div>
-                {/* Sort dropdown. Native <select> so mobile gets the OS
-                    picker for free; styled with palette tokens so it reads
-                    as part of the rustic-paper system rather than browser
-                    chrome. Changing the value triggers a refetch from page
-                    0 via the sortMode useEffect in App — see the comment
-                    on fetchRecipes for the ordering+pagination interaction.
-                    v1 ships date-based sorts only; popularity-based sorts
-                    are deferred to a v2 sub-stage with migration 014. */}
-                <label className="flex-shrink-0 relative">
-                    <span className="sr-only">Sort recipes</span>
-                    <select
-                        value={sortMode}
-                        onChange={(e) => setSortMode(e.target.value)}
-                        aria-label="Sort recipes"
-                        className="appearance-none pl-4 pr-9 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-rust/40 min-h-[44px]"
-                    >
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                    </select>
-                    <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-ink fill-none pointer-events-none"
-                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                        <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                </label>
+                {/* Sort picker (Stage 13 v2). Custom dropdown — two metric
+                    rows (date, likes), each with independent on/off and
+                    direction so all four (A,B) × (~A,~B) combinations are
+                    reachable. Trigger always reads "Sort"; the active
+                    metrics are shown by the left-side toggles inside the
+                    menu. Each row has:
+                      - Left: a switch-style toggle. Clicking it (or the row
+                        body) flips this metric's on/off state — both can
+                        be on at once.
+                      - Right: a chevron that flips this metric's direction.
+                        Flipping while off still updates the remembered
+                        direction; it just doesn't change the rendered
+                        order until the metric is toggled on.
+                    fetchRecipes composes ordering from the live sortConfig
+                    (see its comment for priority + source-table rules).
+                    Native <select> was replaced because per-row toggle +
+                    chevron isn't expressible in <select>/<option>. */}
+                {(() => {
+                    const toggleMetric = (key) => {
+                        setSortConfig(prev => ({
+                            ...prev,
+                            [key]: { ...prev[key], on: !prev[key].on },
+                        }))
+                    }
+                    const flipDir = (key) => {
+                        setSortConfig(prev => ({
+                            ...prev,
+                            [key]: { ...prev[key], dir: prev[key].dir === 'desc' ? 'asc' : 'desc' },
+                        }))
+                    }
+                    return (
+                        <div ref={sortMenuRef} className="flex-shrink-0 relative">
+                            <button
+                                type="button"
+                                onClick={() => setSortOpen(o => !o)}
+                                aria-haspopup="menu"
+                                aria-expanded={sortOpen}
+                                aria-label="Sort recipes"
+                                className="pl-3 pr-3 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-rust/40 min-h-[44px] flex items-center gap-2"
+                            >
+                                <span>Sort</span>
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className={`w-4 h-4 stroke-ink fill-none transition-transform ${sortOpen ? 'rotate-180' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                            </button>
+                            {sortOpen && (
+                                <div role="menu" className="absolute right-0 top-full mt-2 z-40 w-64 bg-paper border border-paper-shade rounded-md shadow-lg overflow-hidden">
+                                    {SORT_METRICS.map(m => {
+                                        const { on, dir } = sortConfig[m.key]
+                                        return (
+                                            <div key={m.key} className="flex items-stretch border-b border-paper-shade last:border-b-0">
+                                                <button
+                                                    type="button"
+                                                    role="menuitemcheckbox"
+                                                    aria-checked={on}
+                                                    onClick={() => toggleMetric(m.key)}
+                                                    className={`flex-1 flex items-center gap-3 px-3 py-2.5 text-left text-ink transition-colors ${on ? 'bg-tan/30 font-semibold' : 'hover:bg-paper-shade'}`}
+                                                >
+                                                    {/* Left toggle — switch-style control. Visual
+                                                        indicator only (aria-hidden); the parent
+                                                        button carries role/aria-checked for a11y.
+                                                        Clicking the parent toggles this metric's
+                                                        on/off state independently of the other
+                                                        metric. */}
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`relative inline-block w-9 h-5 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-rust' : 'bg-paper-shade border border-ink/20'}`}
+                                                    >
+                                                        <span
+                                                            className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${on ? 'left-[18px] bg-paper' : 'left-0.5 bg-ink/30'}`}
+                                                        />
+                                                    </span>
+                                                    <m.Icon className="w-4 h-4" />
+                                                    <span>{m.labels[dir]}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => flipDir(m.key)}
+                                                    aria-label={`Flip ${m.label} direction (currently ${dir === 'desc' ? 'descending' : 'ascending'})`}
+                                                    className="px-3 hover:bg-tan/40 text-ink flex items-center justify-center border-l border-paper-shade transition-colors"
+                                                >
+                                                    <svg aria-hidden="true" viewBox="0 0 24 24" className={`w-4 h-4 stroke-ink fill-none transition-transform ${dir === 'asc' ? 'rotate-180' : ''}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="6 9 12 15 18 9" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })()}
                 {session && (
                     <button onClick={() => navigate('/new')} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors flex-shrink-0">+ New Recipe</button>
                 )}

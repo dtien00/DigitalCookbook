@@ -140,6 +140,25 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Like state per-user** — A likes a recipe; B logs in, the heart shows outline for B (the count is shared but the fill state is per-user)
 - [ ] **Counts and bookmarks are independent** — liking does NOT bookmark, and vice versa; both can be active simultaneously
 
+## Sort metrics checklist
+
+> Verifies the Stage 13 v2 custom sort picker. Requires migration 014 applied in Supabase (`supabase_migration_014_recipe_like_counts_view.sql` — run via Dashboard → SQL Editor). Use `test-large@example.com` (34 recipes, varied like counts) for the most meaningful ordering signal.
+
+- [ ] **Sort trigger visible** in the action row between the search input and "+ New Recipe" button — pill labelled "Sort" at all times (label never changes to reflect active state)
+- [ ] **Opens dropdown** on click — two rows: Date (clock icon) and Likes (heart icon); dropdown is 220px wide, rounded, paper background
+- [ ] **Closes on outside click** — click anywhere outside the dropdown card → closes; trigger retains focus
+- [ ] **Closes on Escape** — with dropdown open, press Escape → closes
+- [ ] **Does NOT close on toggle click** — click the Date or Likes switch; dropdown stays open (this is intentional — user is expected to configure multiple metrics before dismissing)
+- [ ] **Date toggle on/off** — switch flips to rust-filled on; grid re-fetches sorted by `created_at`; switch reverts to muted off; grid returns to default order
+- [ ] **Likes toggle on/off** — switch on → grid re-fetches from `recipes_with_counts` ordered by `like_count DESC`; recipes with more likes appear first; switch off → returns to default
+- [ ] **Direction chevron — Date** — click chevron next to Date row (while Date is on); chevron rotates 180°; grid re-fetches with `created_at ASC` (oldest first)
+- [ ] **Direction chevron — Likes** — same: flips between most-liked and least-liked
+- [ ] **Both on — compound sort** — enable both Date and Likes; grid sorts by `like_count` (primary) then `created_at` (tiebreaker); recipes with the same like count appear in date order within that group
+- [ ] **Both off** — disable both switches; grid falls back to implicit `created_at DESC` (newest first) — grid is never nondeterministic
+- [ ] **Pagination resets on sort change** — with infinity-scroll loaded to page 2, toggle a metric; page resets to 0 (no duplicate/missing cards from the mixed-sort window)
+- [ ] **Anonymous sort** — log out; Sort trigger is visible and functional; grid re-fetches (only public recipes are returned — RLS still applies through the view)
+- [ ] **`recipes_with_counts` — like counts accurate** — like a recipe as one account; sign out and back in as another; sort by Most liked; the liked recipe appears above recipes with 0 likes
+
 ## Toasts checklist
 
 > Verifies the Stage 6 toast migration. Each item exercises a path that used to fire a native `alert(...)` browser modal and should now surface as a top-center toast.

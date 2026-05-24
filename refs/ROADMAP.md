@@ -238,12 +238,17 @@ Goal: Allow new anon users to sign up using their Gmail/Github or other alternat
 
 ---
 
-## Stage 13 - Metric Sorting
+## Stage 13 - Metric Sorting  *(done — bookmarks-sort and time-sort deferred; see DATABASE_DECISIONS.md and carry-forwards below)*
 
 Goal: Users can view recipes by varying metrics to better find something of a particular paradigm;
 includes newest/oldest, most/least likes, most/least bookmarks(?), most/least time(?)
 
-- [] Button inline bewteen search bar and new recipe element to drop down/toggle between different sorting metrics. Should apply on selection.
+- [x] Button inline between search bar and new recipe element to drop down/toggle between different sorting metrics. Should apply on selection. *v1 done on `stage-13-metric-sort` (PR #41) — Newest/Oldest. Native `<select>` dropdown inline in the action row; switching sortMode resets pagination to page 0 (otherwise pages from the old sort would mix with pages from the new sort). v2 done on `stage-13-popularity-sort` — replaces the native `<select>` with a custom dropdown showing two metric rows (Date/Clock + Likes/Heart). Each row has a left-side switch toggle (independent on/off per metric) and a right-side direction chevron; all four combinations (both on, date-only, likes-only, both off) are independently reachable. The trigger always reads "Sort" rather than advertising the current state. Dropdown stays open when a toggle is clicked — the user is expected to explore multiple options before closing. Adds Most-liked / Least-liked via migration 014's `recipes_with_counts` view. The view is a `recipes` LEFT JOIN to an aggregated `likes` subquery exposed as `like_count`; `WITH (security_invoker = true)` so the recipes RLS still does the filtering. Chose a view over denormalised counter columns to avoid triggers + a one-time backfill — upgrade path to counters is straightforward when corpus size warrants it. `fetchRecipes` swaps the table source to the view when the likes metric is on; embedded `ingredients(name)` and `author:profiles!author_id(...)` relations resolve through the view via PostgREST's inherited-FK detection. When both metrics are on, likes is the primary sort and date is the tiebreaker. `id DESC` is always appended as a final tiebreaker for deterministic pagination. Bookmarks-sort deferred: `favorites` is private (own-only RLS, migration 003) so a public `bookmark_count` aggregate is a separate privacy decision. Time-based sort deferred: no `cook_time` column exists on `recipes` yet — needs schema + CreateRecipe UX.*
+
+**Carry-forwards from Stage 13:**
+- **Bookmarks-sort sub-stage** — decide whether `bookmark_count` is a public signal ("N people saved this") or stays private. If public: SECURITY DEFINER aggregate function or a separate public aggregate table. If private: sort is only meaningful for the recipe's own author. Either way, needs its own migration + RLS review.
+- **Time-sort sub-stage** — add a `cook_time` column to `recipes` (integer minutes), surface it in CreateRecipe, then add it as a third sort metric in the picker.
+- **Toast retheme** — react-hot-toast `<Toaster>` still uses library defaults (white background, green/red icons). A small pass to pass `toastOptions.style` overrides would bring it into the rustic palette (`bg-paper-shade`, `text-ink`, rust success, rose-dark error). No migration needed.
 
 ## Stage N - Allergen/Condition filter
 

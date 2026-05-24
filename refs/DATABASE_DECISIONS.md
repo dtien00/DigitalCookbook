@@ -374,11 +374,31 @@ COALESCE(
 
 ---
 
+## `recipes_with_counts` view for popularity-sort (migration 014, Stage 13 v2)
+
+**Decision:** Add a read-only Postgres view that joins `recipes` to an aggregated `likes` subquery and exposes `like_count`. Use it as the table source in `fetchRecipes` when the home grid's sort mode is popularity-based.
+
+**Why:**
+- **Server has to order the page.** Stage 4's bulk-fetch (a `Map<recipe_id, count>` built client-side) was enough for *rendering* counts on already-paginated rows, but the server can't order by something the client computes. Popularity-sort needs the count in SQL.
+- **No drift.** A view is a pure read; counters maintained by triggers can drift if a trigger is ever bypassed (manual SQL, future RPC writes). Drift is silent and only shows up as wrong order on the home grid — exactly the surface where being wrong is most visible.
+- **No backfill.** Adding counter columns to a populated table means writing a backfill query and getting it right under concurrent writes. The view sidesteps this entirely.
+- **Upgrade path is clean.** When corpus size makes the join expensive, swap the view's body to read from a denormalised column; callers don't change.
+
+**RLS:** `WITH (security_invoker = true)` so the view runs as the *caller*, not the view's owner. Without this, the view would bypass the `recipes` RLS and leak private recipes to anonymous viewers. The `likes` subquery is safe under invoker semantics because `likes` has a public SELECT policy (migration 001) — counts come out correct for anon and authenticated alike.
+
+**Why bookmarks-sort isn't in this migration:** `favorites` is private (own-only SELECT, migration 003). Under `security_invoker`, an aggregated `bookmark_count` would be 0 for everyone except the owner of those bookmarks — useless as a sort key. Adding it requires a privacy decision: either expose `bookmark_count` publicly via a SECURITY DEFINER function (the user "X people saved this" signal) or keep aggregates private and sort by them only for the recipe's author. Deferred to its own sub-stage so the trade-off is conscious.
+
+**Tradeoffs:**
+- **Join cost at query time.** A LEFT JOIN to a GROUP BY subquery is computed on every read. Fine at thousands of recipes; warrants revisit at hundreds of thousands. The two-tier upgrade (view → counter columns) is documented above.
+- **PostgREST embedded relations on views.** PostgREST 11+ detects inherited FKs through views that select the PK transparently (which this one does via `r.*`), so `ingredients(name)` and `author:profiles!author_id(...)` embeds keep working. If a future schema cache reload ever fails to pick the inheritance up, the explicit hint `ingredients!recipe_id(...)` is the fix.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
 
-- **Aggregate like-counts** — Stage 4 of the roadmap. Per-recipe `COUNT(likes)` either runs as a subquery per card (cheap at this scale, becomes N+1 at scale) or as a materialized view / database view. No decision yet.
+- ~~**Aggregate like-counts** — Stage 4 of the roadmap. Per-recipe `COUNT(likes)` either runs as a subquery per card (cheap at this scale, becomes N+1 at scale) or as a materialized view / database view. No decision yet.~~ *Resolved at Stage 13 v2 with the `recipes_with_counts` view (migration 014) — see decision entry above.*
 - **Realtime subscriptions** — Supabase channels can push new likes/comments to clients live. Out of scope for early stages but worth noting that the table structure supports it cleanly.
 - **Soft delete on recipes** — Today, deleting a recipe is irrecoverable. If users start curating large collections, an `archived_at` column is preferable to `DELETE`.
 - **Bucket privacy for private recipes** — The storage gap noted above. A signed-URL approach would close it but at a UX cost.
