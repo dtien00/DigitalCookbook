@@ -1004,6 +1004,96 @@ textarea {
   }
 }
 
+/* === Profile book-spread (Stage 14 item 2) =================================
+   Two-column "open book" shell used by Profile.jsx and AuthorProfile.jsx via
+   <ProfileBookSpread>. Left page = inside-cover utilities (user info /
+   forms / read-only display). Right page = book contents (recipes). The
+   spine sits between them at lg+; below lg the spread stacks vertically
+   and the spine collapses.
+
+   Page surfaces use the established card-paper tone (#fbf6f1) over the
+   `paper-grain` background so they read as physical pages resting on the
+   page surface. The inset shadow on each page's inner edge ("toward the
+   fold") suggests the page curling into the binding.
+
+   The spine is a narrow vertical column with a tan↔ink gradient — darker
+   in the center to imply the binding shadow, lighter at the edges where
+   the paper meets it. Two thin dark hairlines along each side stand in
+   for the page-edge rule. Felt-not-seen — strong enough to read as a
+   spine, quiet enough not to overpower the content. */
+.book-spread {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (min-width: 1024px) {
+  .book-spread {
+    grid-template-columns: minmax(320px, 420px) 28px 1fr;
+    /* align-items defaults to `stretch` — both pages take the row's
+       height so the inside-cover paper extends as the recipes column
+       grows. Matches a real open book: both pages are the same
+       physical sheet, content sits at the top, empty paper fills the
+       rest. */
+  }
+}
+
+.book-page {
+  background: #fbf6f1;
+  padding: 28px 24px;
+  border: 1px solid #e8dcd2;
+  box-shadow: 0 4px 16px rgba(30, 30, 36, 0.06);
+  min-width: 0; /* let inner content shrink instead of overflowing */
+  border-radius: 12px;
+}
+
+.book-page-right {
+  margin-top: 20px; /* mobile-stacked: separate the two pages visually */
+}
+
+@media (min-width: 1024px) {
+  .book-page {
+    padding: 36px 32px;
+  }
+
+  .book-page-left {
+    border-radius: 12px 0 0 12px;
+    /* darken the inner (right) edge toward the fold */
+    box-shadow: 0 4px 16px rgba(30, 30, 36, 0.06),
+                inset -14px 0 22px -16px rgba(30, 30, 36, 0.18);
+  }
+
+  .book-page-right {
+    border-radius: 0 12px 12px 0;
+    margin-top: 0;
+    /* mirror: darken the inner (left) edge toward the fold */
+    box-shadow: 0 4px 16px rgba(30, 30, 36, 0.06),
+                inset 14px 0 22px -16px rgba(30, 30, 36, 0.18);
+  }
+}
+
+.book-spine {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .book-spine {
+    display: block;
+    align-self: stretch;
+    background:
+      linear-gradient(
+        to right,
+        rgba(214, 170, 108, 0.18) 0%,
+        rgba(30, 30, 36, 0.22) 50%,
+        rgba(214, 170, 108, 0.18) 100%
+      );
+    border-left: 1px solid rgba(30, 30, 36, 0.20);
+    border-right: 1px solid rgba(30, 30, 36, 0.20);
+    box-shadow: inset 0 6px 12px rgba(30, 30, 36, 0.10),
+                inset 0 -6px 12px rgba(30, 30, 36, 0.10);
+  }
+}
+
 /* Recipe-detail mobile typography. Target: phone propped against a kettle.
    Changes vs desktop:
    - Container and content-card padding tightened so text isn't crushed on
