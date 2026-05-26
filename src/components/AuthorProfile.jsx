@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
+import ProfileBookSpread from './ProfileBookSpread'
+import RecipesCarousel from './RecipesCarousel'
 
 // Read-only author profile at /profile/:id. Sibling to /profile (the
 // self-edit view in Profile.jsx); routed separately so this component
@@ -34,6 +36,25 @@ export default function AuthorProfile({
     const [profile, setProfile] = useState(null)
     const [recipes, setRecipes] = useState([])
     const [fetchState, setFetchState] = useState('loading') // 'loading' | 'idle' | 'notfound'
+
+    // Measure the left page's intrinsic content (avatar + identity +
+    // bio + follow controls) so the recipes carousel on the right page
+    // can cap to match — keeps the book spread visually rectangular
+    // even when the author has many public recipes (Stage 14 item 2
+    // follow-up). ResizeObserver re-fires on bio/identity reflow.
+    const leftContentRef = useRef(null)
+    const [leftContentHeight, setLeftContentHeight] = useState(null)
+
+    useEffect(() => {
+        const el = leftContentRef.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const observer = new ResizeObserver(entries => {
+            const next = entries[0]?.contentRect.height
+            if (next) setLeftContentHeight(next)
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [profile])
 
     useEffect(() => {
         let cancelled = false
@@ -109,39 +130,42 @@ export default function AuthorProfile({
         : null
 
     return (
-        <div className="paper-grain min-h-screen">
-            <div className="max-w-5xl mx-auto px-5 py-8">
-                <div className="flex justify-between items-center mb-6">
+        <ProfileBookSpread
+            header={
+                <header className="flex items-center gap-4 flex-wrap">
                     <button
                         onClick={() => navigate('/')}
                         className="px-4 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
                     >
                         ← Back to List
                     </button>
-                </div>
-
-                <header className="text-center mb-10 pb-8 border-b border-paper-shade">
+                </header>
+            }
+            leftPage={
+                <div ref={leftContentRef} className="text-center flex flex-col items-center gap-3">
                     {profile.avatar_url ? (
                         <img
                             src={profile.avatar_url}
                             alt=""
                             loading="lazy"
-                            className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-2 border-paper-shade"
+                            className="w-24 h-24 rounded-full object-cover border-2 border-paper-shade"
                         />
                     ) : (
                         <div
                             aria-hidden="true"
-                            className="w-24 h-24 rounded-full mx-auto mb-4 bg-tan-soft text-ink font-display text-3xl font-semibold flex items-center justify-center"
+                            className="w-24 h-24 rounded-full bg-tan-soft text-ink font-display text-3xl font-semibold flex items-center justify-center"
                         >
                             {displayName.charAt(0).toUpperCase()}
                         </div>
                     )}
-                    <h1 className="font-display text-3xl font-semibold text-ink m-0">{displayName}</h1>
-                    {subtitle && (
-                        <p className="font-display italic text-ink/60 mt-1">{subtitle}</p>
-                    )}
+                    <div>
+                        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink m-0">{displayName}</h1>
+                        {subtitle && (
+                            <p className="font-display italic text-ink/60 mt-1">{subtitle}</p>
+                        )}
+                    </div>
                     {profile.bio && (
-                        <p className="font-serif text-ink/80 mt-4 max-w-xl mx-auto leading-relaxed">{profile.bio}</p>
+                        <p className="font-serif text-ink/80 mt-2 leading-relaxed">{profile.bio}</p>
                     )}
 
                     {/* Follow control. Hidden when viewing your own profile
@@ -152,7 +176,7 @@ export default function AuthorProfile({
                         Notify toggle only renders when following — opt-in
                         for new-recipe pings (Stage 11 in-app notifications). */}
                     {onToggleFollow && session?.user.id !== profile.id && (
-                        <div className="mt-6 flex flex-col items-center gap-2">
+                        <div className="mt-4 flex flex-col items-center gap-2 w-full">
                             {isFollowing?.(profile.id) ? (
                                 <>
                                     {/* Following status + explicit Unfollow. Two distinct
@@ -162,7 +186,7 @@ export default function AuthorProfile({
                                         destructive). Splitting them avoids the discoverability
                                         gap where a single "Following" button silently
                                         toggled off on click. */}
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
                                         <span
                                             aria-label={`Currently following ${displayName}`}
                                             className="inline-flex items-center gap-1.5 px-4 py-2 bg-paper-shade text-ink font-semibold rounded-full border border-paper-shade min-h-[44px]"
@@ -181,14 +205,14 @@ export default function AuthorProfile({
                                             Unfollow
                                         </button>
                                     </div>
-                                    <label className="inline-flex items-center gap-2 mt-1 text-sm text-ink/70 font-serif cursor-pointer select-none">
+                                    <label className="inline-flex items-start gap-2 mt-1 text-sm text-ink/70 font-serif cursor-pointer select-none text-left">
                                         <input
                                             type="checkbox"
                                             checked={getNotifyPref?.(profile.id) ?? false}
                                             onChange={(e) => onSetNotifyPref?.(profile.id, e.target.checked)}
-                                            className="accent-rust w-4 h-4 cursor-pointer"
+                                            className="accent-rust w-4 h-4 cursor-pointer mt-0.5"
                                         />
-                                        Notify me when {displayName} posts a new recipe
+                                        <span>Notify me when {displayName} posts a new recipe</span>
                                     </label>
                                 </>
                             ) : (
@@ -202,9 +226,10 @@ export default function AuthorProfile({
                             )}
                         </div>
                     )}
-                </header>
-
-                <section>
+                </div>
+            }
+            rightPage={
+                <section className="min-w-0">
                     <h2 className="font-display text-xl font-semibold text-ink mb-4">
                         Recipes ({recipes.length})
                     </h2>
@@ -215,8 +240,10 @@ export default function AuthorProfile({
                             <p className="font-display italic text-rose">{displayName} hasn't shared anything you can see.</p>
                         </div>
                     ) : (
-                        <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4">
-                            {recipes.map(recipe => (
+                        <RecipesCarousel
+                            recipes={recipes}
+                            maxHeight={leftContentHeight}
+                            renderRecipe={(recipe) => (
                                 <RecipeCard
                                     key={recipe.id}
                                     recipe={recipe}
@@ -227,11 +254,11 @@ export default function AuthorProfile({
                                     likeCount={likeCount ? likeCount(recipe.id) : 0}
                                     onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                                 />
-                            ))}
-                        </div>
+                            )}
+                        />
                     )}
                 </section>
-            </div>
-        </div>
+            }
+        />
     )
 }

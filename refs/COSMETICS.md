@@ -419,6 +419,125 @@ The sign-out-redirect-to-home logic gates on `event === 'SIGNED_OUT'` rather tha
 
 ---
 
+# Profile — book-spread layout (Stage 14)
+
+Both profile surfaces — `/profile` (own, editable) and `/profile/:id` (another author, read-only) — render as an **open book**: a two-page spread with the inside-cover utilities on the left and the book's contents on the right.
+
+## The metaphor
+
+| Page | What lives on it | Why |
+|---|---|---|
+| **Left page** *(inside cover)* | User info & utilities — avatar, identity, edit forms (own) or read-only identity + follow controls (author) | Cookbooks traditionally carry inscriptions, library plates, owner marks, and notes on their inside cover. Treat that as the user's "self" surface. |
+| **Right page** *(contents)* | Recipes — My Recipes (own) or the author's public recipes | A cookbook opened to its first page shows its recipes. Treat that as the content surface. |
+
+The spread is implemented as a shared shell [`<ProfileBookSpread>`](../src/components/ProfileBookSpread.jsx) consumed by both [`Profile.jsx`](../src/components/Profile.jsx) and [`AuthorProfile.jsx`](../src/components/AuthorProfile.jsx). The shell is layout-only — what goes inside each page is the caller's concern, so the editable vs read-only divergence stays in the consumer components where it belongs.
+
+## Visual treatment
+
+- **Spread container:** `paper-grain min-h-screen` extends the page texture to the viewport edges so the spread reads as resting on the cookbook's open surface, not on a generic web page.
+- **Pages:** card-paper tone `#fbf6f1` (same tone used by recipe-detail and form cards) with a 1px `paper-shade` border and a soft drop shadow. At `lg+` each page also carries an **inset shadow on its inner (fold-side) edge** — the page subtly darkens toward the binding, suggesting paper curling into the fold.
+- **Equal page heights:** the grid uses the default `align-items: stretch`, so both pages take the height of the taller column. When the recipes side grows, the inside-cover paper extends with it — matches a real open book where both pages are the same physical sheet. Content stays anchored to the top of each page; empty paper fills the rest, which is the correct cookbook-inside-cover behavior (the cover doesn't expand to center its contents).
+- **Spine:** a 28px-wide vertical band between the two pages at `lg+`. A three-stop tan↔ink↔tan gradient (darker in the center) with two thin dark hairlines along each edge stands in for the binding shadow + the page-edge rule. **Felt, not seen** — strong enough to read as a spine, quiet enough not to overpower the content.
+- **Mobile (< lg):** the spread stacks vertically — left page on top, right page below — with `margin-top` on the right page so they read as distinct surfaces. The spine collapses (set to `display: none`); a horizontal separator would have been the obvious mobile counterpart, but the existing page-edge borders already separate the two stacked pages cleanly without one.
+
+The narrow page (left, `minmax(320px, 420px)` at `lg+`) deliberately caps below the wide page so the proportions echo a real book — the inside cover is a fixed-width surface; the contents page is where the volume of material lives.
+
+## What goes on the left page
+
+**`/profile` (own, editable):**
+- `Edit Profile` form — email (disabled), username, bio, Update button
+- `Change Password` form — new password input, Update button
+- No card wrapper around the forms (the page itself is the card surface)
+
+**`/profile/:id` (read-only):**
+- Avatar (image or `tan-soft` initial chip — matches Comments / Following row pattern)
+- Display name (font-display) + optional `full_name` subtitle (italic, muted)
+- Bio (font-serif, ink/80)
+- Follow / Following / Unfollow controls + notify-me checkbox
+
+The follow control cluster lives on the left page because following is a relationship to the *author* (an identity/inside-cover concern), not to their recipes.
+
+## What goes on the right page
+
+**`/profile` (own):**
+- `My Recipes` grid — Pinterest-style masonry, `columns-1 sm:columns-2 lg:columns-2 xl:columns-3` (one column lower than the home grid since the right page is narrower than the full-bleed home wrapper)
+- `Following` list — the existing rows-of-followed-authors list
+
+The Following list is on the right page for this stage; Stage 14 item 5 will lift it into its own phonebook routing.
+
+**`/profile/:id` (read-only):**
+- `Recipes` grid — public recipes only (RLS already gates visibility), same masonry treatment
+
+## What this stage does *not* do
+
+- **Sidebar tabs `[Account, Appearance, Security, Notifications]`** — Stage 14 item 4 layers these onto the left page. Until then, the left page renders the two existing forms (own) or the existing identity + follow controls (read-only) as a single flow.
+- **Backdrop themes** — Stage 14 item 3 adds a backdrop selector, surfaced inside the Appearance tab (which item 4 will add). Default `paper-grain` backdrop ships now.
+- **Recipe → book entity** — Stage 14 item 1 reframes RecipeCard. The current cards continue to render inside the right page until then.
+- **Phonebook for following + parallel routing** — Stage 14 item 5 relocates the Following list off the right page.
+
+## Open question pinned forward
+
+The right page renders recipes as cards; clicking one navigates full-page to `/recipe/:id` (Stage 8 routing unchanged). An alternative — inline "page turn" within the spread — was considered and explicitly deferred: it would require nested routing and would entangle with the print/share/PDF flow, which all assume RecipeDetail is the full page. If/when the recipe-as-book treatment (item 1) lands, revisit whether opening a book from inside another book ought to mean a page-turn rather than a route transition.
+
+## Right-page recipes carousel
+
+The recipes section on the right page caps its height to match the left page's intrinsic content height — so the spread stays visually rectangular rather than letting the recipes column run unbounded down the page. When recipes would overflow that cap, they paginate into "book pages" the user navigates through.
+
+Implemented as [`<RecipesCarousel>`](../src/components/RecipesCarousel.jsx); consumed by both [`Profile.jsx`](../src/components/Profile.jsx) (My Recipes) and [`AuthorProfile.jsx`](../src/components/AuthorProfile.jsx) (author's public recipes).
+
+### Height coupling
+
+The parent component (Profile or AuthorProfile) puts a `ref` on the left page content wrapper and a `ResizeObserver` reads its `contentRect.height` whenever it changes (form input focus reflow, bio textarea growth, viewport width changes). That measured height passes to `<RecipesCarousel maxHeight>` and becomes the viewport's fixed height.
+
+Note the measurement is on the **content wrapper**, not the page surface — the grid uses `align-items: stretch` so the page surface itself stretches to row height, which would create a feedback loop. The inner content wrapper's height is stable and gives a clean "intrinsic" reading.
+
+ResizeObserver is feature-detected (`typeof ResizeObserver === 'undefined'` short-circuits the effect). On the rare browser without it, `maxHeight` stays `null` and the carousel falls back to a `minHeight: 420px` viewport — degraded but not broken.
+
+### Cards-per-page
+
+Computed from `maxHeight`: roughly `Math.max(2, Math.floor((maxHeight - 80) / 240) * 2)` — assumes 2 columns and ~240px per row. Minimum 2 cards/page so pagination always makes progress. Defaults to 6 when `maxHeight` is unknown.
+
+This is a heuristic, not exact — variable card heights (image aspect ratios, description length, tag chips) mean some pages may underflow or have a partial last row. Acceptable v1 tradeoff; documented here so the next person doesn't have to rediscover.
+
+### Page navigation
+
+| Input | Effect |
+|---|---|
+| Wheel down inside the viewport | Next page |
+| Wheel up inside the viewport | Previous page |
+| Horizontal touch swipe (≥60px, horizontal > vertical) | Page nav in swipe direction |
+| `→` / `←` arrows when viewport focused | Next / previous page |
+| `Home` / `End` when viewport focused | First / last page |
+| Indicator pill numbered buttons | Jump to specific page |
+| Indicator `«` / `»` buttons | First / last page |
+
+**Wheel cooldown:** 450ms after a page change, additional wheel events are ignored. Without this, a single trackpad gesture would flip through several pages instantaneously.
+
+**Boundary release:** at page 0 (scrolling up) or last page (scrolling down), the wheel event is NOT prevented — document scroll resumes naturally so the user can scroll past the spread to the Following section / page footer without being trapped.
+
+**Touch direction:** only horizontal swipes navigate (vertical drag stays available for document scroll on phones). The `Math.abs(dx) > Math.abs(dy)` guard means an ambiguous diagonal swipe falls to vertical scroll, not page nav.
+
+### Indicator pill
+
+Sits absolutely positioned at the middle-bottom of the carousel viewport (`bottom: 8px`, centered with `left: 50%; translateX(-50%)`). Reading the bar left-to-right:
+
+1. `«` — jump to first page (disabled when already there)
+2. Numbered page buttons in a windowed list — for ≤7 pages all numbers show; for more, first + (current ± 1) + last with `…` ellipses in between
+3. `»` — jump to last page (disabled when already there)
+4. Italic readout `Page N of M` — also `aria-live="polite"` so screen readers announce page changes
+
+The pill is paper-shade with a soft shadow so it floats over the recipes without interrupting the page texture.
+
+### Single-page fallback
+
+If `recipes.length <= cardsPerPage`, the carousel renders no chrome — just the recipes as a plain `columns-1 sm:columns-2` masonry. The carousel only earns its complexity when there's actually pagination work to do, and the heading + indicator on a one-page collection would just be noise.
+
+### Following section coexistence
+
+On `/profile` the right page also has the Following list below the recipes carousel. The Following section sits OUTSIDE the carousel's height cap — it can grow as needed. The right page total height = (recipes carousel = leftContentHeight) + (Following section), which usually makes the right page taller than the left's intrinsic content. The grid's `align-items: stretch` then extends the left page surface down to match, so both pages stay full-paper rectangles. The visual contract is "recipes column ≈ info column at the top of the spread"; the Following list extending below is acceptable since it's a list of identities (closer to "info" than "contents") that Stage 14 item 5 will eventually lift into its own phonebook routing anyway.
+
+---
+
 # Navigation IA — proposed *(not implemented)*
 
 A directional sketch of where the app's navigation could evolve. Currently top-level navigation is a flat row of buttons in the header (Bookmarks · Profile · Logout for signed-in users); the proposal here reframes those around two top-level spaces — **Public Hub** and **Personal Hub** — to give the app a clearer mental model.

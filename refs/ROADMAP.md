@@ -250,6 +250,38 @@ includes newest/oldest, most/least likes, most/least bookmarks(?), most/least ti
 - **Time-sort sub-stage** — add a `cook_time` column to `recipes` (integer minutes), surface it in CreateRecipe, then add it as a third sort metric in the picker.
 - **Toast retheme** — react-hot-toast `<Toaster>` still uses library defaults (white background, green/red icons). A small pass to pass `toastOptions.style` overrides would bring it into the rustic palette (`bg-paper-shade`, `text-ink`, rust success, rose-dark error). No migration needed.
 
+** Stage 14 - UI/Frontend Presentation **
+- **COSMETICS.md** - Reference document used to outline general idea for application workings/presentation. Looking to still follow a heavily-inspired 'book' theme in order to make recipes feel more accessible and intuitive for general audiences.
+- [] Transition of recipes from singaulr card entities to book entities
+- [] User Profile info with recipes dichotomy; left-hand side has the user related information utilities, right side has recipe-related information. Similar to inside of a book cover on the lefthand side, recipes on the right-hand side (contents of the book)
+- [] Backdrop can represent either visual environment for cookbooks/recipes. Example environments include: Old wood-based library, modern kitchen file cabinet, plain kitchen decour, restaurant aesthetic (notepad, laminated ring paper binder), plain digital space. Have a toggle/option selector in a signed-in user profile page. Move this to a sidebar containing profile utilities under Appearance.
+- [] Revamp user profile setup.
+
+  **Left page** mimics the right page's swappable-content pattern — a tab / table-of-contents selector controls which "mode" the left page renders. Tab list visual mirrors the right page's carousel indicator pill so the two sides read as a paired control system. Left page is **fixed-height** at `min(75vh, 700px)` so the spread stays stable across tab swaps; tab content that exceeds this cap scrolls within its tab area (familiar inner-scroll pattern). Seven tabs:
+  - **Bio Information** — username, full name, bio textarea, avatar (the current Edit Profile form, restyled into the tab content area)
+  - **Following (Other authors) Information** — moved here from the right page. The followed-authors list with unfollow + notify-on-new-recipe controls. **Per-row notify toggle stays** — no separate Notifications tab; Stage 11's distributed pattern is sufficient (the header NotificationsBell remains the central history view).
+  - **Contact Information** — email at minimum; TBD whether to add phone / website / social links (schema additions)
+  - **Security / Account Information** — password change; TBD whether to absorb email change and account deletion
+  - **Appearance Information** — backdrop selector (item 3's home). Persistence decision (per-user column on `profiles` vs localStorage) still TBD with item 3.
+  - **Metrics Information** *(placeholder — no content/routing yet)*
+  - **Usage Information** *(placeholder — no content/routing yet)*
+
+  **Right page** still carries recipes via the Stage 14 item 2 carousel. With the left page fixed-height, the carousel cap stays stable across tab swaps. **TBD:** original item 4 also called for surfacing followed authors' recipes on the right page alongside the user's own — split mechanic and visual treatment (interleaved, toggle, two stacked sections, etc.) unresolved and deferred to implementation time.
+
+  **AuthorProfile (`/profile/:id`) is *not* retrofitted with the tab format** — keeps its current single-page treatment (avatar + name + bio + follow controls on left; recipes carousel on right). The two profile surfaces diverge in role: `/profile` is a control panel; `/profile/:id` is a read-only card. Tabs like Following / Security / Appearance / Metrics / Usage are irrelevant or destructive when read-only; adding them for cosmetic uniformity would be more chrome than substance.
+- [] Revamp following authors as a phonebook/contact book aesthetic that is viewable from user profile page. As this is its own book, should be treated as an independent routing, allowing the user to switch between their own book representing their profile, or the central hub to view all current, latest recipes.
+
+
+** Stage 15 - Additional Context **
+Goal: Allow users to voluntarily add additional information in other media formats. Assistance for those struggling to read, view or understand.
+
+- [] Potentially allow short video snippets/photos to be attached to each ingredient and step, that will be nonvisible to users at first but can be expanded for more context. This can result from users not having perfect cooking knowledge; some ethnicity-specific ingredients could result in misinterpretation, understanding, and can only improve confidence.
+- [] Allow comments to attach their own (singular) picture to potentially show off their results making it. Can help reinforce consistency and feasability of the recipe. May consider implementation or not depending on overhead in the long term, as even one picture versus no pictures for each comment can result in significant storage implications.
+- [] Comment likes? Can particularly show favorite/trending approaches or remarks regarding a recipe, driving further engagement. Can consider whether or not if it will be onlny beneficial, or cause hesitance for feedback from particularly anxious users.
+
+
+
+
 ## Stage N - Allergen/Condition filter
 
 Goal: Add an additional 'filter' mechanic based on user allergies or dietary restrictions. Helps user be assured and looking through recipes without concern of having bodily distress.

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
+import ProfileBookSpread from './ProfileBookSpread'
+import RecipesCarousel from './RecipesCarousel'
 
 export default function Profile({
     session,
@@ -33,11 +35,31 @@ export default function Profile({
     const [followedAuthors, setFollowedAuthors] = useState([])
     const [followingLoading, setFollowingLoading] = useState(true)
 
+    // Measure the left page's intrinsic content height so the recipes
+    // carousel on the right page can cap itself to match — keeps the
+    // book spread visually rectangular (Stage 14 item 2 follow-up).
+    // ResizeObserver fires whenever the left content reflows (form input
+    // resizing on focus, bio textarea content growing, viewport width
+    // changes), so the carousel cap stays in sync.
+    const leftContentRef = useRef(null)
+    const [leftContentHeight, setLeftContentHeight] = useState(null)
+
     useEffect(() => {
         getProfile()
         getUserRecipes()
         getFollowedAuthors()
     }, [session])
+
+    useEffect(() => {
+        const el = leftContentRef.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const observer = new ResizeObserver(entries => {
+            const next = entries[0]?.contentRect.height
+            if (next) setLeftContentHeight(next)
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [])
 
     async function getProfile() {
         try {
@@ -149,16 +171,22 @@ export default function Profile({
     }
 
     return (
-        <div className="profile-container">
-            <header className="profile-header">
-                <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">← Back to List</button>
-                <h1>User Profile</h1>
-            </header>
-
-            <div className="profile-grid">
-                <section className="profile-info-section">
-                    <div className="form-card">
-                        <h3>Edit Profile</h3>
+        <ProfileBookSpread
+            header={
+                <header className="flex items-center gap-4 flex-wrap">
+                    <button
+                        onClick={onBack}
+                        className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                    >
+                        ← Back to List
+                    </button>
+                    <h1 className="font-display text-2xl sm:text-3xl text-ink m-0">User Profile</h1>
+                </header>
+            }
+            leftPage={
+                <div ref={leftContentRef} className="flex flex-col gap-8">
+                    <div>
+                        <h3 className="font-display text-xl text-ink mb-4">Edit Profile</h3>
                         <form onSubmit={updateProfile}>
                             <div className="form-group">
                                 <label>Email</label>
@@ -181,14 +209,17 @@ export default function Profile({
                                     placeholder="Tell us about your cooking..."
                                 />
                             </div>
-                            <button className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
+                            <button
+                                className="w-full px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={loading}
+                            >
                                 {loading ? 'Loading ...' : 'Update Profile'}
                             </button>
                         </form>
                     </div>
 
-                    <div className="form-card" style={{ marginTop: '2rem' }}>
-                        <h3>Change Password</h3>
+                    <div>
+                        <h3 className="font-display text-xl text-ink mb-4">Change Password</h3>
                         <form onSubmit={updatePassword}>
                             <div className="form-group">
                                 <label>New Password</label>
@@ -200,25 +231,31 @@ export default function Profile({
                                     minLength={6}
                                 />
                             </div>
-                            <button className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={passwordLoading || !newPassword}>
+                            <button
+                                className="w-full px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={passwordLoading || !newPassword}
+                            >
                                 {passwordLoading ? 'Updating...' : 'Update Password'}
                             </button>
                         </form>
                     </div>
-                </section>
-
+                </div>
+            }
+            rightPage={
                 <div className="flex flex-col gap-10 min-w-0">
-                    <section className="user-recipes-section">
-                        <h3>My Recipes ({userRecipes.length})</h3>
+                    <section>
+                        <h3 className="font-display text-xl text-ink mb-4">My Recipes ({userRecipes.length})</h3>
                         {userRecipes.length === 0 ? (
-                            <div className="text-center py-12 mt-4">
+                            <div className="text-center py-12">
                                 <p className="text-2xl text-tan mb-3">✦</p>
                                 <p className="font-display text-lg text-ink mb-1">You haven't shared any recipes yet.</p>
                                 <p className="font-display italic text-rose">Use "+ New Recipe" on the home page to add your first.</p>
                             </div>
                         ) : (
-                            <div className="columns-1 sm:columns-2 md:columns-3 gap-4 mt-4">
-                                {userRecipes.map(recipe => (
+                            <RecipesCarousel
+                                recipes={userRecipes}
+                                maxHeight={leftContentHeight}
+                                renderRecipe={(recipe) => (
                                     <RecipeCard
                                         key={recipe.id}
                                         recipe={recipe}
@@ -229,8 +266,8 @@ export default function Profile({
                                         likeCount={likeCount ? likeCount(recipe.id) : 0}
                                         onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                                     />
-                                ))}
-                            </div>
+                                )}
+                            />
                         )}
                     </section>
 
@@ -243,8 +280,8 @@ export default function Profile({
                         onSetNotifyPref={onSetNotifyPref}
                     />
                 </div>
-            </div>
-        </div>
+            }
+        />
     )
 }
 
@@ -259,17 +296,17 @@ function FollowingSection({ followedAuthors, loading, isFollowing, getNotifyPref
 
     return (
         <section>
-            <h3>Following ({visible.length})</h3>
+            <h3 className="font-display text-xl text-ink mb-4">Following ({visible.length})</h3>
             {loading ? (
-                <p className="font-display italic text-rose mt-4" role="status">Loading…</p>
+                <p className="font-display italic text-rose" role="status">Loading…</p>
             ) : visible.length === 0 ? (
-                <div className="text-center py-12 mt-4">
+                <div className="text-center py-12">
                     <p className="text-2xl text-tan mb-3">✦</p>
                     <p className="font-display text-lg text-ink mb-1">You aren't following anyone yet.</p>
                     <p className="font-display italic text-rose">Open any recipe and tap the author's name to visit their profile.</p>
                 </div>
             ) : (
-                <ul className="flex flex-col gap-3 mt-4 list-none p-0">
+                <ul className="flex flex-col gap-3 list-none p-0">
                     {visible.map(author => {
                         const displayName = author.username?.trim() || author.full_name?.trim() || 'Anonymous chef'
                         const notify = getNotifyPref?.(author.id) ?? false
