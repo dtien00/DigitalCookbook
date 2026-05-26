@@ -27,12 +27,17 @@ export default function RecipesCarousel({ recipes, maxHeight, renderRecipe }) {
     const [currentPage, setCurrentPage] = useState(0)
 
     const cardsPerPage = useMemo(() => {
-        if (!maxHeight) return 6
-        // Subtract bottom space for the indicator pill + estimate ~240px
-        // per row of 2 cards. Minimum 2 cards/page so pagination always
-        // makes progress.
-        const rows = Math.max(1, Math.floor((maxHeight - 80) / 240))
-        return Math.max(2, rows * 2)
+        // The carousel page is now a 2-column grid with equal-height rows
+        // (`.recipes-carousel-page-grid`) and a CSS rule that forces card
+        // images to object-fit: cover inside their cell — so cards are
+        // always fully visible regardless of their natural aspect ratio.
+        //
+        // Default to 4 cards/page (2×2) which gives each cell ~300px at
+        // the standard maxHeight cap. Drop to 2 cards/page when the
+        // viewport is short, so cells don't get squeezed below the
+        // image+title-strip minimum needed to recognise a recipe.
+        if (!maxHeight) return 4
+        return maxHeight < 520 ? 2 : 4
     }, [maxHeight])
 
     const pages = useMemo(() => {
@@ -173,7 +178,7 @@ export default function RecipesCarousel({ recipes, maxHeight, renderRecipe }) {
                             className="recipes-carousel-page"
                             aria-hidden={pageIdx !== currentPage}
                         >
-                            <div className="columns-1 sm:columns-2 gap-4">
+                            <div className="recipes-carousel-page-grid">
                                 {pageRecipes.map(renderRecipe)}
                             </div>
                         </div>

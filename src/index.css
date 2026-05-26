@@ -1142,6 +1142,54 @@ textarea {
   box-sizing: border-box;
 }
 
+/* Inside the paginated carousel, cards live in a fixed 2×2 grid with
+   equal-height rows so every card fits fully in its cell — no more
+   bottom-edge clipping from naturally tall images. Scoped overrides
+   below cap the card's image with object-fit: cover so portrait
+   images crop instead of pushing the card past its cell. The
+   home-grid masonry (which uses the same RecipeCard) is untouched
+   because these rules only fire inside `.recipes-carousel-page-grid`. */
+.recipes-carousel-page-grid {
+  display: grid;
+  gap: 16px;
+  height: 100%;
+  grid-template-columns: 1fr;
+  grid-auto-rows: 1fr;
+}
+
+@media (min-width: 640px) {
+  .recipes-carousel-page-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.recipes-carousel-page-grid > * {
+  margin-bottom: 0; /* RecipeCard's mb-4 is meaningless inside a grid */
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Image-card path: the `<div class="relative overflow-hidden">` wrapper
+   grows to fill remaining vertical space; its `<img>` switches to
+   object-fit: cover so any aspect ratio fits the cell without overflow. */
+.recipes-carousel-page-grid > * > .relative {
+  flex: 1;
+  min-height: 0;
+}
+
+.recipes-carousel-page-grid > * > .relative > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Image-less card path: the `.p-5` body is the only flex child, so it
+   naturally fills the cell. No extra rule needed — the flex column on
+   the outer card handles it. */
+
 .recipes-carousel-indicator {
   position: absolute;
   left: 50%;
@@ -1213,6 +1261,185 @@ textarea {
   opacity: 0.7;
   font-style: italic;
   font-size: 12px;
+}
+
+/* === Profile left-page tab system (Stage 14 item 4) =======================
+   Fixed-height container so the book spread stays visually stable when
+   the user swaps tabs; tab panels scroll internally when their content
+   exceeds the cap.
+
+   Layout: bookmark-ribbon rail down the inner-left edge of the left
+   page, panel to the right. Each ribbon is a colored flag with a forked
+   tail (V-notch on the right edge via clip-path) and a small white icon
+   beside its label. Per-tab color via the `--ribbon-color` custom prop
+   set inline on each button (palette: rust / olive / slate / sage /
+   plum / brown, all desaturated so they read with the rustic-paper
+   surface). Active ribbon shifts right slightly and gains a small
+   accent strip suggesting "pulled out from the binding."
+
+   The "detached" Following tab at the bottom uses a different visual
+   primitive — a circular icon button beside the label — to telegraph
+   that the tab leads to a different book entirely (the eventual
+   phonebook route from Stage 14 item 5). A dashed rust hairline above
+   it reinforces the separation. */
+.profile-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  height: min(75vh, 700px);
+}
+
+.profile-tabs-nav {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 156px;
+  padding-right: 4px;
+  gap: 12px;
+  /* `overflow: visible` (the default) is critical: the active ribbon
+     shifts right via `transform: translateX(10px)` to read as "pulled
+     out from the binding," and any `overflow: auto/hidden/scroll` here
+     would either clip the shift or trigger a stray horizontal
+     scrollbar. The 7 tabs always fit vertically inside the parent's
+     fixed height; if the list ever outgrows that, swap to scroll then. */
+  /* Extend leftward past the page padding so the ribbons read as
+     bookmarks hanging from the spine. Matches the .book-page padding
+     (24px mobile, 32px lg) so the ribbons start flush with the page's
+     outer edge. */
+  margin-left: -24px;
+}
+
+@media (min-width: 1024px) {
+  .profile-tabs-nav {
+    margin-left: -32px;
+  }
+}
+
+.profile-tabs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-tab-btn {
+  --ribbon-color: var(--color-rust);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 22px 7px 14px;
+  border: none;
+  background: var(--ribbon-color);
+  color: #fbf6f1; /* paper white on ribbon */
+  font-family: 'Cormorant Garamond', 'Lora', serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.2;
+  /* Forked-tail V-notch on the right edge */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%);
+  /* Inner darker hairline at the bottom suggests stitched fabric */
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  transition: transform 180ms ease-out, filter 180ms;
+}
+
+.profile-tab-btn:hover:not(:disabled):not(.is-current) {
+  transform: translateX(4px);
+  filter: brightness(1.05);
+}
+
+.profile-tab-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.profile-tab-btn.is-current {
+  transform: translateX(10px);
+  filter: brightness(1.08);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+              0 2px 6px rgba(30, 30, 36, 0.18);
+}
+
+.profile-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.profile-tab-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-tab-detached-group {
+  margin-top: auto; /* anchor to the bottom of the nav rail */
+  padding-top: 14px;
+  padding-left: 12px; /* re-introduce a little inset since detached isn't a ribbon */
+  border-top: 1px dashed var(--color-rust);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-tab-detached {
+  --ribbon-color: var(--color-rust);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 8px 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--ribbon-color);
+  font-family: 'Cormorant Garamond', 'Lora', serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 180ms ease-out;
+}
+
+.profile-tab-detached-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--ribbon-color);
+  color: #fbf6f1; /* paper-white icon */
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(30, 30, 36, 0.15);
+  transition: transform 180ms ease-out, box-shadow 180ms;
+}
+
+.profile-tab-detached:hover:not(.is-current) .profile-tab-detached-icon {
+  transform: scale(1.06);
+}
+
+.profile-tab-detached.is-current .profile-tab-detached-icon {
+  transform: scale(1.08);
+  box-shadow: 0 3px 10px rgba(30, 30, 36, 0.25);
+  outline: 2px solid var(--ribbon-color);
+  outline-offset: 3px;
+}
+
+.profile-tab-detached.is-current .profile-tab-detached-label {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.profile-tabs-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 /* Recipe-detail mobile typography. Target: phone propped against a kettle.
