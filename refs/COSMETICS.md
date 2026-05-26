@@ -479,6 +479,63 @@ The Following list is on the right page for this stage; Stage 14 item 5 will lif
 
 The right page renders recipes as cards; clicking one navigates full-page to `/recipe/:id` (Stage 8 routing unchanged). An alternative — inline "page turn" within the spread — was considered and explicitly deferred: it would require nested routing and would entangle with the print/share/PDF flow, which all assume RecipeDetail is the full page. If/when the recipe-as-book treatment (item 1) lands, revisit whether opening a book from inside another book ought to mean a page-turn rather than a route transition.
 
+## Right-page recipes carousel
+
+The recipes section on the right page caps its height to match the left page's intrinsic content height — so the spread stays visually rectangular rather than letting the recipes column run unbounded down the page. When recipes would overflow that cap, they paginate into "book pages" the user navigates through.
+
+Implemented as [`<RecipesCarousel>`](../src/components/RecipesCarousel.jsx); consumed by both [`Profile.jsx`](../src/components/Profile.jsx) (My Recipes) and [`AuthorProfile.jsx`](../src/components/AuthorProfile.jsx) (author's public recipes).
+
+### Height coupling
+
+The parent component (Profile or AuthorProfile) puts a `ref` on the left page content wrapper and a `ResizeObserver` reads its `contentRect.height` whenever it changes (form input focus reflow, bio textarea growth, viewport width changes). That measured height passes to `<RecipesCarousel maxHeight>` and becomes the viewport's fixed height.
+
+Note the measurement is on the **content wrapper**, not the page surface — the grid uses `align-items: stretch` so the page surface itself stretches to row height, which would create a feedback loop. The inner content wrapper's height is stable and gives a clean "intrinsic" reading.
+
+ResizeObserver is feature-detected (`typeof ResizeObserver === 'undefined'` short-circuits the effect). On the rare browser without it, `maxHeight` stays `null` and the carousel falls back to a `minHeight: 420px` viewport — degraded but not broken.
+
+### Cards-per-page
+
+Computed from `maxHeight`: roughly `Math.max(2, Math.floor((maxHeight - 80) / 240) * 2)` — assumes 2 columns and ~240px per row. Minimum 2 cards/page so pagination always makes progress. Defaults to 6 when `maxHeight` is unknown.
+
+This is a heuristic, not exact — variable card heights (image aspect ratios, description length, tag chips) mean some pages may underflow or have a partial last row. Acceptable v1 tradeoff; documented here so the next person doesn't have to rediscover.
+
+### Page navigation
+
+| Input | Effect |
+|---|---|
+| Wheel down inside the viewport | Next page |
+| Wheel up inside the viewport | Previous page |
+| Horizontal touch swipe (≥60px, horizontal > vertical) | Page nav in swipe direction |
+| `→` / `←` arrows when viewport focused | Next / previous page |
+| `Home` / `End` when viewport focused | First / last page |
+| Indicator pill numbered buttons | Jump to specific page |
+| Indicator `«` / `»` buttons | First / last page |
+
+**Wheel cooldown:** 450ms after a page change, additional wheel events are ignored. Without this, a single trackpad gesture would flip through several pages instantaneously.
+
+**Boundary release:** at page 0 (scrolling up) or last page (scrolling down), the wheel event is NOT prevented — document scroll resumes naturally so the user can scroll past the spread to the Following section / page footer without being trapped.
+
+**Touch direction:** only horizontal swipes navigate (vertical drag stays available for document scroll on phones). The `Math.abs(dx) > Math.abs(dy)` guard means an ambiguous diagonal swipe falls to vertical scroll, not page nav.
+
+### Indicator pill
+
+Sits absolutely positioned at the middle-bottom of the carousel viewport (`bottom: 8px`, centered with `left: 50%; translateX(-50%)`). Reading the bar left-to-right:
+
+1. `«` — jump to first page (disabled when already there)
+2. Numbered page buttons in a windowed list — for ≤7 pages all numbers show; for more, first + (current ± 1) + last with `…` ellipses in between
+3. `»` — jump to last page (disabled when already there)
+4. Italic readout `Page N of M` — also `aria-live="polite"` so screen readers announce page changes
+
+The pill is paper-shade with a soft shadow so it floats over the recipes without interrupting the page texture.
+
+### Single-page fallback
+
+If `recipes.length <= cardsPerPage`, the carousel renders no chrome — just the recipes as a plain `columns-1 sm:columns-2` masonry. The carousel only earns its complexity when there's actually pagination work to do, and the heading + indicator on a one-page collection would just be noise.
+
+### Following section coexistence
+
+On `/profile` the right page also has the Following list below the recipes carousel. The Following section sits OUTSIDE the carousel's height cap — it can grow as needed. The right page total height = (recipes carousel = leftContentHeight) + (Following section), which usually makes the right page taller than the left's intrinsic content. The grid's `align-items: stretch` then extends the left page surface down to match, so both pages stay full-paper rectangles. The visual contract is "recipes column ≈ info column at the top of the spread"; the Following list extending below is acceptable since it's a list of identities (closer to "info" than "contents") that Stage 14 item 5 will eventually lift into its own phonebook routing anyway.
+
 ---
 
 # Navigation IA — proposed *(not implemented)*

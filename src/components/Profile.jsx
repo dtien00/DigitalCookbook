@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
 import ProfileBookSpread from './ProfileBookSpread'
+import RecipesCarousel from './RecipesCarousel'
 
 export default function Profile({
     session,
@@ -34,11 +35,31 @@ export default function Profile({
     const [followedAuthors, setFollowedAuthors] = useState([])
     const [followingLoading, setFollowingLoading] = useState(true)
 
+    // Measure the left page's intrinsic content height so the recipes
+    // carousel on the right page can cap itself to match — keeps the
+    // book spread visually rectangular (Stage 14 item 2 follow-up).
+    // ResizeObserver fires whenever the left content reflows (form input
+    // resizing on focus, bio textarea content growing, viewport width
+    // changes), so the carousel cap stays in sync.
+    const leftContentRef = useRef(null)
+    const [leftContentHeight, setLeftContentHeight] = useState(null)
+
     useEffect(() => {
         getProfile()
         getUserRecipes()
         getFollowedAuthors()
     }, [session])
+
+    useEffect(() => {
+        const el = leftContentRef.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const observer = new ResizeObserver(entries => {
+            const next = entries[0]?.contentRect.height
+            if (next) setLeftContentHeight(next)
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [])
 
     async function getProfile() {
         try {
@@ -163,7 +184,7 @@ export default function Profile({
                 </header>
             }
             leftPage={
-                <div className="flex flex-col gap-8">
+                <div ref={leftContentRef} className="flex flex-col gap-8">
                     <div>
                         <h3 className="font-display text-xl text-ink mb-4">Edit Profile</h3>
                         <form onSubmit={updateProfile}>
@@ -231,8 +252,10 @@ export default function Profile({
                                 <p className="font-display italic text-rose">Use "+ New Recipe" on the home page to add your first.</p>
                             </div>
                         ) : (
-                            <div className="columns-1 sm:columns-2 lg:columns-2 xl:columns-3 gap-4">
-                                {userRecipes.map(recipe => (
+                            <RecipesCarousel
+                                recipes={userRecipes}
+                                maxHeight={leftContentHeight}
+                                renderRecipe={(recipe) => (
                                     <RecipeCard
                                         key={recipe.id}
                                         recipe={recipe}
@@ -243,8 +266,8 @@ export default function Profile({
                                         likeCount={likeCount ? likeCount(recipe.id) : 0}
                                         onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                                     />
-                                ))}
-                            </div>
+                                )}
+                            />
                         )}
                     </section>
 

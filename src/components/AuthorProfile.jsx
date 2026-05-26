@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
 import ProfileBookSpread from './ProfileBookSpread'
+import RecipesCarousel from './RecipesCarousel'
 
 // Read-only author profile at /profile/:id. Sibling to /profile (the
 // self-edit view in Profile.jsx); routed separately so this component
@@ -35,6 +36,25 @@ export default function AuthorProfile({
     const [profile, setProfile] = useState(null)
     const [recipes, setRecipes] = useState([])
     const [fetchState, setFetchState] = useState('loading') // 'loading' | 'idle' | 'notfound'
+
+    // Measure the left page's intrinsic content (avatar + identity +
+    // bio + follow controls) so the recipes carousel on the right page
+    // can cap to match — keeps the book spread visually rectangular
+    // even when the author has many public recipes (Stage 14 item 2
+    // follow-up). ResizeObserver re-fires on bio/identity reflow.
+    const leftContentRef = useRef(null)
+    const [leftContentHeight, setLeftContentHeight] = useState(null)
+
+    useEffect(() => {
+        const el = leftContentRef.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const observer = new ResizeObserver(entries => {
+            const next = entries[0]?.contentRect.height
+            if (next) setLeftContentHeight(next)
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [profile])
 
     useEffect(() => {
         let cancelled = false
@@ -122,7 +142,7 @@ export default function AuthorProfile({
                 </header>
             }
             leftPage={
-                <div className="text-center flex flex-col items-center gap-3">
+                <div ref={leftContentRef} className="text-center flex flex-col items-center gap-3">
                     {profile.avatar_url ? (
                         <img
                             src={profile.avatar_url}
@@ -220,8 +240,10 @@ export default function AuthorProfile({
                             <p className="font-display italic text-rose">{displayName} hasn't shared anything you can see.</p>
                         </div>
                     ) : (
-                        <div className="columns-1 sm:columns-2 lg:columns-2 xl:columns-3 gap-4">
-                            {recipes.map(recipe => (
+                        <RecipesCarousel
+                            recipes={recipes}
+                            maxHeight={leftContentHeight}
+                            renderRecipe={(recipe) => (
                                 <RecipeCard
                                     key={recipe.id}
                                     recipe={recipe}
@@ -232,8 +254,8 @@ export default function AuthorProfile({
                                     likeCount={likeCount ? likeCount(recipe.id) : 0}
                                     onToggleLike={onToggleLike ? () => onToggleLike(recipe.id) : undefined}
                                 />
-                            ))}
-                        </div>
+                            )}
+                        />
                     )}
                 </section>
             }

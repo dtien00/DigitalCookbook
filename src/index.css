@@ -1094,6 +1094,127 @@ textarea {
   }
 }
 
+/* === Recipes carousel on the book spread (Stage 14 item 2.1) ==============
+   Paginated recipe display for the right page. The viewport height is
+   pinned to the left page's intrinsic height (measured by the parent
+   with ResizeObserver) so the recipes section stays inside the book's
+   visual rectangle. When recipes overflow that height, they split into
+   pages the user navigates via wheel / horizontal swipe / keyboard /
+   the indicator pill at the bottom.
+
+   The track is a flexbox row of full-width pages; navigating sets a
+   translateX on the track with a 400ms cubic-bezier transition, so the
+   "page turn" reads as a smooth horizontal slide. */
+.recipes-carousel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.recipes-carousel-viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  outline: none;
+}
+
+.recipes-carousel-viewport:focus-visible {
+  /* Use the same global focus ring as buttons/cards; the global rule
+     skips raw divs, so re-add it here for the keyboard-navigable region. */
+  outline: 2px solid var(--color-rust);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.recipes-carousel-track {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.recipes-carousel-page {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding-bottom: 56px; /* breathing room above the indicator pill */
+  box-sizing: border-box;
+}
+
+.recipes-carousel-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(251, 246, 241, 0.94);
+  border: 1px solid var(--color-paper-shade);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(30, 30, 36, 0.10);
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  z-index: 2;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.indicator-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: background-color 150ms;
+  line-height: 1;
+}
+
+.indicator-btn:hover:not(:disabled) {
+  background: var(--color-tan-soft);
+}
+
+.indicator-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.indicator-btn.is-current {
+  background: var(--color-rust);
+  color: var(--color-paper);
+  font-weight: 600;
+}
+
+.indicator-btn.indicator-edge {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.indicator-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  color: var(--color-ink);
+  opacity: 0.5;
+}
+
+.indicator-readout {
+  margin-left: 6px;
+  color: var(--color-ink);
+  opacity: 0.7;
+  font-style: italic;
+  font-size: 12px;
+}
+
 /* Recipe-detail mobile typography. Target: phone propped against a kettle.
    Changes vs desktop:
    - Container and content-card padding tightened so text isn't crushed on
