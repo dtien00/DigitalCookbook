@@ -461,9 +461,8 @@ The follow control cluster lives on the left page because following is a relatio
 
 **`/profile` (own):**
 - `My Recipes` grid — Pinterest-style masonry, `columns-1 sm:columns-2 lg:columns-2 xl:columns-3` (one column lower than the home grid since the right page is narrower than the full-bleed home wrapper)
-- `Following` list — the existing rows-of-followed-authors list
 
-The Following list is on the right page for this stage; Stage 14 item 5 will lift it into its own phonebook routing.
+The Following list has been lifted into its own phonebook routing (Stage 14 item 5) — see the "Phonebook book" section below. The detached Following tab on the left page now navigates to `/profile/following` rather than rendering an inline list.
 
 **`/profile/:id` (read-only):**
 - `Recipes` grid — public recipes only (RLS already gates visibility), same masonry treatment
@@ -473,7 +472,7 @@ The Following list is on the right page for this stage; Stage 14 item 5 will lif
 - **Sidebar tabs `[Account, Appearance, Security, Notifications]`** — Stage 14 item 4 layers these onto the left page. Until then, the left page renders the two existing forms (own) or the existing identity + follow controls (read-only) as a single flow.
 - **Backdrop themes** — Stage 14 item 3 adds a backdrop selector, surfaced inside the Appearance tab (which item 4 will add). Default `paper-grain` backdrop ships now.
 - **Recipe → book entity** — Stage 14 item 1 reframes RecipeCard. The current cards continue to render inside the right page until then.
-- **Phonebook for following + parallel routing** — Stage 14 item 5 relocates the Following list off the right page.
+- **Phonebook for following + parallel routing** — *(done — Stage 14 item 5)*. Implemented at `/profile/following` via [`<FollowingPhonebook>`](../src/components/FollowingPhonebook.jsx). See the "Phonebook book" section below.
 
 ## Open question pinned forward
 
@@ -534,7 +533,38 @@ If `recipes.length <= cardsPerPage`, the carousel renders no chrome — just the
 
 ### Following section coexistence
 
-On `/profile` the right page also has the Following list below the recipes carousel. The Following section sits OUTSIDE the carousel's height cap — it can grow as needed. The right page total height = (recipes carousel = leftContentHeight) + (Following section), which usually makes the right page taller than the left's intrinsic content. The grid's `align-items: stretch` then extends the left page surface down to match, so both pages stay full-paper rectangles. The visual contract is "recipes column ≈ info column at the top of the spread"; the Following list extending below is acceptable since it's a list of identities (closer to "info" than "contents") that Stage 14 item 5 will eventually lift into its own phonebook routing anyway.
+Historically `/profile`'s right page also rendered a Following list below the recipes carousel. Stage 14 item 5 lifted that list into its own phonebook routing (see below), so `/profile`'s right page is now recipes-only.
+
+---
+
+## Phonebook book (Stage 14 item 5)
+
+Followed authors live in their own book at `/profile/following` — a parallel surface to `/profile` and `/profile/:id`, all three sharing the [`<ProfileBookSpread>`](../src/components/ProfileBookSpread.jsx) shell. Three books, one shell.
+
+| Page | Contents |
+|---|---|
+| **Left page** *(phonebook)* | Vertical bookmark-ribbon list of followed authors — one entry per author. Each is a paper-shade pill with a 4px transparent left border; the active row picks up a rust left-accent stripe and shifts 8px to the right via `translateX`, mimicking how a real bookmark protrudes from a book. |
+| **Right page** *(contents)* | The selected author's public recipes inside the same `<RecipesCarousel>` used by `/profile` and `/profile/:id`. Header carries "View profile →" (to `/profile/:id`) and "Unfollow" pill controls so the directory entry feels actionable. |
+
+### Why a separate route, not an in-tab section
+
+The followed-authors set is conceptually its own "book", not a section of the user's own profile. Splitting it off lets the recipe-carousel device be reused as the right-page payload — an in-tab list couldn't host a `<RecipesCarousel>` without nesting a carousel inside a fixed-height tab panel.
+
+### Entry point from `/profile`
+
+The detached Following tab on `/profile`'s left page (item 4) carries an `onSelect` override on its `<ProfileTabs>` tab definition that calls `navigate('/profile/following')` instead of swapping the active panel. The detached pill grows a right-side chevron to telegraph the route hop visually. The Following tab is the canonical entry point — there is no inline-list mode anymore.
+
+### Height stability
+
+[`.phonebook-bookmarks`](../src/index.css) uses the same `height: min(75vh, 700px)` cap as `<ProfileTabs>`, so the spread stays a stable rectangle regardless of how many authors the user follows. Without it, a user with one follow would collapse the left page, force the height-coupled right-page carousel to ~80px, and squish every recipe card. The bookmark list scrolls within the panel (`overflow-y: auto`, `overflow-x: hidden` so the active-row `translateX` doesn't create a horizontal scrollbar).
+
+### Per-author notify pref intentionally omitted
+
+The notify-on-new-recipe toggle is NOT exposed in the bookmark list. The phonebook should read like a directory entry — one item per author, minimal chrome. Notify toggles remain reachable on `/profile/:id` (per-author setting) and the header NotificationsBell (the consumption surface), both one click away from any phonebook entry.
+
+### Source of truth & optimistic state
+
+The bookmark list filters through the central `useFollowing` state (`isFollowing`) so an optimistic unfollow elsewhere in the app reflects here without a refetch, and a rollback puts the row back in place. The local `followedAuthors` list is just the profile-data sidecar (avatars / names) so the bookmark UI doesn't N+1-query profiles per row.
 
 ---
 

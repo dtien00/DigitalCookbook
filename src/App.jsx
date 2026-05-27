@@ -14,6 +14,7 @@ import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import AuthorProfile from './components/AuthorProfile'
+import FollowingPhonebook from './components/FollowingPhonebook'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
@@ -436,10 +437,23 @@ function App() {
                                 likeCount={likeCount}
                                 userLiked={userLiked}
                                 onToggleLike={handleLikeClick}
+                            />
+                            : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/profile/following"
+                    element={
+                        session
+                            ? <FollowingPhonebook
+                                session={session}
                                 isFollowing={isFollowing}
-                                getNotifyPref={getNotifyPref}
                                 onUnfollow={toggleFollow}
-                                onSetNotifyPref={setNotifyPref}
+                                isFavorited={isFavorited}
+                                onToggleFavorite={handleBookmarkClick}
+                                likeCount={likeCount}
+                                userLiked={userLiked}
+                                onToggleLike={handleLikeClick}
                             />
                             : <Navigate to="/" replace />
                     }

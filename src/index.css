@@ -1434,12 +1434,107 @@ textarea {
   text-underline-offset: 4px;
 }
 
+.profile-tab-detached-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: transform 180ms ease-out, opacity 180ms;
+}
+
+.profile-tab-detached:hover .profile-tab-detached-chevron {
+  transform: translateX(2px);
+  opacity: 1;
+}
+
 .profile-tabs-panel {
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   padding-right: 6px;
+}
+
+/* === Phonebook bookmarks (Stage 14 item 5) =================================
+   Left-page bookmark list inside <FollowingPhonebook>. Each followed author
+   is a clickable "bookmark" — paper-shade rounded pill that slides slightly
+   to the right when active to mimic a real bookmark protruding from a book.
+   The active one also picks up a rust accent stripe on its leading edge,
+   which is what the eye actually catches at a glance. */
+.phonebook-bookmarks {
+  display: flex;
+  flex-direction: column;
+  /* Match the fixed-height pattern from <ProfileTabs> (Stage 14 item 4) so
+     the book spread stays a stable rectangle regardless of how many
+     authors the user follows. Without this, a user following 1 author
+     would collapse the left page, force the right-page carousel to
+     height-couple to ~80px, and squish every recipe card. */
+  height: min(75vh, 700px);
+  /* The active bookmark protrudes 8px to the right via translateX —
+     clip the overflow so it doesn't introduce a horizontal scrollbar. */
+  overflow-x: hidden;
+}
+
+.phonebook-bookmark-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Scroll within the panel if the user follows enough authors to
+     overflow the fixed height — mirrors the inner-scroll pattern used
+     inside ProfileTabs panels. */
+  overflow-y: auto;
+  /* The active bookmark protrudes 8px to the right via translateX —
+     don't let it create a horizontal scrollbar. */
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-right: 6px;
+}
+
+.phonebook-bookmark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-paper-shade);
+  border: 1px solid var(--color-paper-shade);
+  border-left: 4px solid transparent;
+  border-radius: 0 999px 999px 0;
+  color: var(--color-ink);
+  font-family: 'Cormorant Garamond', 'Lora', serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 180ms ease-out, background-color 180ms, border-color 180ms;
+  min-height: 56px;
+}
+
+.phonebook-bookmark:hover:not(.is-current) {
+  background: rgba(176, 100, 82, 0.08); /* rust tint */
+}
+
+.phonebook-bookmark.is-current {
+  background: var(--color-paper);
+  border-left-color: var(--color-rust);
+  /* push the active bookmark out from the spine */
+  transform: translateX(8px);
+  box-shadow: 0 2px 6px rgba(30, 30, 36, 0.12);
+}
+
+.phonebook-bookmark.is-current .phonebook-bookmark-name {
+  color: var(--color-rust);
+}
+
+.phonebook-bookmark-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Recipe-detail mobile typography. Target: phone propped against a kettle.
