@@ -9,6 +9,7 @@ import { useAdmin } from './hooks/useAdmin'
 import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
+import { useBackdrop } from './hooks/useBackdrop'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -179,6 +180,12 @@ function App() {
     // survives route changes. Filter coupling lands in a follow-up Stage 10
     // item; for now the basket is purely additive.
     const { basket, addIngredient, removeIngredient, clearBasket } = useFridgeBasket()
+
+    // Backdrop preference — written to data-backdrop on <html> by the hook
+    // so the .paper-grain treatment swaps via CSS at every consumer surface
+    // without per-component plumbing. Lives at App level (single source of
+    // truth) and is passed into Profile so the Appearance tab can change it.
+    const { backdrop, chooseBackdrop } = useBackdrop()
     const [basketOpen, setBasketOpen] = useState(false)
     const basketTriggerRef = useRef(null)
 
@@ -437,6 +444,8 @@ function App() {
                                 likeCount={likeCount}
                                 userLiked={userLiked}
                                 onToggleLike={handleLikeClick}
+                                backdrop={backdrop}
+                                onChooseBackdrop={chooseBackdrop}
                             />
                             : <Navigate to="/" replace />
                     }

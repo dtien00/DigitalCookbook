@@ -671,9 +671,24 @@ The sentinel `<div>` that drives the IntersectionObserver is `h-1 w-full` and `a
 
 Search disables the sentinel: when the user is typing in the search bar, "load more" is hidden because the search filters client-side over loaded pages only — appending more rows that may not match the search would surface confusing UX. Documented as a known limitation; the eventual fix is server-side `ilike` filtering with pagination reset on each keystroke.
 
-## Backdrop
+## Backdrop (Stage 14 item 3)
 
-- **"Large library bookshelf"** - When signing out/switching accounts, could look like the book closing, going into the background and grabbing another book to login. When scrolling up/down, books go in/out the library shelf.
+The "surface the cookbook rests on" is user-selectable from the Appearance tab on `/profile`. Five options ship in v1, all rendered with pure CSS — no image assets, so palette shifts and devicePixelRatio changes don't degrade the visual:
+
+- **Rustic paper** *(default)* — the original `.paper-grain` treatment. Cream cookbook page with offset radial-gradient grain.
+- **Wood library** — warm oak grain. Repeating horizontal stripes over a vertical wood-tone gradient. Reads as a kitchen-shelf cookbook resting on wood.
+- **Kitchen cabinet** — brushed steel. Fine vertical hairlines over a cool-gray gradient. Modern utility surface.
+- **Restaurant notepad** — yellow ruled pad. Horizontal blue rules, red left margin, a perforated top-tear strip. Reads as line-cook reference.
+- **Digital space** — flat neutral with a soft radial vignette. Minimal, no texture. v1 ships this as a *light* neutral so dark-ink page chrome (home-grid header, tag chips, action buttons) stays readable without per-element contrast overrides. A genuine dark-mode treatment is a future follow-up — would need a sweep across text-color utilities across the app.
+
+**Implementation.** `useBackdrop()` (in [src/hooks/useBackdrop.js](../src/hooks/useBackdrop.js)) writes `data-backdrop="<id>"` onto `<html>`. Each variant lives in [src/index.css](../src/index.css) as a `html[data-backdrop="<id>"] .paper-grain { ... }` override. The default rustic treatment is the base `.paper-grain` rule; the four alternates each replace `background-color` + `background-image`. **Every consumer surface keeps the same `.paper-grain` className** (HomeView, ProfileBookSpread, RecipeDetail, AuthorProfile, FridgeBasket, MaintenancePage) — swapping backdrop is purely a CSS rebind, no JSX changes at the call sites.
+
+**Persistence.** localStorage (key `cookbook.backdrop`). Per-device, not per-user — anon visitors also browse the home grid and benefit from picking a backdrop, so a `profiles.backdrop_preference` column would force a "must be signed in to choose" UX that doesn't fit. The hook validates the stored value against the known options on read so a corrupted entry falls back to the default rather than serving an undefined attribute. **Upgrade path:** when cross-device sync becomes a real ask, add a `profiles.backdrop_preference` column, have the hook prefer that value when a session exists, and write through to localStorage as a mirror. The hook's API (`{ backdrop, chooseBackdrop }`) stays unchanged.
+
+**Swatches.** The Appearance tab renders a 64×64px preview chip next to each option using the same gradient ingredients at a smaller repeat scale, so the user sees the destination state before committing. Selection is immediate (no Apply button) — the change is reversible and the user should see the page they're configuring change as they pick.
+
+**Forward-looking sketches** (not implemented):
+- **Large library bookshelf** — when signing out / switching accounts, the current cookbook closes and recedes into the shelf; login grabs another. Scrolling could push books in/out of the shelf in parallax.
 
 ## Recipe Item
 

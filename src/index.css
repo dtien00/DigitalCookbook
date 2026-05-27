@@ -49,6 +49,186 @@ body {
   background-position: 0 0, 30px 50px, 50px 20px;
 }
 
+/* ─── Backdrop variants (Stage 14 item 3) ─────────────────────────────────
+   The `data-backdrop` attribute is written on <html> by useBackdrop().
+   Each variant overrides .paper-grain — the consumer surfaces (HomeView,
+   ProfileBookSpread, RecipeDetail, AuthorProfile, FridgeBasket) keep
+   the same class name, so swapping the backdrop is purely a CSS rebind.
+   All textures are CSS only (gradients / repeating-linear-gradients) so
+   the page stays fast and stays palette-coherent under token shifts.
+   The default rustic paper grain is the `paper` id and needs no override
+   — the base .paper-grain rules above already render it. */
+
+/* Wood library — warm oak grain. Horizontal grain stripes + a few darker
+   bands to imply rough sawn boards; the in-grain color modulation comes
+   from a low-frequency vertical gradient layered above. Card surfaces
+   (paper-shade) read as cookbook covers resting on the shelf wood. */
+html[data-backdrop="wood"] .paper-grain {
+  background-color: #6b4a2e;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(40, 22, 8, 0.15) 0px,
+      rgba(40, 22, 8, 0.15) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 220, 170, 0.05) 0px,
+      rgba(255, 220, 170, 0.05) 1px,
+      transparent 1px,
+      transparent 18px
+    ),
+    linear-gradient(
+      180deg,
+      #7a5639 0%,
+      #5d3f23 50%,
+      #7a5639 100%
+    );
+  background-size: auto, auto, auto;
+  background-position: 0 0, 0 0, 0 0;
+}
+
+/* Kitchen cabinet — brushed-steel surface. Fine vertical hairlines over a
+   cool-gray gradient. Reads as a modern stainless-steel utility surface
+   without straying into "industrial dashboard" territory. */
+html[data-backdrop="cabinet"] .paper-grain {
+  background-color: #cdd2d6;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.25) 0px,
+      rgba(255, 255, 255, 0.25) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(30, 30, 36, 0.08) 0px,
+      rgba(30, 30, 36, 0.08) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    linear-gradient(180deg, #d8dde1 0%, #b8bfc4 100%);
+}
+
+/* Restaurant notepad — yellow ruled pad. Horizontal blue rules every 28px
+   over a warm pad-yellow ground, with a red margin line near the left edge
+   and a faint perforated tear strip at the top. */
+html[data-backdrop="notepad"] .paper-grain {
+  background-color: #f7e9a8;
+  background-image:
+    /* perforated top strip */
+    radial-gradient(
+      circle at 6px 6px,
+      rgba(30, 30, 36, 0.18) 1.2px,
+      transparent 1.6px
+    ),
+    /* red left-margin rule */
+    linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 38px,
+      rgba(196, 60, 50, 0.55) 38px,
+      rgba(196, 60, 50, 0.55) 39px,
+      transparent 39px
+    ),
+    /* horizontal ruled lines */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 27px,
+      rgba(60, 100, 160, 0.30) 27px,
+      rgba(60, 100, 160, 0.30) 28px
+    ),
+    linear-gradient(180deg, #faedb0 0%, #f3e09a 100%);
+  background-size: 12px 12px, auto, auto, auto;
+  background-position: 0 4px, 0 0, 0 12px, 0 0;
+}
+
+/* Digital space — neutral flat surface with a soft radial vignette. The
+   roadmap calls this "plain digital space"; v1 ships it as a *light*
+   neutral so the dark-ink text and chips at the page level (home grid
+   header, tag chips, action buttons) stay readable without per-element
+   contrast overrides. A true dark-mode variant would require sweeping
+   text-color rules across the app — flagged as a follow-up in
+   refs/COSMETICS.md. */
+html[data-backdrop="digital"] .paper-grain {
+  background-color: #dde2e7;
+  background-image:
+    radial-gradient(
+      ellipse at center,
+      rgba(120, 135, 155, 0.20) 0%,
+      transparent 70%
+    ),
+    linear-gradient(180deg, #e4e8ed 0%, #c7cdd4 100%);
+}
+
+/* ─── Appearance-tab swatches ────────────────────────────────────────────
+   Mirror each backdrop's CSS at a 64×64px preview chip so the user can
+   see the destination state before selecting. Patterns are scaled down
+   from the full-surface treatment — same gradient ingredients, smaller
+   repeat sizes — so they read as recognizable previews rather than
+   different visuals. */
+.backdrop-swatch[data-backdrop-swatch="paper"] {
+  background-color: #f2e9e4;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(30, 30, 36, 0.06) 1px, transparent 1.5px),
+    radial-gradient(circle at 70% 80%, rgba(30, 30, 36, 0.05) 1px, transparent 1.5px);
+  background-size: 18px 18px, 24px 24px;
+}
+.backdrop-swatch[data-backdrop-swatch="wood"] {
+  background-color: #6b4a2e;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(40, 22, 8, 0.30) 0px,
+      rgba(40, 22, 8, 0.30) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(180deg, #7a5639 0%, #5d3f23 100%);
+}
+.backdrop-swatch[data-backdrop-swatch="cabinet"] {
+  background-color: #cdd2d6;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.45) 0px,
+      rgba(255, 255, 255, 0.45) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(180deg, #d8dde1 0%, #b8bfc4 100%);
+}
+.backdrop-swatch[data-backdrop-swatch="notepad"] {
+  background-color: #f7e9a8;
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 10px,
+      rgba(196, 60, 50, 0.55) 10px,
+      rgba(196, 60, 50, 0.55) 11px,
+      transparent 11px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 9px,
+      rgba(60, 100, 160, 0.35) 9px,
+      rgba(60, 100, 160, 0.35) 10px
+    ),
+    linear-gradient(180deg, #faedb0 0%, #f3e09a 100%);
+}
+.backdrop-swatch[data-backdrop-swatch="digital"] {
+  background-color: #dde2e7;
+  background-image:
+    radial-gradient(ellipse at center, rgba(120, 135, 155, 0.35) 0%, transparent 75%),
+    linear-gradient(180deg, #e4e8ed 0%, #c7cdd4 100%);
+}
+
 /* Auth & Forms */
 .auth-container {
   display: flex;
