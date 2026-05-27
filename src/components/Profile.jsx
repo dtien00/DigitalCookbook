@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
@@ -16,11 +16,8 @@ export default function Profile({
     likeCount,
     userLiked,
     onToggleLike,
-    isFollowing,
-    getNotifyPref,
-    onUnfollow,
-    onSetNotifyPref,
 }) {
+    const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
     const [username, setUsername] = useState('')
     const [fullName, setFullName] = useState('')
@@ -29,12 +26,6 @@ export default function Profile({
     const [userRecipes, setUserRecipes] = useState([])
     const [newPassword, setNewPassword] = useState('')
     const [passwordLoading, setPasswordLoading] = useState(false)
-    // Author profile rows for everyone the user follows. Fetched once on
-    // mount; the displayed list filters via the central useFollowing state
-    // (isFollowing prop) so optimistic unfollow / rollback stay in sync with
-    // the rest of the app without a refetch.
-    const [followedAuthors, setFollowedAuthors] = useState([])
-    const [followingLoading, setFollowingLoading] = useState(true)
 
     // The tab container has a fixed height of min(75vh, 700px) per the
     // Stage 14 item 4 spec. ResizeObserver still works — it resolves the
@@ -46,7 +37,6 @@ export default function Profile({
     useEffect(() => {
         getProfile()
         getUserRecipes()
-        getFollowedAuthors()
     }, [session])
 
     useEffect(() => {
@@ -97,32 +87,6 @@ export default function Profile({
 
         if (error) console.error('Error fetching user recipes:', error.message)
         else setUserRecipes(data || [])
-    }
-
-    async function getFollowedAuthors() {
-        setFollowingLoading(true)
-        const { data, error } = await supabase
-            .from('follows')
-            .select('following_id, created_at, following:profiles!following_id(id, username, full_name, avatar_url)')
-            .eq('follower_id', session.user.id)
-            .order('created_at', { ascending: false })
-
-        if (error) {
-            console.error('Error fetching followed authors:', error.message)
-            setFollowedAuthors([])
-        } else {
-            setFollowedAuthors(
-                (data || [])
-                    .filter(row => row.following)
-                    .map(row => ({
-                        id: row.following.id,
-                        username: row.following.username,
-                        full_name: row.following.full_name,
-                        avatar_url: row.following.avatar_url,
-                    }))
-            )
-        }
-        setFollowingLoading(false)
     }
 
     async function updateProfile(e) {
@@ -235,16 +199,10 @@ export default function Profile({
             color: '#b06452', // rust (matches the standalone phonebook book accent)
             icon: <IconUserPlus />,
             detached: true,
-            content: (
-                <FollowingTab
-                    followedAuthors={followedAuthors}
-                    loading={followingLoading}
-                    isFollowing={isFollowing}
-                    getNotifyPref={getNotifyPref}
-                    onUnfollow={onUnfollow}
-                    onSetNotifyPref={onSetNotifyPref}
-                />
-            ),
+            // Delegates to the standalone phonebook route — see ProfileTabs
+            // for the onSelect contract. The detached chevron telegraphs
+            // the route hop visually.
+            onSelect: () => navigate('/profile/following'),
         },
     ]
 
@@ -394,13 +352,6 @@ function PlaceholderTab({ title, subtitle }) {
     )
 }
 
-// Followed-authors panel rendered inside the detached Following tab.
-// Source-of-truth for which rows render is the central useFollowing
-// state (isFollowing prop) — the local followedAuthors list is just
-// the profile-data sidecar so we can show avatars / names without a
-// second query per row. Unfollow rollback is handled by useFollowing,
-// so a failed delete makes the row reappear without any local
-// reconciliation here.
 // Stage 14 item 4 — bookmark-ribbon tab icons. Stroke-based feather-style
 // glyphs, sized for the 18px icon slot on each ribbon. `currentColor` is
 // driven by the ribbon's text color (white on the ribbon background) so a
@@ -484,77 +435,3 @@ function IconUserPlus() {
     )
 }
 
-function FollowingTab({ followedAuthors, loading, isFollowing, getNotifyPref, onUnfollow, onSetNotifyPref }) {
-    const visible = followedAuthors.filter(a => isFollowing?.(a.id))
-
-    return (
-        <section>
-            <h3 className="font-display text-xl text-ink mb-4">Following ({visible.length})</h3>
-            {loading ? (
-                <p className="font-display italic text-rose" role="status">Loading…</p>
-            ) : visible.length === 0 ? (
-                <div className="text-center py-12">
-                    <p className="text-2xl text-tan mb-3">✦</p>
-                    <p className="font-display text-lg text-ink mb-1">You aren't following anyone yet.</p>
-                    <p className="font-display italic text-rose">Open any recipe and tap the author's name to visit their profile.</p>
-                </div>
-            ) : (
-                <ul className="flex flex-col gap-3 list-none p-0">
-                    {visible.map(author => {
-                        const displayName = author.username?.trim() || author.full_name?.trim() || 'Anonymous chef'
-                        const notify = getNotifyPref?.(author.id) ?? false
-                        return (
-                            <li
-                                key={author.id}
-                                className="flex flex-wrap items-center gap-3 p-3 bg-paper-shade/50 border border-paper-shade rounded-lg"
-                            >
-                                {author.avatar_url ? (
-                                    <img
-                                        src={author.avatar_url}
-                                        alt=""
-                                        loading="lazy"
-                                        className="w-12 h-12 rounded-full object-cover flex-shrink-0"
-                                    />
-                                ) : (
-                                    <div
-                                        aria-hidden="true"
-                                        className="w-12 h-12 rounded-full bg-tan-soft text-ink font-display text-lg font-semibold flex items-center justify-center flex-shrink-0"
-                                    >
-                                        {displayName.charAt(0).toUpperCase()}
-                                    </div>
-                                )}
-
-                                <div className="flex-1 min-w-0">
-                                    <Link
-                                        to={`/profile/${author.id}`}
-                                        className="font-display text-ink font-semibold hover:text-rust transition-colors truncate block"
-                                    >
-                                        {displayName}
-                                    </Link>
-                                    <label className="inline-flex items-center gap-2 mt-1 text-sm text-ink/70 font-serif cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={notify}
-                                            onChange={(e) => onSetNotifyPref?.(author.id, e.target.checked)}
-                                            className="accent-rust w-4 h-4 cursor-pointer"
-                                        />
-                                        Notify me on new recipes
-                                    </label>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => onUnfollow?.(author.id)}
-                                    aria-label={`Unfollow ${displayName}`}
-                                    className="px-4 py-2 bg-rose-dark hover:bg-rose text-paper font-semibold rounded-full transition-colors min-h-[44px] flex-shrink-0"
-                                >
-                                    Unfollow
-                                </button>
-                            </li>
-                        )
-                    })}
-                </ul>
-            )}
-        </section>
-    )
-}

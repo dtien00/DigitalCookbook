@@ -10,18 +10,27 @@ import { useState } from 'react'
 // read as a paired control system.
 //
 // The optional `detached` flag on a tab definition breaks the tab out
-// of the main pill into its own pill with a route-hint chevron. Used
-// for the Following tab (Stage 14 item 5 — the chevron telegraphs the
-// future phonebook book/route that the tab will eventually navigate
-// to instead of swapping in-place).
+// of the main pill into its own pill. Detached tabs may also carry an
+// `onSelect` override — when present, clicking the tab fires
+// `onSelect()` instead of swapping the active panel. Used for the
+// Following tab (Stage 14 item 5), which navigates to the standalone
+// /profile/following phonebook route rather than rendering its panel
+// inline.
 //
-// Tabs prop shape: { id, label, content, detached?, disabled? }[]
+// Tabs prop shape: { id, label, content, detached?, onSelect?, disabled? }[]
 export default function ProfileTabs({ tabs, defaultTabId, containerRef }) {
     const initial = defaultTabId && tabs.some(t => t.id === defaultTabId)
         ? defaultTabId
         : tabs[0]?.id
     const [activeId, setActiveId] = useState(initial)
-    const active = tabs.find(t => t.id === activeId) ?? tabs[0]
+    // Tabs with an onSelect override aren't selectable as panels — they
+    // delegate their click to the caller (e.g. router navigate). Pin the
+    // resolved active tab to the ones that DO render a panel so a stale
+    // activeId pointing at a delegated tab never blanks the panel area.
+    const panelTabs = tabs.filter(t => !t.onSelect)
+    const active =
+        panelTabs.find(t => t.id === activeId)
+        ?? panelTabs[0]
 
     const mainTabs = tabs.filter(t => !t.detached)
     const detachedTabs = tabs.filter(t => t.detached)
@@ -52,25 +61,44 @@ export default function ProfileTabs({ tabs, defaultTabId, containerRef }) {
 
                 {detachedTabs.length > 0 && (
                     <div className="profile-tab-detached-group">
-                        {detachedTabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                type="button"
-                                role="tab"
-                                id={`profile-tab-trigger-${tab.id}`}
-                                aria-selected={tab.id === activeId}
-                                aria-controls={`profile-tab-panel-${tab.id}`}
-                                onClick={() => setActiveId(tab.id)}
-                                style={tab.color ? { '--ribbon-color': tab.color } : undefined}
-                                className={
-                                    'profile-tab-detached'
-                                    + (tab.id === activeId ? ' is-current' : '')
-                                }
-                            >
-                                <span className="profile-tab-detached-icon" aria-hidden="true">{tab.icon}</span>
-                                <span className="profile-tab-detached-label">{tab.label}</span>
-                            </button>
-                        ))}
+                        {detachedTabs.map(tab => {
+                            const delegated = typeof tab.onSelect === 'function'
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    role={delegated ? undefined : 'tab'}
+                                    id={`profile-tab-trigger-${tab.id}`}
+                                    aria-selected={delegated ? undefined : tab.id === activeId}
+                                    aria-controls={delegated ? undefined : `profile-tab-panel-${tab.id}`}
+                                    onClick={() => delegated ? tab.onSelect() : setActiveId(tab.id)}
+                                    style={tab.color ? { '--ribbon-color': tab.color } : undefined}
+                                    className={
+                                        'profile-tab-detached'
+                                        + (!delegated && tab.id === activeId ? ' is-current' : '')
+                                    }
+                                >
+                                    <span className="profile-tab-detached-icon" aria-hidden="true">{tab.icon}</span>
+                                    <span className="profile-tab-detached-label">{tab.label}</span>
+                                    {delegated && (
+                                        <svg
+                                            aria-hidden="true"
+                                            viewBox="0 0 24 24"
+                                            width="14"
+                                            height="14"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="profile-tab-detached-chevron"
+                                        >
+                                            <polyline points="9 6 15 12 9 18" />
+                                        </svg>
+                                    )}
+                                </button>
+                            )
+                        })}
                     </div>
                 )}
             </nav>
