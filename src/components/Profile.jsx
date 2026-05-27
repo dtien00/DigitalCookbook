@@ -6,6 +6,7 @@ import RecipeCard from './RecipeCard'
 import ProfileBookSpread from './ProfileBookSpread'
 import RecipesCarousel from './RecipesCarousel'
 import ProfileTabs from './ProfileTabs'
+import { BACKDROPS } from '../hooks/useBackdrop'
 
 export default function Profile({
     session,
@@ -16,6 +17,8 @@ export default function Profile({
     likeCount,
     userLiked,
     onToggleLike,
+    backdrop,
+    onChooseBackdrop,
 }) {
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
@@ -177,7 +180,12 @@ export default function Profile({
             label: 'Appearance',
             color: '#6a8068', // muted sage
             icon: <IconBrush />,
-            content: <PlaceholderTab title="Appearance" subtitle="Backdrop selector lands with Stage 14 item 3." />,
+            content: (
+                <AppearanceTab
+                    backdrop={backdrop}
+                    onChoose={onChooseBackdrop}
+                />
+            ),
         },
         {
             id: 'metrics',
@@ -338,6 +346,60 @@ function SecurityTab({ newPassword, setNewPassword, onSubmit, loading }) {
             <p className="font-serif italic text-ink/60 text-sm mt-4">
                 Email change and account deletion controls may be added in a future stage.
             </p>
+        </div>
+    )
+}
+
+// Stage 14 item 3 — backdrop selector. Each option is a radio-style card
+// with a preview swatch that mirrors the actual CSS treatment from
+// index.css, so the user sees the destination state before committing.
+// Selection is immediate (no Apply button) since the change is reversible
+// and the user wants to see the page they're configuring change as they
+// pick. Persistence is owned by useBackdrop at App level — the tab is
+// purely a renderer for the current pref + a callback to update it.
+function AppearanceTab({ backdrop, onChoose }) {
+    return (
+        <div>
+            <h3 className="font-display text-xl text-ink mb-2">Backdrop</h3>
+            <p className="font-serif italic text-ink/60 text-sm mb-5">
+                Choose the surface the cookbook rests on. Your choice is remembered on this device.
+            </p>
+            <ul role="radiogroup" aria-label="Backdrop options" className="flex flex-col gap-3">
+                {BACKDROPS.map(option => {
+                    const isActive = option.id === backdrop
+                    return (
+                        <li key={option.id}>
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={isActive}
+                                onClick={() => onChoose(option.id)}
+                                className={
+                                    'w-full flex items-center gap-4 p-3 rounded-md border transition-colors text-left ' +
+                                    (isActive
+                                        ? 'border-rust bg-tan/20'
+                                        : 'border-paper-shade hover:bg-paper-shade/60')
+                                }
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    data-backdrop-swatch={option.id}
+                                    className="backdrop-swatch w-16 h-16 rounded-md flex-shrink-0 border border-ink/10 shadow-sm"
+                                />
+                                <span className="flex-1 min-w-0">
+                                    <span className="block font-display text-base text-ink">{option.label}</span>
+                                    <span className="block font-serif italic text-ink/60 text-sm">{option.description}</span>
+                                </span>
+                                {isActive && (
+                                    <span className="text-rust font-semibold text-sm flex-shrink-0" aria-hidden="true">
+                                        Selected
+                                    </span>
+                                )}
+                            </button>
+                        </li>
+                    )
+                })}
+            </ul>
         </div>
     )
 }
