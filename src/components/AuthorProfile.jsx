@@ -142,7 +142,20 @@ export default function AuthorProfile({
                 </header>
             }
             leftPage={
-                <div ref={leftContentRef} className="text-center flex flex-col items-center gap-3">
+                <div
+                    ref={leftContentRef}
+                    className="text-center flex flex-col items-center gap-3"
+                    /* Match the fixed-height envelope used by <ProfileTabs>
+                       on /profile and <FollowingPhonebook> on
+                       /profile/following so the right-page carousel reads
+                       the same maxHeight and produces the same 2×2 layout
+                       across all three book surfaces. Without this floor,
+                       AuthorProfile's intrinsic content (avatar + bio +
+                       follow controls) is ~300px — below the 520px
+                       cards-per-page threshold — so the carousel drops to
+                       2 cards per page here while Profile shows 4. */
+                    style={{ minHeight: 'min(75vh, 700px)' }}
+                >
                     {profile.avatar_url ? (
                         <img
                             src={profile.avatar_url}
