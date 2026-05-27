@@ -34,6 +34,23 @@ export default function RecipeDetail({
     const [swipeX, setSwipeX] = useState(0)
     const touchRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, tracking: false })
 
+    // Stage 14 item 1 — body layout toggle. "sheet" = single-column scroll
+    // (the original layout); "spread" = two-page book layout with ingredients
+    // on the left page and steps on the right, reusing the .book-spread /
+    // .book-page vocabulary from ProfileBookSpread. SessionStorage scope so
+    // the preference travels across recipes inside the same kitchen session
+    // but resets when the tab closes.
+    const [layout, setLayout] = useState(() => {
+        if (typeof window === 'undefined') return 'sheet'
+        return sessionStorage.getItem('cookbook.recipeDetailLayout') === 'spread' ? 'spread' : 'sheet'
+    })
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('cookbook.recipeDetailLayout', layout)
+        }
+    }, [layout])
+
     const isAuthor = userId === recipe.author_id
     const baseServings = recipe.servings || 1
     const multiplier = targetServings / baseServings
@@ -244,6 +261,79 @@ export default function RecipeDetail({
         }
     }
 
+    const ingredientsSection = (
+        <section>
+            <h3>Ingredients</h3>
+            {loading ? (
+                <ul className="space-y-3" role="status" aria-label="Loading ingredients">
+                    {['w-full', 'w-3/5', 'w-4/5', 'w-3/5'].map((w, i) => (
+                        <Skeleton key={i} className={`h-4 ${w}`} />
+                    ))}
+                </ul>
+            ) : (
+                <ul className="ingredient-list list-none pl-0">
+                    {ingredients.map(ing => {
+                        const checked = checkedIngredients.has(ing.id)
+                        return (
+                            <li key={ing.id}>
+                                <label className="flex items-start gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
+                                        className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
+                                    />
+                                    <span className={checked ? 'line-through text-ink/50' : ''}>
+                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                        {ing.notes && (
+                                            <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
+                                                {ing.notes}
+                                            </span>
+                                        )}
+                                    </span>
+                                </label>
+                            </li>
+                        )
+                    })}
+                </ul>
+            )}
+        </section>
+    )
+
+    const stepsSection = (
+        <section>
+            <h3>Steps</h3>
+            {loading ? (
+                <ol className="space-y-3" role="status" aria-label="Loading steps">
+                    {['w-full', 'w-4/5', 'w-full', 'w-3/5', 'w-4/5'].map((w, i) => (
+                        <Skeleton key={i} className={`h-4 ${w}`} />
+                    ))}
+                </ol>
+            ) : (
+                <ol className="step-list">
+                    {steps.map(step => {
+                        const checked = checkedSteps.has(step.id)
+                        return (
+                            <li key={step.id}>
+                                <label className="flex items-start gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleChecked(setCheckedSteps, step.id)}
+                                        className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
+                                    />
+                                    <span className={checked ? 'line-through text-ink/50' : ''}>
+                                        {step.instruction}
+                                    </span>
+                                </label>
+                            </li>
+                        )
+                    })}
+                </ol>
+            )}
+        </section>
+    )
+
     return (
         <div
             className="paper-grain min-h-screen"
@@ -267,22 +357,7 @@ export default function RecipeDetail({
                         {onToggleFavorite && (
                             <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
                         )}
-                        {recipe.is_public !== false && (
-                            <ShareButton url={`${window.location.origin}/recipe/${recipe.id}`} />
-                        )}
-                        <button
-                            onClick={handleDownloadPdf}
-                            disabled={pdfLoading}
-                            aria-label="Download recipe as PDF"
-                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            <span className="hidden sm:inline">{pdfLoading ? 'Generating…' : 'PDF'}</span>
-                        </button>
+                        
                     </div>
                 </div>
 
@@ -325,32 +400,74 @@ export default function RecipeDetail({
                             ))}
                         </div>
                     )}
-                    <div className="recipe-meta flex items-center gap-2 flex-wrap">
-                        <span>Servings:</span>
-                        <button
-                            onClick={() => setTargetServings(s => Math.max(1, s - 1))}
-                            disabled={targetServings <= 1}
-                            className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-                            aria-label="Decrease servings"
-                        >−</button>
-                        <span className="w-6 text-center font-semibold">{targetServings}</span>
-                        <button
-                            onClick={() => setTargetServings(s => Math.min(99, s + 1))}
-                            disabled={targetServings >= 99}
-                            className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-                            aria-label="Increase servings"
-                        >+</button>
-                        {targetServings !== baseServings && (
+                    
+                    <div className="flex justify-between">
+                        <div className="recipe-meta flex items-center gap-2 flex-wrap">
+                            <span>Servings:</span>
                             <button
-                                onClick={() => setTargetServings(baseServings)}
-                                className="no-print text-xs text-rose hover:underline underline-offset-2 ml-1 transition-colors"
+                                onClick={() => setTargetServings(s => Math.max(1, s - 1))}
+                                disabled={targetServings <= 1}
+                                className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                                aria-label="Decrease servings"
+                            >−</button>
+                            <span className="w-6 text-center font-semibold">{targetServings}</span>
+                            <button
+                                onClick={() => setTargetServings(s => Math.min(99, s + 1))}
+                                disabled={targetServings >= 99}
+                                className="no-print w-8 h-8 rounded-full bg-paper-shade hover:bg-tan/40 text-ink font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                                aria-label="Increase servings"
+                            >+</button>
+                            {targetServings !== baseServings && (
+                                <button
+                                    onClick={() => setTargetServings(baseServings)}
+                                    className="no-print text-xs text-rose hover:underline underline-offset-2 ml-1 transition-colors"
+                                >
+                                    reset
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                            {recipe.is_public !== false && (
+                                <ShareButton url={`${window.location.origin}/recipe/${recipe.id}`} />
+                            )}
+                            <button
+                                onClick={() => setLayout(l => l === 'spread' ? 'sheet' : 'spread')}
+                                aria-label={layout === 'spread' ? 'Switch to single-sheet layout' : 'Switch to book-spread layout'}
+                                aria-pressed={layout === 'spread'}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors"
                             >
-                                reset
+                                {layout === 'spread' ? (
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <rect x="4" y="4" width="16" height="16" rx="1" />
+                                        <line x1="4" y1="9" x2="20" y2="9" />
+                                        <line x1="4" y1="15" x2="20" y2="15" />
+                                    </svg>
+                                ) : (
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M2 4h8a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H2z" />
+                                        <path d="M22 4h-8a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h8z" />
+                                    </svg>
+                                )}
+                                <span className="hidden sm:inline">{layout === 'spread' ? 'Sheet' : 'Book'}</span>
                             </button>
-                        )}
-                    </div>
+                            <button
+                                onClick={handleDownloadPdf}
+                                disabled={pdfLoading}
+                                aria-label="Download recipe as PDF"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <span className="hidden sm:inline">{pdfLoading ? 'Generating…' : 'PDF'}</span>
+                            </button>
+                        </div>
+                    </div>      
                 </div>
-
+                
                 {isAuthor && (
                     <div className="author-actions no-print">
                         <button onClick={() => onEdit(recipe)} className="px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors">Edit Recipe</button>
@@ -397,86 +514,31 @@ export default function RecipeDetail({
                     </div>
                 )}
 
-                <div className="recipe-content">
-                    <section>
-                        <h3>Ingredients</h3>
-                        {loading ? (
-                            <ul className="space-y-3" role="status" aria-label="Loading ingredients">
-                                {['w-full', 'w-3/5', 'w-4/5', 'w-3/5'].map((w, i) => (
-                                    <Skeleton key={i} className={`h-4 ${w}`} />
-                                ))}
-                            </ul>
-                        ) : (
-                            <ul className="ingredient-list list-none pl-0">
-                                {ingredients.map(ing => {
-                                    const checked = checkedIngredients.has(ing.id)
-                                    return (
-                                        <li key={ing.id}>
-                                            <label className="flex items-start gap-3 cursor-pointer select-none">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={checked}
-                                                    onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
-                                                    className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
-                                                />
-                                                <span className={checked ? 'line-through text-ink/50' : ''}>
-                                                    {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
-                                                    {ing.notes && (
-                                                        <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
-                                                            {ing.notes}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </label>
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        )}
-                    </section>
-
-                    <hr />
-
-                    <section>
-                        <h3>Steps</h3>
-                        {loading ? (
-                            <ol className="space-y-3" role="status" aria-label="Loading steps">
-                                {['w-full', 'w-4/5', 'w-full', 'w-3/5', 'w-4/5'].map((w, i) => (
-                                    <Skeleton key={i} className={`h-4 ${w}`} />
-                                ))}
-                            </ol>
-                        ) : (
-                            <ol className="step-list">
-                                {steps.map(step => {
-                                    const checked = checkedSteps.has(step.id)
-                                    return (
-                                        <li key={step.id}>
-                                            <label className="flex items-start gap-3 cursor-pointer select-none">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={checked}
-                                                    onChange={() => toggleChecked(setCheckedSteps, step.id)}
-                                                    className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
-                                                />
-                                                <span className={checked ? 'line-through text-ink/50' : ''}>
-                                                    {step.instruction}
-                                                </span>
-                                            </label>
-                                        </li>
-                                    )
-                                })}
-                            </ol>
-                        )}
-                    </section>
-
-                    <div className="no-print">
-                        <Comments
-                            recipeId={recipe.id}
-                            userId={userId}
-                            isAdmin={isAdmin}
-                            onRequireAuth={onRequireAuth}
-                        />
+                {layout === 'spread' ? (
+                    <div className="book-spread recipe-content-spread mt-4">
+                        <section className="book-page book-page-left" aria-label="Ingredients">
+                            {ingredientsSection}
+                        </section>
+                        <div className="book-spine" aria-hidden="true" />
+                        <section className="book-page book-page-right" aria-label="Steps">
+                            {stepsSection}
+                        </section>
                     </div>
+                ) : (
+                    <div className="recipe-content">
+                        {ingredientsSection}
+                        <hr />
+                        {stepsSection}
+                    </div>
+                )}
+
+                <div className="no-print mt-6">
+                    <Comments
+                        recipeId={recipe.id}
+                        userId={userId}
+                        isAdmin={isAdmin}
+                        onRequireAuth={onRequireAuth}
+                    />
                 </div>
             </div>
         </div>

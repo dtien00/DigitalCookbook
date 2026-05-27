@@ -471,7 +471,7 @@ The Following list has been lifted into its own phonebook routing (Stage 14 item
 
 - **Sidebar tabs `[Account, Appearance, Security, Notifications]`** — Stage 14 item 4 layers these onto the left page. Until then, the left page renders the two existing forms (own) or the existing identity + follow controls (read-only) as a single flow.
 - **Backdrop themes** — Stage 14 item 3 adds a backdrop selector, surfaced inside the Appearance tab (which item 4 will add). Default `paper-grain` backdrop ships now.
-- **Recipe → book entity** — Stage 14 item 1 reframes RecipeCard. The current cards continue to render inside the right page until then.
+- **Recipe → book entity** — *(done — Stage 14 item 1)*. RecipeCard now renders as a closed mini-book (cognac spine on the left, page-edges sliver on the right). See the "Recipe as a closed mini-book" section below.
 - **Phonebook for following + parallel routing** — *(done — Stage 14 item 5)*. Implemented at `/profile/following` via [`<FollowingPhonebook>`](../src/components/FollowingPhonebook.jsx). See the "Phonebook book" section below.
 
 ## Open question pinned forward
@@ -678,4 +678,54 @@ Search disables the sentinel: when the user is typing in the search bar, "load m
 ## Recipe Item
 
 - **Each recipe is a book** - Instead of being a card, could represent it as a book that comes out into the middle, opens and can see the ingredients and steps inside. Alternate styles can be supported.
+
+---
+
+# Recipe as a closed mini-book (Stage 14 item 1)
+
+Every recipe card in the home grid, MyBookmarks, AuthorProfile, and the Profile/Phonebook `<RecipesCarousel>` reads as a closed hardcover book on a shelf. The flat card frame is gone; the wrapper is a `.recipe-book` with a leather spine on the left, a page-edges sliver on the right, and the existing cover art (image or cognac leather) between them.
+
+## Anatomy
+
+| Layer | Class | What it is |
+|---|---|---|
+| Frame | `.recipe-book` | Outer wrapper. Cream paper base, asymmetric `border-radius: 3px 8px 8px 3px` (tighter on the spine side), layered drop shadow. Carries the hover lift + shadow transition. |
+| Spine | `.recipe-book-spine` | 8px (desktop) / 6px (phones) dark leather strip down the left edge. A right-fading gradient from deep saddle (binding) to a faint highlight (cover edge) implies the curvature into the fold. Absolute, `z-index: 3`, `pointer-events: none`. |
+| Page edges | `.recipe-book-pages` | 4px cream strip down the right edge, inset 4px from top/bottom so it reads as the page block protruding from under the cover. A vertical `repeating-linear-gradient` draws ~hairline marks suggesting individual page edges. Dark hairline borders on both sides. Slides outward 2px on hover. |
+| Cover | `.recipe-book-cover` | The actual content area. Fills the whole card; spine + page-edges overlay its outer edges. Two variants below. |
+
+The hover state lifts the book `translateY(-3px)`, deepens the shadow, and slides the page-edges 2px outward — visual metaphor: the user is pulling the book off the shelf to open it.
+
+## Cover variants
+
+**Image cards** — the recipe image fills the cover from edge to edge (with the spine + page-edges overlaying ~12px of art on the outer columns). The existing bottom-gradient overlay still carries the title, with the description + tags revealed on hover. The `sepia-[0.08]` filter softens modern photography toward "old cookbook plate" without going full vintage.
+
+**Image-less cards** (`.recipe-book-cover-leather`) — cognac leather treatment built from layered radial gradients (warm highlight top-left, dark vignette bottom-right). Title in **embossed cream serif** with a two-tone text-shadow (dark on top, faint cream below — the same "pressed into leather" trick as `.auth-book-brand-text`). Title sits centered, followed by a thin cream rule, italic-serif description, tag chips with translucent cream borders, and a small `✦` glyph blind-embossed at the bottom.
+
+## Why overlay the spine instead of pushing the cover inward
+
+The spine and page-edges sit at `z-index: 3` and cover the outer ~12px of cover art. The alternative — `margin-left: 8px; margin-right: 4px` on the cover — was tried and reverted, because the `<RecipesCarousel>` pins card height to fill its grid cell, and the cover margins fought the carousel's `object-fit: cover` image rule. Overlaying is also conceptually correct: on a real closed book viewed front-on, the spine sits in front of the cover.
+
+## Backdrop interaction
+
+The cognac-leather tones don't reference palette tokens (they pre-date the rustic-paper system and match the Auth book's `.auth-book-cover` directly). The card reads against every Stage 14 item 3 backdrop variant — paper, wood, cabinet, notepad, digital — because cognac leather has high contrast against every backdrop tone the project ships. If a future backdrop pushes toward a similar terracotta range, the leather treatment would need a darker fallback; not a current concern.
+
+---
+
+# Recipe detail — sheet vs book-spread layout toggle (Stage 14 item 1)
+
+[RecipeDetail.jsx](../src/components/RecipeDetail.jsx) carries a layout toggle in the action row (alongside Like / Bookmark / Share / PDF). Two modes:
+
+| Mode | Visual | Markup |
+|---|---|---|
+| `sheet` *(default)* | Single-column scroll, the original layout. Ingredients section, `<hr>` rule, Steps section. | `.recipe-content` |
+| `spread` | Two-page open book. Ingredients on the left page, Steps on the right, the standard tan↔ink spine between them at `lg+`. Below `lg` the pages stack vertically and the spine collapses. | `.book-spread.recipe-content-spread` with `.book-page-left` + `.book-spine` + `.book-page-right` |
+
+The toggle reuses the same `.book-spread / .book-page` vocabulary the profile surfaces already use, so users see one consistent "open book" treatment across the app.
+
+**Persistence:** sessionStorage key `cookbook.recipeDetailLayout`. Kitchen-session scope (matches `checkedIngredients` / `checkedSteps` / `lastViewedRecipeId`): the preference travels across recipes inside the same tab session but resets when the tab closes. Per-user-account persistence was considered and rejected — the choice is a screen-real-estate preference, not an identity one; treating it as session-local keeps the schema clean.
+
+**Header, author actions, admin panel, Comments** all stay outside the body branches — single-column regardless of mode. The book metaphor applies to ingredients-and-steps (the recipe's "contents"); everything else is chrome.
+
+**Print / PDF:** `@media print` rules in [src/index.css](../src/index.css) override `.recipe-content-spread` back to a single column when the page is printed. This preserves the existing kitchen-card-friendly print/PDF layout regardless of which mode the user is in on screen. Caveat: html2pdf captures the live DOM via html2canvas, not the print stylesheet, so the in-app PDF download will reflect the current screen mode. Acceptable tradeoff — the user has explicit control via the toggle right before they click Download.
 

@@ -1,17 +1,21 @@
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
 
-// Shared recipe card used by the home grid (App.jsx), the Profile
-// "My Recipes" section, and the My Bookmarks view. Two layouts:
-// image cards use a bottom-gradient overlay with hover-revealed
-// description + tags; image-less cards show everything in the body.
+// Stage 14 item 1 — each recipe card reads as a closed mini-book on a shelf.
+// The flat-card chrome is gone; the wrapper is now a `.recipe-book` with a
+// spine on the left, page-edges sliver on the right, and the existing image
+// (or a cognac leather cover for image-less recipes) as the cover art.
 //
-// Bookmark and like buttons render whenever their handlers are
-// provided — anonymous viewers see both (with counts), and the
-// parent wires the click to open the auth view instead of toggling
-// the state. The bookmark icon sits top-right; the like pill sits
-// top-left, so the corners are visually balanced and both are
-// reachable without obscuring the title/overlay area.
+// Two variants:
+//   1. Image cards   — cover art is the recipe image, with the existing
+//      bottom-gradient overlay carrying title / description / tags.
+//   2. Image-less    — cognac leather cover with embossed serif title,
+//      tan hairline rule, italic description, tag chips.
+//
+// Bookmark / like / private-badge keep their existing absolute positions on
+// the cover (above the page-edges via z-index). Anonymous viewers see both
+// action buttons; the parent wires the click to open the auth view instead
+// of toggling state.
 export default function RecipeCard({
     recipe,
     onClick,
@@ -35,8 +39,11 @@ export default function RecipeCard({
             onClick={onClick}
             onKeyDown={handleKeyDown}
             aria-label={`Open recipe: ${recipe.title}`}
-            className="group mb-4 break-inside-avoid cursor-pointer overflow-hidden rounded-lg bg-[#fbf6f1] border border-paper-shade shadow-[0_2px_8px_rgba(30,30,36,0.06)] hover:shadow-[0_8px_20px_rgba(30,30,36,0.12)] transition-shadow duration-300 relative"
+            className="recipe-book group mb-4 break-inside-avoid cursor-pointer"
         >
+            <div className="recipe-book-spine" aria-hidden="true" />
+            <div className="recipe-book-pages" aria-hidden="true" />
+
             {onToggleLike && (
                 <LikeButton
                     liked={liked}
@@ -66,7 +73,7 @@ export default function RecipeCard({
             )}
 
             {recipe.image_url ? (
-                <div className="relative overflow-hidden">
+                <div className="recipe-book-cover relative">
                     <img
                         src={recipe.image_url}
                         alt={recipe.title}
@@ -94,16 +101,18 @@ export default function RecipeCard({
                     </div>
                 </div>
             ) : (
-                <div className="p-5">
-                    <h3 className="m-0 mb-2 font-display text-xl font-semibold text-ink">{recipe.title}</h3>
-                    <div className="w-12 h-px bg-tan mb-3" />
-                    <p className="m-0 font-display italic text-sm text-rose-dark line-clamp-2">{recipe.description}</p>
+                <div className="recipe-book-cover recipe-book-cover-leather">
+                    <h3 className="recipe-book-title">{recipe.title}</h3>
+                    {recipe.description && (
+                        <>
+                            <div className="recipe-book-rule" aria-hidden="true" />
+                            <p className="recipe-book-description">{recipe.description}</p>
+                        </>
+                    )}
                     {recipe.tags?.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
+                        <div className="recipe-book-tags">
                             {recipe.tags.slice(0, 3).map(tag => (
-                                <span key={tag} className="px-2 py-0.5 bg-tan-soft text-ink text-[11px] font-medium rounded-full">
-                                    {tag}
-                                </span>
+                                <span key={tag} className="recipe-book-tag">{tag}</span>
                             ))}
                         </div>
                     )}
