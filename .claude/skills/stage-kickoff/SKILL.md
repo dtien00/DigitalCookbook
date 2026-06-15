@@ -1,6 +1,6 @@
 ---
 name: stage-kickoff
-description: Kick off the next stage of the Digital Cookbook roadmap. Use whenever the user asks to "start Stage N", "begin the next stage", "what's next in ROADMAP", "approach Stage X", or otherwise opens a new chunk of staged work referencing refs/ROADMAP.md. Also trigger when the user is on `main` (or a stale stage branch) and asks how to begin upcoming roadmap work, even if they don't say "stage" — the roadmap is the source of truth for this project's sequencing.
+description: Kick off the next stage of the Digital Cookbook roadmap. Use whenever the user asks to "start Stage N", "begin the next stage", "what's next in ROADMAP", "approach Stage X", or otherwise opens a new chunk of staged work referencing refs/ROADMAP.md. Also trigger when the user is on `main` (or a stale stage branch) and asks how to begin upcoming roadmap work, even if they don't say "stage" — the roadmap is the source of truth for this project's sequencing. Includes an edge-case sweep mode triggered when the user's args mention "review for edge cases", "missing edge cases", "issues to resolve", "review for issues", or similar — surfaces unaddressed scenarios in the stage's items before implementation begins.
 ---
 
 # Stage kickoff
@@ -27,6 +27,17 @@ Your job is to compress that opening into one structured response so the user ca
 
 5. **Propose the branch name.** Convention is `stage-N-<short-slug>` based on the first item you're tackling (e.g., `stage-7-servings-multiplier`). Confirm with the user before creating.
 
+6. **Run an edge-case sweep when the args ask for one.** Trigger phrases in `command-args`: "edge cases", "missing edge cases", "issues to resolve", "review for issues", "anything missing", "exit criteria". When triggered, for the suggested first item (not the whole stage), list 3–6 concrete scenarios the roadmap item doesn't explicitly call out. Categories to scan:
+   - **Empty / zero state** — what shows when the user has none of the thing yet?
+   - **Permission / RLS** — who can read, who can write, what happens to the other person's view?
+   - **Optimistic-update failure** — what if the mutation fails after the UI already moved?
+   - **Concurrent edit / stale read** — two tabs, two devices, refresh during action.
+   - **Mobile / narrow viewport** — does the affordance still work at phone width? (cross-ref `mobile-audit`)
+   - **Stale closure / functional setState** — the project has been bitten by this; flag mutations that depend on prior state.
+   - **Deep-link / refresh** — does the URL still resolve after a hard reload?
+
+   Format each as one line: `<scenario> — <suggested handling or "needs decision">`. Don't propose fixes for all of them; the point is surfacing what's worth deciding before code lands.
+
 ## Output shape
 
 Respond with a tight structure the user can act on:
@@ -46,9 +57,14 @@ Why: <one-line: blast radius, kitchen-relevance, unblocks-other-items, or "close
 **Branch:** `stage-N-<slug>` off `main` (current: `<current-branch>`, status: <clean | N uncommitted>)
 
 **Deferred this stage:** <items recommended to push to a later stage or post-audience>
+
+**Edge-case sweep** *(only when args triggered it):*
+- <scenario> — <suggested handling or "needs decision">
+- <scenario> — <suggested handling or "needs decision">
+- ...
 ```
 
-End with: "Want me to create the branch and start on `<item>`?" — don't create branches or start work until the user confirms.
+End with: "Want me to create the branch and start on `<item>`?" — don't create branches or start work until the user confirms. If the sweep surfaced items that need a decision, ask for those decisions in the same turn so the user can answer once.
 
 ## What NOT to do
 
@@ -56,3 +72,5 @@ End with: "Want me to create the branch and start on `<item>`?" — don't create
 - **Don't propose multiple items in parallel.** The user's pattern is one item at a time per branch. Suggesting "let's do all four items this stage" undoes the staged sequencing that the roadmap was built around.
 - **Don't auto-create branches or write code.** This skill ends at the recommendation. The user signs off, then implementation begins.
 - **Don't restate the full task list from ROADMAP verbatim.** The user has the file open — give them the synthesis they can't get from re-reading.
+- **Don't run the edge-case sweep unprompted.** It's gated on trigger phrases in the args. Adding it to every kickoff bloats the response and front-loads decisions before the user has even agreed to the item.
+- **Don't run the edge-case sweep across the whole stage.** Sweep only the suggested first item — the rest of the stage's items will get their own kickoff later, and pre-sweeping them invents work the user may never reach.
