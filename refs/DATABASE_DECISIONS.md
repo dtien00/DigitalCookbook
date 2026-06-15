@@ -394,6 +394,42 @@ COALESCE(
 
 ---
 
+## Cookbooks + cookbook_recipes (migration 015, Stage 14 item 1)
+
+**Decision:** Two-table model — `cookbooks` (one row per collection) + `cookbook_recipes` (join, ordered by `position`). Cookbooks are owner-curated and optionally public; cookbook_recipes inherit their parent cookbook's visibility for reads but are gated on parent ownership for writes.
+
+**Why two tables, not an array column on `cookbooks`:**
+- A recipe needs to live in many cookbooks (many-to-many), so an array on either side would denormalise.
+- Ordering (`position`) and per-membership metadata (`added_at`) need somewhere to live.
+- Reverse-lookup ("which cookbooks contain this recipe?") for the future "Add to cookbook…" affordance on RecipeDetail needs an index on the recipe-id side; an array column would force a GIN scan instead of a B-tree probe.
+
+**Curation model — Option A (own-only), not collaborative:** Only the cookbook's `owner_id` can add, reorder, or remove recipes. Mirrors `favorites` (a private personal collection) rather than `comments` (multi-author). Collaborative cookbooks would need a `cookbook_collaborators` table, more RLS surface, and a "who invited whom" UX — none of which the audience has asked for. Decision is reversible later: add a collaborators table and widen the EXISTS check in the write policies; existing single-owner cookbooks keep working.
+
+**RLS — parent-visibility-inherited pattern (new in this project):** Existing join-ish tables in the project (`favorites`, `likes`, `comments`) gate writes on `auth.uid() = user_id` directly because each row carries the actor's id. `cookbook_recipes` rows don't — they carry `cookbook_id` and `recipe_id`, neither of which is the actor. So the policies use:
+
+```sql
+EXISTS (
+  SELECT 1 FROM public.cookbooks c
+  WHERE c.id = cookbook_recipes.cookbook_id
+    AND c.owner_id = auth.uid()  -- for INSERT/UPDATE/DELETE
+)
+```
+
+For SELECT the policy drops the `owner_id` check — the EXISTS just confirms the parent cookbook is visible to the caller, and the parent's own RLS (`is_public OR auth.uid() = owner_id`) does the actual filtering. This is the first migration in the project that uses an EXISTS-on-parent pattern for write gating. Future join tables (e.g., `cookbook_collaborators`, `meal_plans`'s recipe slots) should follow the same shape — it's the right pattern any time the actor isn't on the row itself.
+
+**Cover image — nullable URL + client-side fallback:** `cookbooks.cover_image_url TEXT` is nullable. When null, the client composes a cover from the first N recipe thumbnails (zero-effort default). When set, points into the existing `recipe-images` bucket — no new bucket / storage policy needed. An author who wants a polished cover can upload one; an author who doesn't gets a reasonable auto-cover for free.
+
+**Cascade behavior:**
+- Deleting a cookbook drops its `cookbook_recipes` rows (own-only).
+- Deleting a recipe drops it from every cookbook that contained it (`ON DELETE CASCADE` on `cookbook_recipes.recipe_id`). This means a user's cookbook can shrink without their action when an author they bookmarked deletes a recipe. Acceptable: the alternative (orphaned references) is worse.
+- Deleting a user drops all their cookbooks via the existing `profiles` cascade chain.
+
+**Tradeoffs:**
+- **EXISTS subquery cost on every INSERT.** Negligible at any realistic scale — the cookbooks PK lookup is a single index probe.
+- **No uniqueness on `(cookbook_id, position)`.** Two recipes can share a position. Acceptable for v1 — client-side reorder assigns fresh positions, and visual ordering ties break by `added_at` if it ever happens. A unique index would force a more involved reorder transaction.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:

@@ -10,6 +10,7 @@ import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
 import { useBackdrop } from './hooks/useBackdrop'
+import { useCookbooks } from './hooks/useCookbooks'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -186,6 +187,13 @@ function App() {
     // without per-component plumbing. Lives at App level (single source of
     // truth) and is passed into Profile so the Appearance tab can change it.
     const { backdrop, chooseBackdrop } = useBackdrop()
+
+    // Cookbooks (Stage 14 item 1) — own cookbooks + recipe-membership.
+    // Lives at App level so the future "Add to cookbook…" picker on
+    // RecipeDetail and the Cookbook shelf on Profile share one source
+    // of truth. Anonymous viewers get an empty list + no-op mutators.
+    const cookbooksApi = useCookbooks(session?.user.id)
+
     const [basketOpen, setBasketOpen] = useState(false)
     const basketTriggerRef = useRef(null)
 
