@@ -162,18 +162,33 @@ export function useCookbooks(userId) {
         }
     }, [userId, cookbookMap])
 
+    // NOTE: addRecipeToCookbook / removeRecipeFromCookbook read state via
+    // setCookbookMap(prev => ...) rather than closing over `cookbookMap`.
+    // The "create cookbook then add this recipe" flow on RecipeDetail's
+    // AddToCookbookButton chains the two: createCookbook resolves and
+    // updates state, then handleCreateAndAdd calls addRecipeToCookbook
+    // referring to a brand-new cookbook id. The closed-over `cookbookMap`
+    // is captured before that state update propagates, so the
+    // `cookbookMap.get(cookbookId)` check would miss the new row and the
+    // function would early-return silently. Functional setState reads
+    // the latest map and avoids the stale-closure trap.
     const addRecipeToCookbook = useCallback(async (cookbookId, recipeId) => {
         if (!userId || !cookbookId || !recipeId) return
-        const cookbook = cookbookMap.get(cookbookId)
-        if (!cookbook || cookbook.recipeIds.has(recipeId)) return
 
+        let shouldSkip = false
         setCookbookMap(prev => {
+            const cookbook = prev.get(cookbookId)
+            if (!cookbook || cookbook.recipeIds.has(recipeId)) {
+                shouldSkip = true
+                return prev
+            }
             const next = new Map(prev)
             const updated = { ...cookbook, recipeIds: new Set(cookbook.recipeIds) }
             updated.recipeIds.add(recipeId)
             next.set(cookbookId, updated)
             return next
         })
+        if (shouldSkip) return
 
         try {
             // position defaults to 0 server-side; client-side ordering ties
@@ -187,6 +202,8 @@ export function useCookbooks(userId) {
         } catch (e) {
             console.error('Failed to add recipe to cookbook:', e.message)
             setCookbookMap(prev => {
+                const cookbook = prev.get(cookbookId)
+                if (!cookbook) return prev
                 const next = new Map(prev)
                 const reverted = { ...cookbook, recipeIds: new Set(cookbook.recipeIds) }
                 reverted.recipeIds.delete(recipeId)
@@ -194,20 +211,25 @@ export function useCookbooks(userId) {
                 return next
             })
         }
-    }, [userId, cookbookMap])
+    }, [userId])
 
     const removeRecipeFromCookbook = useCallback(async (cookbookId, recipeId) => {
         if (!userId || !cookbookId || !recipeId) return
-        const cookbook = cookbookMap.get(cookbookId)
-        if (!cookbook || !cookbook.recipeIds.has(recipeId)) return
 
+        let shouldSkip = false
         setCookbookMap(prev => {
+            const cookbook = prev.get(cookbookId)
+            if (!cookbook || !cookbook.recipeIds.has(recipeId)) {
+                shouldSkip = true
+                return prev
+            }
             const next = new Map(prev)
             const updated = { ...cookbook, recipeIds: new Set(cookbook.recipeIds) }
             updated.recipeIds.delete(recipeId)
             next.set(cookbookId, updated)
             return next
         })
+        if (shouldSkip) return
 
         try {
             const { error } = await supabase
@@ -219,6 +241,8 @@ export function useCookbooks(userId) {
         } catch (e) {
             console.error('Failed to remove recipe from cookbook:', e.message)
             setCookbookMap(prev => {
+                const cookbook = prev.get(cookbookId)
+                if (!cookbook) return prev
                 const next = new Map(prev)
                 const reverted = { ...cookbook, recipeIds: new Set(cookbook.recipeIds) }
                 reverted.recipeIds.add(recipeId)
@@ -226,7 +250,7 @@ export function useCookbooks(userId) {
                 return next
             })
         }
-    }, [userId, cookbookMap])
+    }, [userId])
 
     return {
         cookbooks,
