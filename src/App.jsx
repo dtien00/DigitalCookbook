@@ -16,6 +16,7 @@ import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import AuthorProfile from './components/AuthorProfile'
+import CookbookDetail from './components/CookbookDetail'
 import FollowingPhonebook from './components/FollowingPhonebook'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
@@ -501,6 +502,24 @@ function App() {
                                 toggleFollow(authorId)
                             }}
                             onSetNotifyPref={setNotifyPref}
+                        />
+                    }
+                />
+                <Route
+                    path="/cookbook/:id"
+                    element={
+                        <CookbookDetail
+                            session={session}
+                            cookbooks={cookbooksApi.cookbooks}
+                            updateCookbook={cookbooksApi.updateCookbook}
+                            deleteCookbook={cookbooksApi.deleteCookbook}
+                            addRecipeToCookbook={cookbooksApi.addRecipeToCookbook}
+                            removeRecipeFromCookbook={cookbooksApi.removeRecipeFromCookbook}
+                            isFavorited={isFavorited}
+                            onToggleFavorite={handleBookmarkClick}
+                            likeCount={likeCount}
+                            userLiked={userLiked}
+                            onToggleLike={handleLikeClick}
                         />
                     }
                 />
