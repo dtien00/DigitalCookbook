@@ -410,6 +410,11 @@ function App() {
         onBookmarkClick: handleBookmarkClick,
         onLikeClick: handleLikeClick,
         onRequireAuth: () => setShowAuth(true),
+        cookbooks: cookbooksApi.cookbooks,
+        isRecipeInCookbook: cookbooksApi.isRecipeInCookbook,
+        addRecipeToCookbook: cookbooksApi.addRecipeToCookbook,
+        removeRecipeFromCookbook: cookbooksApi.removeRecipeFromCookbook,
+        createCookbook: cookbooksApi.createCookbook,
     }
 
     const handleCreateComplete = () => {
@@ -1172,6 +1177,7 @@ function RecipeDetailRoute({
     isFavorited, likeCount, userLiked,
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
+    cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1261,6 +1267,12 @@ function RecipeDetailRoute({
             refetchLikes={refetchLikes}
             refetchFavorites={refetchFavorites}
             onRequireAuth={onRequireAuth}
+            session={session}
+            cookbooks={cookbooks}
+            isRecipeInCookbook={isRecipeInCookbook}
+            addRecipeToCookbook={addRecipeToCookbook}
+            removeRecipeFromCookbook={removeRecipeFromCookbook}
+            createCookbook={createCookbook}
         />
     )
 }

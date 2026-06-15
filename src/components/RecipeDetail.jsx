@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
 import ShareButton from './ShareButton'
+import AddToCookbookButton from './AddToCookbookButton'
 import Comments from './Comments'
 import Skeleton from './Skeleton'
 
@@ -23,6 +24,12 @@ export default function RecipeDetail({
     refetchLikes,
     refetchFavorites,
     onRequireAuth,
+    session,
+    cookbooks = [],
+    isRecipeInCookbook,
+    addRecipeToCookbook,
+    removeRecipeFromCookbook,
+    createCookbook,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -430,6 +437,18 @@ export default function RecipeDetail({
                         <div className="flex items-center gap-3">
                             {recipe.is_public !== false && (
                                 <ShareButton url={`${window.location.origin}/recipe/${recipe.id}`} />
+                            )}
+                            {isRecipeInCookbook && (
+                                <AddToCookbookButton
+                                    recipeId={recipe.id}
+                                    session={session}
+                                    cookbooks={cookbooks}
+                                    isRecipeInCookbook={isRecipeInCookbook}
+                                    addRecipeToCookbook={addRecipeToCookbook}
+                                    removeRecipeFromCookbook={removeRecipeFromCookbook}
+                                    createCookbook={createCookbook}
+                                    onRequireAuth={onRequireAuth}
+                                />
                             )}
                             <button
                                 onClick={() => setLayout(l => l === 'spread' ? 'sheet' : 'spread')}
