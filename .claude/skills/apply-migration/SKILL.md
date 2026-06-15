@@ -1,17 +1,17 @@
 ---
 name: apply-migration
-description: Walk the user through applying a pending Supabase migration. Use whenever the user asks to "apply the migration", "run the migration", "what migrations do I need to apply", "did I run NNN yet", or otherwise signals that a `supabase_migration_*.sql` file in `supabase_migrations/` needs to land in the cloud project. Also trigger when a session just authored a new migration file and the user asks "what's next?" — the next step is always the manual dashboard paste-and-run.
+description: Walk the user through applying a pending Supabase migration. Use whenever the user asks to "apply the migration", "run the migration", "what migrations do I need to apply", "did I run NNN yet", or otherwise signals that a `supabase_migration_*.sql` file in `supabase_migration/` needs to land in the cloud project. Also trigger when a session just authored a new migration file and the user asks "what's next?" — the next step is always the manual dashboard paste-and-run.
 ---
 
 # Apply migration
 
-This project keeps SQL migration files in `supabase_migrations/` (gitignored — local-only, not shipped). They are applied **manually** through the Supabase Dashboard's SQL Editor, not via the Supabase CLI. Every recent session that touched schema ended with the same instruction shape: "open Dashboard → SQL Editor → paste this file → Run, then re-run `npm run seed:test` if seed data changed, then update `refs/DATABASE_DECISIONS.md` if you introduced a new pattern."
+This project keeps SQL migration files in `supabase_migration/` (gitignored — local-only, not shipped). They are applied **manually** through the Supabase Dashboard's SQL Editor, not via the Supabase CLI. Every recent session that touched schema ended with the same instruction shape: "open Dashboard → SQL Editor → paste this file → Run, then re-run `npm run seed:test` if seed data changed, then update `refs/DATABASE_DECISIONS.md` if you introduced a new pattern."
 
 Your job is to identify which migration(s) need applying, hand the user the exact paste-and-run steps, and remind them about the two follow-up actions that are easy to forget.
 
 ## What to do
 
-1. **List the local migration files.** `ls supabase_migrations/` (the directory is gitignored, so `git status` won't show new files there). Files follow the convention `supabase_migration_NNN_<slug>.sql` — the number is a strict increment, the slug is short.
+1. **List the local migration files.** `ls supabase_migration/` (the directory is gitignored, so `git status` won't show new files there). Files follow the convention `supabase_migration_NNN_<slug>.sql` — the number is a strict increment, the slug is short.
 
 2. **Figure out what's pending.** There is no migrations table in this project — the user is the source of truth on what's been applied. Ask if it's not obvious from context:
    - If a session just authored a new file (e.g., the diff shows `supabase_migration_011_*.sql` was just written), that file is the pending one — no question needed.
@@ -23,7 +23,7 @@ Your job is to identify which migration(s) need applying, hand the user the exac
    ```
    **Apply `supabase_migration_NNN_<slug>.sql`:**
    1. Open [Supabase Dashboard](https://supabase.com/dashboard) → your project → **SQL Editor** (left sidebar) → **New query**
-   2. Paste the contents of `supabase_migrations/supabase_migration_NNN_<slug>.sql`
+   2. Paste the contents of `supabase_migration/supabase_migration_NNN_<slug>.sql`
    3. Click **Run** (or Ctrl+Enter). Migration is idempotent — safe to re-run if you're unsure.
    4. Look for "Success. No rows returned" (or the relevant row count) at the bottom.
    ```
@@ -44,7 +44,7 @@ Your job is to identify which migration(s) need applying, hand the user the exac
 
 **Apply:**
 1. Supabase Dashboard → SQL Editor → New query
-2. Paste contents of `supabase_migrations/supabase_migration_NNN_<slug>.sql`
+2. Paste contents of `supabase_migration/supabase_migration_NNN_<slug>.sql`
 3. Run (Ctrl+Enter). Idempotent.
 
 **After applying:**
