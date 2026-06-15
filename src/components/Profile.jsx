@@ -6,6 +6,7 @@ import RecipeCard from './RecipeCard'
 import ProfileBookSpread from './ProfileBookSpread'
 import RecipesCarousel from './RecipesCarousel'
 import ProfileTabs from './ProfileTabs'
+import CookbookShelf from './CookbookShelf'
 import { BACKDROPS } from '../hooks/useBackdrop'
 
 export default function Profile({
@@ -19,6 +20,10 @@ export default function Profile({
     onToggleLike,
     backdrop,
     onChooseBackdrop,
+    cookbooks,
+    createCookbook,
+    deleteCookbook,
+    cookbooksLoading,
 }) {
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
@@ -151,6 +156,20 @@ export default function Profile({
                     setBio={setBio}
                     onSubmit={updateProfile}
                     loading={loading}
+                />
+            ),
+        },
+        {
+            id: 'cookbooks',
+            label: 'Cookbooks',
+            color: '#7a4a3a', // warm wood — fits the bookshelf aesthetic
+            icon: <IconBook />,
+            content: (
+                <CookbookShelf
+                    cookbooks={cookbooks ?? []}
+                    createCookbook={createCookbook}
+                    deleteCookbook={deleteCookbook}
+                    loading={cookbooksLoading}
                 />
             ),
         },
@@ -482,6 +501,15 @@ function IconPie() {
         <svg {...iconProps}>
             <path d="M21 12A9 9 0 1 1 12 3v9h9z" />
             <path d="M12 3a9 9 0 0 1 9 9h-9z" />
+        </svg>
+    )
+}
+
+function IconBook() {
+    return (
+        <svg {...iconProps}>
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
     )
 }

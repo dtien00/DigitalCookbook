@@ -454,6 +454,10 @@ function App() {
                                 onToggleLike={handleLikeClick}
                                 backdrop={backdrop}
                                 onChooseBackdrop={chooseBackdrop}
+                                cookbooks={cookbooksApi.cookbooks}
+                                createCookbook={cookbooksApi.createCookbook}
+                                deleteCookbook={cookbooksApi.deleteCookbook}
+                                cookbooksLoading={cookbooksApi.loading}
                             />
                             : <Navigate to="/" replace />
                     }
