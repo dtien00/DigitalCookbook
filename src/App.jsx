@@ -10,11 +10,13 @@ import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
 import { useBackdrop } from './hooks/useBackdrop'
+import { useCookbooks } from './hooks/useCookbooks'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import AuthorProfile from './components/AuthorProfile'
+import CookbookDetail from './components/CookbookDetail'
 import FollowingPhonebook from './components/FollowingPhonebook'
 import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
@@ -186,6 +188,13 @@ function App() {
     // without per-component plumbing. Lives at App level (single source of
     // truth) and is passed into Profile so the Appearance tab can change it.
     const { backdrop, chooseBackdrop } = useBackdrop()
+
+    // Cookbooks (Stage 14 item 1) — own cookbooks + recipe-membership.
+    // Lives at App level so the future "Add to cookbook…" picker on
+    // RecipeDetail and the Cookbook shelf on Profile share one source
+    // of truth. Anonymous viewers get an empty list + no-op mutators.
+    const cookbooksApi = useCookbooks(session?.user.id)
+
     const [basketOpen, setBasketOpen] = useState(false)
     const basketTriggerRef = useRef(null)
 
@@ -402,6 +411,11 @@ function App() {
         onBookmarkClick: handleBookmarkClick,
         onLikeClick: handleLikeClick,
         onRequireAuth: () => setShowAuth(true),
+        cookbooks: cookbooksApi.cookbooks,
+        isRecipeInCookbook: cookbooksApi.isRecipeInCookbook,
+        addRecipeToCookbook: cookbooksApi.addRecipeToCookbook,
+        removeRecipeFromCookbook: cookbooksApi.removeRecipeFromCookbook,
+        createCookbook: cookbooksApi.createCookbook,
     }
 
     const handleCreateComplete = () => {
@@ -446,6 +460,10 @@ function App() {
                                 onToggleLike={handleLikeClick}
                                 backdrop={backdrop}
                                 onChooseBackdrop={chooseBackdrop}
+                                cookbooks={cookbooksApi.cookbooks}
+                                createCookbook={cookbooksApi.createCookbook}
+                                deleteCookbook={cookbooksApi.deleteCookbook}
+                                cookbooksLoading={cookbooksApi.loading}
                             />
                             : <Navigate to="/" replace />
                     }
@@ -484,6 +502,24 @@ function App() {
                                 toggleFollow(authorId)
                             }}
                             onSetNotifyPref={setNotifyPref}
+                        />
+                    }
+                />
+                <Route
+                    path="/cookbook/:id"
+                    element={
+                        <CookbookDetail
+                            session={session}
+                            cookbooks={cookbooksApi.cookbooks}
+                            updateCookbook={cookbooksApi.updateCookbook}
+                            deleteCookbook={cookbooksApi.deleteCookbook}
+                            addRecipeToCookbook={cookbooksApi.addRecipeToCookbook}
+                            removeRecipeFromCookbook={cookbooksApi.removeRecipeFromCookbook}
+                            isFavorited={isFavorited}
+                            onToggleFavorite={handleBookmarkClick}
+                            likeCount={likeCount}
+                            userLiked={userLiked}
+                            onToggleLike={handleLikeClick}
                         />
                     }
                 />
@@ -1160,6 +1196,7 @@ function RecipeDetailRoute({
     isFavorited, likeCount, userLiked,
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
+    cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1249,6 +1286,12 @@ function RecipeDetailRoute({
             refetchLikes={refetchLikes}
             refetchFavorites={refetchFavorites}
             onRequireAuth={onRequireAuth}
+            session={session}
+            cookbooks={cookbooks}
+            isRecipeInCookbook={isRecipeInCookbook}
+            addRecipeToCookbook={addRecipeToCookbook}
+            removeRecipeFromCookbook={removeRecipeFromCookbook}
+            createCookbook={createCookbook}
         />
     )
 }
