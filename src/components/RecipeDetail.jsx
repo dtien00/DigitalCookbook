@@ -8,6 +8,7 @@ import ShareButton from './ShareButton'
 import AddToCookbookButton from './AddToCookbookButton'
 import Comments from './Comments'
 import Skeleton from './Skeleton'
+import MfaChallengeGate from './MfaChallengeGate'
 
 export default function RecipeDetail({
     recipe,
@@ -30,6 +31,7 @@ export default function RecipeDetail({
     addRecipeToCookbook,
     removeRecipeFromCookbook,
     createCookbook,
+    mfa,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -500,36 +502,52 @@ export default function RecipeDetail({
                             <span aria-hidden="true" className="text-rose-dark">⚑</span>
                             <h3 className="font-display text-sm font-semibold text-ink m-0 uppercase tracking-wide">Admin moderation</h3>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {!isAuthor && (
+                        {/* Stage 16 item 2 — gate admin tools on MFA. Three states:
+                            (a) no factor enrolled → push to Security tab
+                            (b) factor enrolled but session AAL1 → inline challenge
+                            (c) AAL2 → render the buttons */}
+                        {!mfa?.hasVerifiedFactor ? (
+                            <p className="font-serif italic text-ink/80 text-sm m-0">
+                                Enable two-factor authentication in your <Link to="/profile" className="underline hover:text-ink">profile Security tab</Link> to access admin tools.
+                            </p>
+                        ) : !mfa.isAal2 ? (
+                            <MfaChallengeGate
+                                factors={mfa.factors}
+                                verifyCode={mfa.verifyCode}
+                                hint="Verify with your authenticator app to unlock admin actions for this session."
+                            />
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {!isAuthor && (
+                                    <button
+                                        onClick={handleAdminDeleteRecipe}
+                                        className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                    >
+                                        Delete recipe
+                                    </button>
+                                )}
                                 <button
-                                    onClick={handleAdminDeleteRecipe}
-                                    className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                    onClick={handleResetLikes}
+                                    className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
                                 >
-                                    Delete recipe
+                                    Reset likes
                                 </button>
-                            )}
-                            <button
-                                onClick={handleResetLikes}
-                                className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
-                            >
-                                Reset likes
-                            </button>
-                            <button
-                                onClick={handleResetBookmarks}
-                                className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
-                            >
-                                Reset bookmarks
-                            </button>
-                            {!isAuthor && (
                                 <button
-                                    onClick={handleAdminDeleteAuthor}
-                                    className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                    onClick={handleResetBookmarks}
+                                    className="px-3 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-semibold rounded-md border border-paper-shade transition-colors"
                                 >
-                                    Delete author
+                                    Reset bookmarks
                                 </button>
-                            )}
-                        </div>
+                                {!isAuthor && (
+                                    <button
+                                        onClick={handleAdminDeleteAuthor}
+                                        className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors"
+                                    >
+                                        Delete author
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
