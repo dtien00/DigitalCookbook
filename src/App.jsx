@@ -6,6 +6,7 @@ import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
 import { useAdmin } from './hooks/useAdmin'
+import { useMfa } from './hooks/useMfa'
 import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
@@ -174,6 +175,7 @@ function App() {
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin } = useAdmin(session?.user.id)
+    const mfa = useMfa(session?.user.id)
     const { isFollowing, getNotifyPref, toggleFollow, setNotifyPref } = useFollowing(session?.user.id)
     const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session?.user.id)
 
@@ -416,6 +418,7 @@ function App() {
         addRecipeToCookbook: cookbooksApi.addRecipeToCookbook,
         removeRecipeFromCookbook: cookbooksApi.removeRecipeFromCookbook,
         createCookbook: cookbooksApi.createCookbook,
+        mfa,
     }
 
     const handleCreateComplete = () => {
@@ -464,6 +467,8 @@ function App() {
                                 createCookbook={cookbooksApi.createCookbook}
                                 deleteCookbook={cookbooksApi.deleteCookbook}
                                 cookbooksLoading={cookbooksApi.loading}
+                                isAdmin={isAdmin}
+                                mfa={mfa}
                             />
                             : <Navigate to="/" replace />
                     }
