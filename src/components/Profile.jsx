@@ -7,6 +7,7 @@ import ProfileBookSpread from './ProfileBookSpread'
 import RecipesCarousel from './RecipesCarousel'
 import ProfileTabs from './ProfileTabs'
 import CookbookShelf from './CookbookShelf'
+import MfaEnrollDialog from './MfaEnrollDialog'
 import { BACKDROPS } from '../hooks/useBackdrop'
 
 export default function Profile({
@@ -24,7 +25,10 @@ export default function Profile({
     createCookbook,
     deleteCookbook,
     cookbooksLoading,
+    isAdmin = false,
+    mfa,
 }) {
+    const [mfaDialogOpen, setMfaDialogOpen] = useState(false)
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
     const [username, setUsername] = useState('')
@@ -191,6 +195,9 @@ export default function Profile({
                     setNewPassword={setNewPassword}
                     onSubmit={updatePassword}
                     loading={passwordLoading}
+                    isAdmin={isAdmin}
+                    mfa={mfa}
+                    onEnableMfa={() => setMfaDialogOpen(true)}
                 />
             ),
         },
@@ -234,6 +241,16 @@ export default function Profile({
     ]
 
     return (
+        <>
+        {mfaDialogOpen && mfa && (
+            <MfaEnrollDialog
+                onClose={() => setMfaDialogOpen(false)}
+                onComplete={() => setMfaDialogOpen(false)}
+                beginEnrollment={mfa.beginEnrollment}
+                verifyCode={mfa.verifyCode}
+                unenroll={mfa.unenroll}
+            />
+        )}
         <ProfileBookSpread
             header={
                 <header className="flex items-center gap-4 flex-wrap">
@@ -285,6 +302,7 @@ export default function Profile({
                 </div>
             }
         />
+        </>
     )
 }
 
@@ -340,31 +358,95 @@ function ContactTab({ email }) {
     )
 }
 
-function SecurityTab({ newPassword, setNewPassword, onSubmit, loading }) {
+function SecurityTab({ newPassword, setNewPassword, onSubmit, loading, isAdmin, mfa, onEnableMfa }) {
+    const [unenrolling, setUnenrolling] = useState(false)
+    const hasFactor = mfa?.hasVerifiedFactor
+    const factor = mfa?.factors?.[0]
+
+    async function handleDisable() {
+        if (!factor) return
+        if (!window.confirm('Disable two-factor authentication? You will only need your password to sign in next time.')) return
+        setUnenrolling(true)
+        try {
+            await mfa.unenroll(factor.id)
+            toast.success('Two-factor authentication disabled')
+        } catch (error) {
+            toast.error('Could not disable: ' + error.message)
+        } finally {
+            setUnenrolling(false)
+        }
+    }
+
     return (
         <div>
-            <h3 className="font-display text-xl text-ink mb-4">Change Password</h3>
-            <form onSubmit={onSubmit}>
-                <div className="form-group">
-                    <label>New Password</label>
-                    <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Enter new password"
-                        minLength={6}
-                    />
+            {isAdmin && !hasFactor && (
+                <div className="mb-5 p-4 bg-rose-dark/10 border border-dashed border-rose-dark/40 rounded-md">
+                    <p className="font-display text-sm font-semibold text-rose-dark uppercase tracking-wide mb-1">⚑ Admin MFA required</p>
+                    <p className="font-serif italic text-ink/80 text-sm m-0">
+                        Admin accounts must enable two-factor authentication before using the moderation panel.
+                    </p>
                 </div>
-                <button
-                    className="w-full px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={loading || !newPassword}
-                >
-                    {loading ? 'Updating...' : 'Update Password'}
-                </button>
-            </form>
-            <p className="font-serif italic text-ink/60 text-sm mt-4">
-                Email change and account deletion controls may be added in a future stage.
-            </p>
+            )}
+
+            <section className="mb-6">
+                <h3 className="font-display text-xl text-ink mb-3">Two-factor authentication</h3>
+                <p className="font-serif italic text-ink/70 text-sm mb-3">
+                    Use Microsoft Authenticator, Google Authenticator, Authy, or any RFC 6238 TOTP app.
+                </p>
+                {hasFactor ? (
+                    <div className="flex items-center justify-between gap-3 p-3 bg-paper-shade/40 border border-paper-shade rounded-md">
+                        <div>
+                            <p className="font-display text-sm text-ink m-0">
+                                <span aria-hidden="true" className="text-rust">✓</span> Enabled
+                            </p>
+                            <p className="font-serif italic text-ink/60 text-xs m-0">
+                                {factor.friendly_name || 'Authenticator'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleDisable}
+                            disabled={unenrolling}
+                            className="px-3 py-2 bg-rose-dark hover:bg-rose text-paper text-sm font-semibold rounded-md transition-colors disabled:opacity-50"
+                        >
+                            {unenrolling ? 'Disabling…' : 'Disable'}
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={onEnableMfa}
+                        className="px-4 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
+                    >
+                        Enable two-factor authentication
+                    </button>
+                )}
+            </section>
+
+            <section>
+                <h3 className="font-display text-xl text-ink mb-4">Change Password</h3>
+                <form onSubmit={onSubmit}>
+                    <div className="form-group">
+                        <label>New Password</label>
+                        <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Enter new password"
+                            minLength={6}
+                        />
+                    </div>
+                    <button
+                        className="w-full px-5 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={loading || !newPassword}
+                    >
+                        {loading ? 'Updating...' : 'Update Password'}
+                    </button>
+                </form>
+                <p className="font-serif italic text-ink/60 text-sm mt-4">
+                    Email change and account deletion controls may be added in a future stage.
+                </p>
+            </section>
         </div>
     )
 }
