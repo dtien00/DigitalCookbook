@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useComments } from '../hooks/useComments'
 import { SkeletonComment } from './Skeleton'
+import ReportButton from './ReportButton'
 
 // Comment thread for a recipe. Renders below the steps section in
 // RecipeDetail. Three responsibilities:
@@ -19,7 +20,7 @@ import { SkeletonComment } from './Skeleton'
 //   userId           — current user's id, or null for anonymous viewers
 //   onRequireAuth()  — invoked when an anonymous user attempts to comment
 
-export default function Comments({ recipeId, userId, isAdmin = false, onRequireAuth }) {
+export default function Comments({ recipeId, userId, isAdmin = false, onRequireAuth, submitReport }) {
     const { comments, addComment, deleteComment, loading } = useComments(recipeId, userId, isAdmin)
     const [draft, setDraft] = useState('')
     const [submitting, setSubmitting] = useState(false)
@@ -105,6 +106,10 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                                 canDelete={isOwn || isAdmin}
                                 deleteLabel={isAdmin && !isOwn ? 'Delete (admin)' : 'Delete'}
                                 onDelete={() => deleteComment(c.id)}
+                                canReport={!isOwn && submitReport}
+                                userId={userId}
+                                onRequireAuth={onRequireAuth}
+                                submitReport={submitReport}
                             />
                         )
                     })}
@@ -116,7 +121,7 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
 
 // Single comment row: avatar + username + relative time + content + delete
 // (visible to the comment's owner, or to admins as a moderation override).
-function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete }) {
+function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete, canReport, userId, onRequireAuth, submitReport }) {
     const username = comment.profiles?.username || 'Unknown user'
     const avatarUrl = comment.profiles?.avatar_url
     const initials = username.slice(0, 2).toUpperCase()
@@ -146,15 +151,28 @@ function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete'
                     <span className="text-xs text-ink/60">{formatRelativeTime(comment.created_at)}</span>
                 </div>
                 <p className="mt-1 text-ink whitespace-pre-wrap break-words">{comment.content}</p>
-                {canDelete && (
-                    <button
-                        onClick={handleDeleteClick}
-                        className="mt-1 min-h-[44px] flex items-center text-xs text-rose-dark hover:text-rose transition-colors"
-                        aria-label={isOwn ? 'Delete this comment' : 'Admin: delete this comment'}
-                    >
-                        {deleteLabel}
-                    </button>
-                )}
+                <div className="flex items-center gap-3">
+                    {canDelete && (
+                        <button
+                            onClick={handleDeleteClick}
+                            className="mt-1 min-h-[44px] flex items-center text-xs text-rose-dark hover:text-rose transition-colors"
+                            aria-label={isOwn ? 'Delete this comment' : 'Admin: delete this comment'}
+                        >
+                            {deleteLabel}
+                        </button>
+                    )}
+                    {canReport && (
+                        <ReportButton
+                            variant="text"
+                            targetType="comment"
+                            targetId={comment.id}
+                            targetLabel={comment.content?.slice(0, 80)}
+                            userId={userId}
+                            onRequireAuth={onRequireAuth}
+                            submitReport={submitReport}
+                        />
+                    )}
+                </div>
             </div>
         </li>
     )

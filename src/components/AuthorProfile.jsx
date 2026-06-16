@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import RecipeCard from './RecipeCard'
 import ProfileBookSpread from './ProfileBookSpread'
 import RecipesCarousel from './RecipesCarousel'
+import ReportButton from './ReportButton'
 
 // Read-only author profile at /profile/:id. Sibling to /profile (the
 // self-edit view in Profile.jsx); routed separately so this component
@@ -29,6 +30,8 @@ export default function AuthorProfile({
     getNotifyPref,
     onToggleFollow,
     onSetNotifyPref,
+    onRequireAuth,
+    submitReport,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -238,6 +241,23 @@ export default function AuthorProfile({
                                 </button>
                             )}
                         </div>
+                    )}
+
+                    {/* Stage 16 item 1 — Report author. Hidden when viewing your
+                        own profile (the self-id redirect above covers the signed-in
+                        case, but the guard belongs here too for clarity). The pill
+                        variant sits below the Follow cluster as a quiet, secondary
+                        affordance so it never reads as the primary CTA. */}
+                    {submitReport && session?.user.id !== profile.id && (
+                        <ReportButton
+                            variant="pill"
+                            targetType="profile"
+                            targetId={profile.id}
+                            targetLabel={displayName}
+                            userId={session?.user.id ?? null}
+                            onRequireAuth={onRequireAuth}
+                            submitReport={submitReport}
+                        />
                     )}
                 </div>
             }

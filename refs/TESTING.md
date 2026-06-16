@@ -254,6 +254,37 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Non-admin cannot delete others' content** — log in as `test-tiny`, attempt `await supabase.from('recipes').delete().eq('id', '<other-author-recipe-id>')` → success-but-zero-rows-affected (RLS filters the WHERE clause; the row doesn't match for them).
 - [ ] **Non-admin cannot call `admin_delete_user`** — `await supabase.rpc('admin_delete_user', { target_id: '...' })` → returns an error from the RAISE EXCEPTION
 
+## Report handling checklist
+
+> Verifies the Stage 16 item 1 reports surface. Requires migration 017 applied (`supabase_migration_017_reports.sql`) and the admin account already enrolled in MFA (from Stage 16 item 2). Seed script does not yet seed reports — exercise the flow live.
+
+**Reporter side (any non-admin test account, e.g. `test-medium`):**
+- [ ] **Recipe-level Report** — open any recipe the test user does NOT author; an icon-flag "Report" button appears in the action cluster alongside Share / Book / PDF. Hidden on your own recipes.
+- [ ] **Comment-level Report** — on a recipe with at least one comment from another user, each non-own comment row shows a "Report" text link next to the username/timestamp area. Hidden on your own comments.
+- [ ] **Author-level Report** — navigate to `/profile/<other-user-id>`; a paper-shade "Report" pill appears below the Follow / Unfollow / Notify cluster. Hidden when viewing your own profile (the route redirects to `/profile` first anyway).
+- [ ] **Anonymous click → Auth overlay** — sign out, click any Report affordance; the Auth slide-in opens instead of the report dialog.
+- [ ] **Dialog UX** — clicking Report opens a centred dialog with the reason textarea focused, a character counter (1000 ceiling), and a disabled Submit until non-whitespace text is entered. Escape, × close, backdrop click, and Cancel all dismiss without submitting and restore focus to the trigger.
+- [ ] **Successful submission** — submit with a reason → toast "Reported — thanks for flagging this {comment/recipe/author}"; dialog closes.
+- [ ] **Spam cap** — file 10 open reports back-to-back; the 11th attempt surfaces toast "You have 10 open reports. Wait for admin review before filing more." and the row is rejected by the BEFORE INSERT trigger. (Easier: have an admin Dismiss 5 of them first, then file 5 more — confirms the cap is on `status = 'open'` only, not lifetime.)
+- [ ] **Reporter own-view** — `await supabase.from('reports').select('*')` in the devtools console returns only the rows the test user filed. Other users' reports are invisible.
+
+**Admin side (`admin@example.com`):**
+- [ ] **Profile dropdown** — header → Profile → dropdown now shows a rose-dark "Reports" entry between Bookmarks and Log out. Non-admin accounts do NOT see this entry.
+- [ ] **Route access** — click "Reports" or visit `/admin/reports` directly. Anonymous → bounces to `/`. Non-admin signed-in → bounces to `/`. Admin without MFA enrolled → "Enable two-factor authentication…" message linking to Profile Security tab. Admin enrolled at AAL1 → inline MFA challenge form. Admin at AAL2 → full reports list.
+- [ ] **Deep-link reload** — paste `/admin/reports` into a fresh tab, press Enter; "Checking access…" shows briefly while session + admin flag resolve, then the gate or the list renders. Does NOT bounce to `/` before the auth state restores.
+- [ ] **Status filter chips** — Open / Reviewing / Resolved / Dismissed / All. Default is Open. Active chip is rust-filled.
+- [ ] **Row content** — each report shows: target-type chip (Comment / Recipe / Author), status badge (color-coded), relative time, reason text, "Filed by {reporter}" with a profile link, and a target summary. Comment targets show a 240-char excerpt + link to the parent recipe. Recipe targets show title + "Private" badge if applicable. Author targets show display name + link.
+- [ ] **Target-deleted state** — delete the target of an open report (e.g. as that recipe's author), reload `/admin/reports`; the row now reads "Target no longer exists (deleted)." in italic instead of a clickable link.
+- [ ] **Optimistic status flip** — click Mark reviewing / Resolve / Dismiss; badge changes instantly + toast "Marked {status}". If the current filter no longer matches, the row drops out of the list. Switch filter chips to find it.
+- [ ] **Reopen** — on a resolved or dismissed row, a "Reopen" button appears and flips status back to `open`. The auto-stamp trigger clears `resolved_at` / `resolved_by` in this transition.
+- [ ] **Resolution audit trail** — after resolving a report, `await supabase.from('reports').select('id, status, resolved_at, resolved_by').eq('id', '<id>')` in the devtools console returns the admin's UUID in `resolved_by` and a non-null `resolved_at`. Without manual stamping; the BEFORE UPDATE trigger handled it.
+
+**RLS axes (one-off SQL Editor checks if you want belt-and-suspenders):**
+- [ ] **Anonymous SELECT** — sign out, `await supabase.from('reports').select('*')` returns `[]` (RLS denies, not an error).
+- [ ] **Anonymous INSERT** — same session, `await supabase.from('reports').insert({...})` returns an RLS error.
+- [ ] **Non-admin INSERT spoofing** — signed in as `test-tiny`, attempt `await supabase.from('reports').insert({ reporter_id: '<other-uuid>', ... })` → RLS error (the INSERT policy requires `auth.uid() = reporter_id`).
+- [ ] **Non-admin UPDATE attempt** — `await supabase.from('reports').update({ status: 'resolved' }).eq('id', '<your-own-report-id>')` → zero rows affected (no UPDATE policy for reporters).
+
 ## Servings multiplier checklist
 
 > Verifies the Stage 7 servings stepper on RecipeDetail. Local-state-only — no migration required.

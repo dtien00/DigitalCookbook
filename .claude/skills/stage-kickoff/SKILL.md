@@ -18,7 +18,17 @@ Your job is to compress that opening into one structured response so the user ca
    - [refs/DATABASE_DECISIONS.md](../../../refs/DATABASE_DECISIONS.md) — if the stage mentions schema, RLS, migrations, or data
    - [refs/TESTING.md](../../../refs/TESTING.md) — for the test accounts you'll exercise the feature with
 
-3. **Check git state.** `git branch --show-current` and `git status`. Note the current branch and any uncommitted work — the user often has carry-forward changes from the previous stage that need to be dealt with before branching.
+3. **Check the starting point.** New sessions should branch off a fresh `main`, not whatever stage branch the previous session left behind. Run in parallel:
+   - `git branch --show-current` — am I on `main`?
+   - `git status` — is the working tree clean?
+   - `git fetch origin main` then `git rev-list --left-right --count origin/main...main` (or `git status -uno` after fetch on main) — is local `main` up to date with `origin/main`?
+
+   Surface three things:
+   - **Current branch.** If not `main`, flag that the user should checkout main before branching for the new stage. Stale stage branches from the previous session are the common case here.
+   - **Working tree.** Any uncommitted work is carry-forward from the previous stage and needs to be dealt with (commit, stash, or discard) before branching.
+   - **Main freshness.** This project merges PRs via the GitHub UI, which does NOT update local `main`. A freshly-opened session almost always has stale local `main`. If behind `origin/main`, flag that the user should `git checkout main && git pull` before branching.
+
+   Do not auto-checkout, auto-pull, or auto-stash — surface the state, let the user confirm the cleanup.
 
 4. **Recommend a sequencing.** A stage's checklist is a menu, not a prescription. Look at the items and propose an order that:
    - Starts with the item that has the smallest blast radius (local-state-only > schema changes > cross-cutting refactors). The user has explicitly preferred this framing — "local-state-only, no schema, no RLS" was the chosen first move for Stage 7.
@@ -54,7 +64,9 @@ Why: <one-line: blast radius, kitchen-relevance, unblocks-other-items, or "close
 - DATABASE_DECISIONS: <only if relevant — RLS pattern, migration numbering>
 - TESTING: <only if relevant — which test account exercises this>
 
-**Branch:** `stage-N-<slug>` off `main` (current: `<current-branch>`, status: <clean | N uncommitted>)
+**Starting point:** <one line — e.g. "✓ on `main`, clean, up to date with `origin/main`" or "⚠ on `stage-16-report-handling` (clean); local `main` is 2 commits behind `origin/main` — checkout main and pull before branching">
+
+**Branch to create:** `stage-N-<slug>` off `main`
 
 **Deferred this stage:** <items recommended to push to a later stage or post-audience>
 
@@ -64,13 +76,18 @@ Why: <one-line: blast radius, kitchen-relevance, unblocks-other-items, or "close
 - ...
 ```
 
-End with: "Want me to create the branch and start on `<item>`?" — don't create branches or start work until the user confirms. If the sweep surfaced items that need a decision, ask for those decisions in the same turn so the user can answer once.
+End with the right next question for the starting state:
+- Clean starting point (on `main`, clean, in sync): "Want me to create the branch and start on `<item>`?"
+- Stale or dirty: "Want me to <checkout main / pull origin/main / handle the uncommitted changes> first, then create the branch?" — name the specific cleanup, don't make the user spell it out.
+
+Don't create branches, checkout, pull, or start work until the user confirms. If the sweep surfaced items that need a decision, ask for those decisions in the same turn so the user can answer once.
 
 ## What NOT to do
 
 - **Don't open all four living docs by default.** A stage that's purely UI doesn't need DATABASE_DECISIONS; a stage that's purely schema doesn't need COSMETICS. Reading docs you won't use bloats context and slows the kickoff.
 - **Don't propose multiple items in parallel.** The user's pattern is one item at a time per branch. Suggesting "let's do all four items this stage" undoes the staged sequencing that the roadmap was built around.
 - **Don't auto-create branches or write code.** This skill ends at the recommendation. The user signs off, then implementation begins.
+- **Don't auto-checkout `main`, auto-pull, or auto-stash uncommitted work.** Surface stale-branch / behind-origin / dirty-tree state in the Starting point line and ask. Silently switching branches or pulling can drop work the user hasn't decided what to do with yet.
 - **Don't restate the full task list from ROADMAP verbatim.** The user has the file open — give them the synthesis they can't get from re-reading.
 - **Don't run the edge-case sweep unprompted.** It's gated on trigger phrases in the args. Adding it to every kickoff bloats the response and front-loads decisions before the user has even agreed to the item.
 - **Don't run the edge-case sweep across the whole stage.** Sweep only the suggested first item — the rest of the stage's items will get their own kickoff later, and pre-sweeping them invents work the user may never reach.

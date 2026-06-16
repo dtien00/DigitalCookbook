@@ -15,7 +15,11 @@ import { supabase } from '../lib/supabaseClient'
 // the client just shows the buttons; the underlying writes still fail.
 export function useAdmin(userId) {
     const [isAdmin, setIsAdmin] = useState(false)
-    const [loading, setLoading] = useState(false)
+    // Start at true when there's a userId — the effect's setLoading(true)
+    // runs post-render, so a route gate that reads `loading` on the very
+    // first mount would otherwise see `false, false` (not loading, not
+    // admin) and bounce before the fetch even fires.
+    const [loading, setLoading] = useState(!!userId)
 
     useEffect(() => {
         if (!userId) {

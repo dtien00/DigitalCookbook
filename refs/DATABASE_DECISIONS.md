@@ -491,6 +491,41 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 
 ---
 
+## Report handling (migration 017, Stage 16 item 1)
+
+**Decision:** New `reports` table holding signed-in-user-submitted flags against `comments`, `recipes`, or `profiles`. Two enums (`report_target_type`, `report_status`), polymorphic `target_id` (no FK), four RLS policies (own-INSERT, own-SELECT, admin-SELECT, admin-UPDATE), two triggers (spam cap + auto-stamp resolution), and two covering indexes — one for the reporter's own view, one for the admin's "open newest-first" path.
+
+**Why polymorphic `target_id` is not a FK:**
+- Postgres FKs can't be conditional on a sibling column's value, and three separate nullable FKs (`comment_target_id`, `recipe_target_id`, `profile_target_id`) would explode the surface (more nullable columns, more CHECK constraints to enforce exactly-one-set) for no real win.
+- The admin UI's `hydrateTargets` in `useAdminReports` batch-fetches each target type via three parallel `in (...)` queries — one round-trip per target type regardless of report count. "Target no longer exists (deleted)" surfaces cleanly when the lookup misses, which is the expected state after an admin resolves by deleting.
+
+**RLS pattern: own-write + admin-override, audit-trail-only:**
+- Reporter can INSERT a row claiming themselves as `reporter_id`, and SELECT their own rows. They cannot UPDATE (so they can't retroactively edit a report's reason) and cannot DELETE.
+- Admin SELECTs every row and UPDATEs status. Admin cannot DELETE either — there is no DELETE policy at all. Status transitions (`open → reviewing → resolved/dismissed`) are the workflow; the row stays as an audit record. If a legal need ever requires removal, that's a Dashboard-side SQL action by a project owner, not a runtime path.
+- This is the first table in the project where the SELECT model is "own-only OR admin-only" (every prior public-read table — `recipes`, `profiles`, `likes`, `comments` — exposes rows publicly). Captured here so future tables don't accidentally inherit the wrong default.
+
+**Spam cap as a BEFORE INSERT trigger (not a CHECK or UI gate):**
+- `enforce_report_spam_cap()` counts the caller's existing `status = 'open'` rows and `RAISE EXCEPTION` on the 11th. SECURITY DEFINER so the count is independent of future RLS changes (today's reporter-own-SELECT policy means the count works invoker-rights too, but the trigger should keep behaving correctly if SELECT shape ever shifts).
+- CHECK constraints can only reference the row being inserted — they can't COUNT(*) across the table — so a trigger is the only schema-level enforcement option. UI-only enforcement is rejected because a hand-crafted PostgREST call would bypass it.
+- The cap is on `open` rows specifically, not lifetime reports. A reporter whose first 10 reports all get resolved by admins is back to 0 open and can file again. Without that, a frequent reporter would be permanently silenced — overcorrects for the abuse case.
+- Surface to the client: the trigger's message is prefixed `reports_spam_cap:` and `useReports` re-wraps it as "You have 10 open reports. Wait for admin review before filing more." so toast copy stays user-friendly while the raw Postgres message stays diagnostic.
+
+**Resolution auto-stamp via BEFORE UPDATE trigger:**
+- `stamp_report_resolution()` writes `resolved_at = NOW()` + `resolved_by = auth.uid()` whenever status flips into `resolved` or `dismissed`, and clears both when status flips back to `open` or `reviewing`. Client never sets those fields directly.
+- Means a Dashboard-side manual UPDATE on `status` also gets a correct audit trail, not just admin-UI clicks.
+
+**Why `reason` is a length-bounded CHECK (1..1000), not unbounded TEXT:**
+- A 1-char floor blocks empty submissions at the schema (defense-in-depth — the client already requires non-whitespace, but a crafted request would bypass that).
+- A 1000-char ceiling caps payload size so the admin UI doesn't have to handle multi-page reasons, and bounds row-size for the spam-cap COUNT scan.
+
+**Tradeoffs:**
+- **Reporter can re-report the same target.** No `UNIQUE (reporter_id, target_id, target_type, status='open')` constraint. Picking three separate report rows over one merged row is informative (the admin sees three reasons) and avoids an awkward "you already reported this" failure path. Spam cap is the bound.
+- **No `IF NOT EXISTS` on the target.** A report can be filed against a target that gets deleted seconds later; the admin sees "Target no longer exists" instead of the content. Acceptable — the report's reason text is itself the artifact worth reviewing, and an orphaned report often *means* the author already acted on it.
+- **No email notification to admins on new report.** The roadmap flagged this as a possible follow-up via a Postgres trigger + `pg_net` Edge Function call. Deferred: sending-domain wiring isn't in place, the admin dashboard polls naturally on next visit, and the volume is low enough that real-time alerts aren't yet load-bearing. Captured as a Stage 16 carry-forward.
+- **No reporter notification on resolution.** Could piggyback on the Stage 11 `notifications` table but adds a fan-out path; deferred for the same low-volume reason.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
