@@ -430,6 +430,31 @@ For SELECT the policy drops the `owner_id` check — the EXISTS just confirms th
 
 ---
 
+## Password policy: stay on Supabase defaults (Stage 16 item 3)
+
+**Decision:** Keep Supabase Auth's default password policy (8-character minimum, no required character classes). Do not enable additional complexity requirements, expiry, or history checks.
+
+**Why:**
+- **Threat model is low-stakes.** The worst-case account compromise leaks recipes, bookmarks, follows, and comments — no payments, no PII beyond email and a self-written bio, no health/financial data. The blast radius of a brute-forced casual account is "someone reads private cookbook entries", not "identity theft".
+- **Strict policies hurt the actual audience.** The intended users are friends and family, not adversaries. Forcing "symbol + digit + uppercase + 12 chars" raises the sign-up friction tax that demonstrably tanks completion rates in casual apps, with no commensurate security gain at this risk level. NIST SP 800-63B (2017+) explicitly recommends against the older composition rules for similar reasons — they push users toward predictable substitutions (`Password1!`) without raising entropy meaningfully.
+- **Defense-in-depth lives elsewhere.** Higher-value protections for this app are already in place: admin actions are gated on TOTP MFA (Stage 16 item 2), the anon key is RLS-bounded, and Supabase Auth rate-limits sign-in attempts server-side. Password complexity is the wrong lever to push.
+- **Documenting this stops it being an open question.** Past stage planning kept reopening "should we tighten passwords?" — capturing the answer + reasoning here closes the loop until a real signal forces a revisit.
+
+**Revisit when any of these become true:**
+- The app starts storing PII beyond email / displayName / bio (e.g., shipping addresses for the shopping-list partner integration in Stage N+2b).
+- A real attack signal appears (credential-stuffing spike in Supabase Auth logs, reports of account takeover).
+- The audience expands beyond friends/family — public sign-ups from strangers shift the calculus.
+- A specific feature requires elevated trust (e.g., direct messaging, payment flows).
+
+If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (free, zero UX cost on the happy path — blocks passwords known from public breach corpora like LinkedIn/Adobe/Collection #1 via the `haveibeenpwned.com` Pwned Passwords API; one toggle in Project Settings → Authentication → Password Settings); (2) require MFA for all signed-in users, not just admins; (3) raise minimum length to 12 — only as a last step, since length is the highest-friction lever for legitimate users.
+
+**Tradeoffs:**
+- **Weak passwords are possible.** A user can choose `password` (8 chars) and Supabase Auth will accept it. That account is more vulnerable to credential stuffing than one with a 16-char random password. Acceptable given the threat model; the user wears the consequence within their own data.
+- **No password expiry.** Same NIST guidance — periodic rotation pushes users toward weak variants of a remembered password. Not adding it.
+- **No password history.** A user who changes their password could reuse a prior one. Negligible at this risk level; the history table isn't justified.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
