@@ -47,6 +47,37 @@ export default function RecipeDetail({
     const [cooking, setCooking] = useState(false)
     const [swipeX, setSwipeX] = useState(0)
     const touchRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, tracking: false })
+    // Tracks whether cooking-mode entry was the source of the current
+    // fullscreen state, so handleExitCooking doesn't yank the user out of
+    // a fullscreen they were already in for some other reason.
+    const fullscreenRequestedRef = useRef(false)
+
+    // Stage 15 — landscape on mobile is where cooking mode benefits most
+    // from extra vertical space, so request fullscreen on entry. Must run
+    // synchronously inside this click handler — the Fullscreen API requires
+    // an active user-gesture context and a useEffect on mount of CookingMode
+    // would no longer qualify. iOS Safari doesn't support requestFullscreen
+    // on non-video elements; .catch swallows that and any user denial.
+    const handleStartCooking = () => {
+        if (
+            window.matchMedia('(orientation: landscape)').matches &&
+            !document.fullscreenElement &&
+            document.documentElement.requestFullscreen
+        ) {
+            document.documentElement.requestFullscreen()
+                .then(() => { fullscreenRequestedRef.current = true })
+                .catch(() => {})
+        }
+        setCooking(true)
+    }
+
+    const handleExitCooking = () => {
+        if (fullscreenRequestedRef.current && document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {})
+        }
+        fullscreenRequestedRef.current = false
+        setCooking(false)
+    }
 
     // Stage 14 item 1 — body layout toggle. "sheet" = single-column scroll
     // (the original layout); "spread" = two-page book layout with ingredients
@@ -580,7 +611,7 @@ export default function RecipeDetail({
                     fetch and on recipes with no steps. */}
                 {!loading && steps.length > 0 && (
                     <button
-                        onClick={() => setCooking(true)}
+                        onClick={handleStartCooking}
                         className="no-print w-full mt-4 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
                     >
                         <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -628,7 +659,7 @@ export default function RecipeDetail({
                     setCheckedIngredients={setCheckedIngredients}
                     checkedSteps={checkedSteps}
                     setCheckedSteps={setCheckedSteps}
-                    onExit={() => setCooking(false)}
+                    onExit={handleExitCooking}
                 />
             )}
         </div>
