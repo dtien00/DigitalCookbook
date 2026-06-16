@@ -6,6 +6,7 @@ import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
 import ShareButton from './ShareButton'
 import AddToCookbookButton from './AddToCookbookButton'
+import ReportButton from './ReportButton'
 import Comments from './Comments'
 import Skeleton from './Skeleton'
 import MfaChallengeGate from './MfaChallengeGate'
@@ -32,6 +33,7 @@ export default function RecipeDetail({
     removeRecipeFromCookbook,
     createCookbook,
     mfa,
+    submitReport,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -485,8 +487,26 @@ export default function RecipeDetail({
                                 </svg>
                                 <span className="hidden sm:inline">{pdfLoading ? 'Generating…' : 'PDF'}</span>
                             </button>
+                            {/* Stage 16 item 1 — Report. Hidden on the author's own
+                                recipe (no value in self-reporting) and on anonymous
+                                viewers (the trigger routes through onRequireAuth so
+                                anon CAN click, but the affordance is signed-in-only
+                                to keep the action row uncluttered). Admins still see
+                                it on others' recipes — they may want to flag a
+                                report from a non-admin perspective for audit. */}
+                            {!isAuthor && userId && submitReport && (
+                                <ReportButton
+                                    variant="icon"
+                                    targetType="recipe"
+                                    targetId={recipe.id}
+                                    targetLabel={recipe.title}
+                                    userId={userId}
+                                    onRequireAuth={onRequireAuth}
+                                    submitReport={submitReport}
+                                />
+                            )}
                         </div>
-                    </div>      
+                    </div>
                 </div>
                 
                 {isAuthor && (
@@ -575,6 +595,7 @@ export default function RecipeDetail({
                         userId={userId}
                         isAdmin={isAdmin}
                         onRequireAuth={onRequireAuth}
+                        submitReport={submitReport}
                     />
                 </div>
             </div>

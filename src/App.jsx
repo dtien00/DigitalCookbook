@@ -9,6 +9,7 @@ import { useAdmin } from './hooks/useAdmin'
 import { useMfa } from './hooks/useMfa'
 import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
+import { useReports } from './hooks/useReports'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
 import { useBackdrop } from './hooks/useBackdrop'
 import { useCookbooks } from './hooks/useCookbooks'
@@ -17,6 +18,7 @@ import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
 import Profile from './components/Profile'
 import AuthorProfile from './components/AuthorProfile'
+import AdminReports from './components/AdminReports'
 import CookbookDetail from './components/CookbookDetail'
 import FollowingPhonebook from './components/FollowingPhonebook'
 import MyBookmarks from './components/MyBookmarks'
@@ -75,6 +77,11 @@ function App() {
     const navigate = useNavigate()
 
     const [session, setSession] = useState(null)
+    // `sessionLoaded` flips true once supabase.auth.getSession() resolves.
+    // Without this sentinel, protected routes that gate on `!session` would
+    // navigate to '/' on the first render of a deep-link reload — before
+    // the persisted session is restored from local storage.
+    const [sessionLoaded, setSessionLoaded] = useState(false)
     const [recipes, setRecipes] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
@@ -174,10 +181,11 @@ function App() {
 
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
-    const { isAdmin } = useAdmin(session?.user.id)
+    const { isAdmin, loading: adminLoading } = useAdmin(session?.user.id)
     const mfa = useMfa(session?.user.id)
     const { isFollowing, getNotifyPref, toggleFollow, setNotifyPref } = useFollowing(session?.user.id)
     const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session?.user.id)
+    const { submitReport } = useReports(session)
 
     // Fridge basket — persistent ingredient list (localStorage). Lives at the
     // App level so the modal can mount above any route and so basket state
@@ -204,6 +212,7 @@ function App() {
         // Check initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session)
+            setSessionLoaded(true)
         })
 
         // Listen for auth changes
@@ -402,6 +411,7 @@ function App() {
         onLikeClick: handleLikeClick,
         onLogout: handleLogout,
         onSignIn: () => setShowAuth(true),
+        isAdmin,
     }
 
     const recipeDetailProps = {
@@ -419,6 +429,7 @@ function App() {
         removeRecipeFromCookbook: cookbooksApi.removeRecipeFromCookbook,
         createCookbook: cookbooksApi.createCookbook,
         mfa,
+        submitReport,
     }
 
     const handleCreateComplete = () => {
@@ -507,6 +518,8 @@ function App() {
                                 toggleFollow(authorId)
                             }}
                             onSetNotifyPref={setNotifyPref}
+                            onRequireAuth={() => setShowAuth(true)}
+                            submitReport={submitReport}
                         />
                     }
                 />
@@ -543,6 +556,18 @@ function App() {
                                 onToggleLike={handleLikeClick}
                             />
                             : <Navigate to="/" replace />
+                    }
+                />
+                <Route
+                    path="/admin/reports"
+                    element={
+                        <AdminReports
+                            session={session}
+                            sessionLoaded={sessionLoaded}
+                            isAdmin={isAdmin}
+                            adminLoading={adminLoading}
+                            mfa={mfa}
+                        />
                     }
                 />
                 {/* Unknown route → home. Keeps the URL bar from displaying a 404
@@ -598,6 +623,7 @@ function HomeView({
     notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
+    isAdmin,
 }) {
     const navigate = useNavigate()
 
@@ -896,6 +922,15 @@ function HomeView({
                                     >
                                         Bookmarks
                                     </button>
+                                    {isAdmin && (
+                                        <button
+                                            role="menuitem"
+                                            onClick={() => { navigate('/admin/reports'); setMenuOpen(false) }}
+                                            className="w-full text-left px-4 py-2.5 text-rose-dark font-medium hover:bg-paper-shade transition-colors"
+                                        >
+                                            Reports
+                                        </button>
+                                    )}
                                     <div className="border-t border-paper-shade" aria-hidden="true" />
                                     <button
                                         role="menuitem"
@@ -1202,6 +1237,7 @@ function RecipeDetailRoute({
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
+    mfa, submitReport,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1297,6 +1333,8 @@ function RecipeDetailRoute({
             addRecipeToCookbook={addRecipeToCookbook}
             removeRecipeFromCookbook={removeRecipeFromCookbook}
             createCookbook={createCookbook}
+            mfa={mfa}
+            submitReport={submitReport}
         />
     )
 }
