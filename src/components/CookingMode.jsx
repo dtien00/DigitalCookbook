@@ -148,12 +148,23 @@ export default function CookingMode({
     const isLast = currentStep === steps.length - 1
     const progressPct = steps.length > 0 ? Math.round(((currentStep + 1) / steps.length) * 100) : 0
 
+    // React's synthetic event system bubbles through the component tree,
+    // not the DOM tree — so even though CookingMode portals to document.body,
+    // touches inside it still reach RecipeDetail's swipe-back-to-home
+    // handler. Stop propagation at the cooking-mode root so a swipe-right
+    // here only navigates between steps, not out of the recipe entirely.
+    const stopTouchPropagation = (e) => e.stopPropagation()
+
     return createPortal(
         <div
             className="fixed inset-0 z-[100] bg-paper paper-grain flex flex-col"
             role="dialog"
             aria-modal="true"
             aria-label={`Cooking ${recipe.title}`}
+            onTouchStart={stopTouchPropagation}
+            onTouchMove={stopTouchPropagation}
+            onTouchEnd={stopTouchPropagation}
+            onTouchCancel={stopTouchPropagation}
         >
             <div className="flex items-center justify-between gap-3 px-4 py-3 landscape:py-2 border-b border-paper-shade flex-shrink-0">
                 <button
