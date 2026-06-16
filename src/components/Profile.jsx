@@ -191,6 +191,7 @@ export default function Profile({
             icon: <IconLock />,
             content: (
                 <SecurityTab
+                    userId={session.user.id}
                     newPassword={newPassword}
                     setNewPassword={setNewPassword}
                     onSubmit={updatePassword}
@@ -358,8 +359,9 @@ function ContactTab({ email }) {
     )
 }
 
-function SecurityTab({ newPassword, setNewPassword, onSubmit, loading, isAdmin, mfa, onEnableMfa }) {
+function SecurityTab({ userId, newPassword, setNewPassword, onSubmit, loading, isAdmin, mfa, onEnableMfa }) {
     const [unenrolling, setUnenrolling] = useState(false)
+    const [exporting, setExporting] = useState(false)
     const hasFactor = mfa?.hasVerifiedFactor
     const factor = mfa?.factors?.[0]
 
@@ -374,6 +376,28 @@ function SecurityTab({ newPassword, setNewPassword, onSubmit, loading, isAdmin, 
             toast.error('Could not disable: ' + error.message)
         } finally {
             setUnenrolling(false)
+        }
+    }
+
+    async function handleExport() {
+        setExporting(true)
+        try {
+            const { data, error } = await supabase.rpc('export_user_data', { target_id: userId })
+            if (error) throw error
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `cookbook-export-${new Date().toISOString().slice(0, 10)}.json`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            toast.success('Your data has been downloaded')
+        } catch (error) {
+            toast.error('Could not export data: ' + error.message)
+        } finally {
+            setExporting(false)
         }
     }
 
@@ -423,7 +447,7 @@ function SecurityTab({ newPassword, setNewPassword, onSubmit, loading, isAdmin, 
                 )}
             </section>
 
-            <section>
+            <section className="mb-6">
                 <h3 className="font-display text-xl text-ink mb-4">Change Password</h3>
                 <form onSubmit={onSubmit}>
                     <div className="form-group">
@@ -446,6 +470,21 @@ function SecurityTab({ newPassword, setNewPassword, onSubmit, loading, isAdmin, 
                 <p className="font-serif italic text-ink/60 text-sm mt-4">
                     Email change and account deletion controls may be added in a future stage.
                 </p>
+            </section>
+
+            <section>
+                <h3 className="font-display text-xl text-ink mb-2">Your data</h3>
+                <p className="font-serif italic text-ink/70 text-sm mb-3">
+                    Download a JSON file containing your profile, recipes, ingredients, steps, bookmarks, likes, comments, follows, cookbooks, and notifications.
+                </p>
+                <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="px-4 py-2.5 bg-paper-shade hover:bg-tan-soft text-ink font-semibold rounded-md border border-paper-shade transition-colors disabled:opacity-50"
+                >
+                    {exporting ? 'Preparing download…' : 'Download my data'}
+                </button>
             </section>
         </div>
     )

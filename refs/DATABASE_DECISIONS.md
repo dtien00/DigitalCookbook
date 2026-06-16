@@ -98,7 +98,10 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_011_canonical_ingredient.sql` — adds nullable `canonical_ingredient_id UUID` column to `ingredients`. No FK target yet (the canonical table doesn't exist), no RLS changes. Forward-compatibility hook for Stage 10's fridge-basket feature — see "Canonical ingredient hook + token-match filter" below for the rationale. Idempotent.
 - `supabase_migration_012_follows_notifications.sql` — hardens the `follows` INSERT policy (same gap as migrations 004/005), adds `notify_on_new_recipe` + `created_at` columns + covering index + own-only UPDATE policy on `follows`, creates the `notifications` table with own-only SELECT/UPDATE/DELETE (no client INSERT — server trigger only), and adds an AFTER INSERT trigger on `recipes` that fans out notifications to opted-in followers when the recipe is public. See "Follows hardening + in-app notifications (migration 012, Stage 11)" below. Idempotent.
 - `supabase_migration_013_oauth_profile_trigger.sql` — patches `handle_new_user()` to correctly populate `username` and `avatar_url` for OAuth signups (Google and GitHub), which use different metadata key names than email/password. See "OAuth provider metadata mapping in `handle_new_user()`" below for the key-mapping rationale. Idempotent (`CREATE OR REPLACE FUNCTION`).
-- Future migrations: `supabase_migration_014_*.sql`, etc.
+- `supabase_migration_014_recipe_like_counts_view.sql` — adds the `recipes_with_counts` view (`recipes` LEFT JOIN aggregated `likes` subquery exposing `like_count`) with `WITH (security_invoker = true)` so the underlying `recipes` RLS still does the filtering. Backs Stage 13 v2's Most-/Least-liked sort. See "`recipes_with_counts` view for popularity-sort" below. Idempotent.
+- `supabase_migration_015_cookbooks.sql` — adds the `cookbooks` and `cookbook_recipes` tables with the parent-visibility-inherited RLS pattern (own-curation, optional public visibility). First migration in the project to use EXISTS-on-parent for write gating on a join table — see "Cookbooks + cookbook_recipes (migration 015, Stage 14 item 1)" below. Idempotent.
+- `supabase_migration_016_user_data_export.sql` — adds the `export_user_data(target_id UUID)` RPC backing Stage 16 item 4's "Download my data" button. SECURITY DEFINER + self-only auth gate (`auth.uid() = target_id`). Returns a single JSONB containing every row the platform holds about the caller. See "GDPR-style user data export RPC (migration 016, Stage 16 item 4)" below. Idempotent (`CREATE OR REPLACE FUNCTION`).
+- Future migrations: `supabase_migration_017_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -452,6 +455,39 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 - **Weak passwords are possible.** A user can choose `password` (8 chars) and Supabase Auth will accept it. That account is more vulnerable to credential stuffing than one with a 16-char random password. Acceptable given the threat model; the user wears the consequence within their own data.
 - **No password expiry.** Same NIST guidance — periodic rotation pushes users toward weak variants of a remembered password. Not adding it.
 - **No password history.** A user who changes their password could reuse a prior one. Negligible at this risk level; the history table isn't justified.
+
+---
+
+## GDPR-style user data export RPC (migration 016, Stage 16 item 4)
+
+**Decision:** Single SECURITY DEFINER RPC `export_user_data(target_id UUID) RETURNS JSONB` that returns the caller's profile, recipes (with ingredients + steps), favorites, likes, comments, follows (both directions), cookbooks (with `cookbook_recipes` membership), and notifications in one round-trip. Hard self-only gate: `auth.uid() = target_id` or `RAISE EXCEPTION`. Granted to `authenticated` only.
+
+**Why one RPC instead of N PostgREST queries:**
+- A round-trip per table (8–9 queries) makes the UI either chatty (sequential) or hard to error-handle (parallel with partial failure). One RPC gives the UI a single success/error path and the user a single "your export is ready" toast.
+- The shape returned by the RPC IS the export shape. No client-side stitching means the export format is defined by SQL in a versioned migration, not by a JSX file that could drift across PRs.
+- `export_version` is included in the payload so a future format change is detectable by anything that re-imports.
+
+**Why SECURITY DEFINER:**
+- A signed-in user can `SELECT` their own rows from `profiles`, `recipes`, `favorites`, `likes`, `comments`, `cookbooks`, and `cookbook_recipes` under existing RLS — no privilege escalation needed there.
+- BUT `notifications` has no SELECT policy beyond own-only, and `auth.users.email` (the user's own email) lives on a table the `authenticated` role can't query directly. SECURITY DEFINER lets the function read across those without weakening RLS on the underlying tables. Every read inside the function is still scoped to `target_id`, so the auth gate is what enforces privacy.
+- Alternative considered: invoker-rights with a `GRANT SELECT ON auth.users.email` to authenticated. Rejected — granting any access on `auth.users` to the authenticated role is a permanent expansion of attack surface for a one-shot need. SECURITY DEFINER bounded by a hard auth check is the more conservative path.
+
+**Scope: more than the roadmap spec named.** The Stage 16 item 4 spec listed *profile + recipes + favorites + comments + follows*. The RPC also includes **likes** (Stage 4), **cookbooks + cookbook_recipes** (Stage 14), and **notifications** (Stage 11) because they are all rows the platform holds about the user, and a GDPR-style export that omits them defeats the portability purpose. The spec was written before those tables existed; including them here is the same principle the spec applied at its own time. Documented explicitly so a future reader doesn't mistake the expansion for scope creep.
+
+**Email inclusion.** `auth.users.email` is pulled into the `profile` block. Without it the export is missing the user's own primary identifier — every other field references the user by UUID. The email is already visible to the signed-in user via `session.user.email` in the client; the RPC is just consolidating it into the downloaded file.
+
+**Why JSONB return, not a setof or table view:**
+- The export has a heterogeneous, nested shape (recipes contain ingredients arrays, follows is two nested arrays, cookbooks contain recipe membership). PostgreSQL's `jsonb_build_object` + `jsonb_agg` produce this directly in one SQL pass.
+- The client receives a single object it can `JSON.stringify` into a blob and download. No serialization decisions live in the React layer.
+- COALESCE-to-`'[]'::jsonb` on every aggregate keeps empty collections as empty arrays in the output (not `null`), so a re-import tool would never need to branch on null vs empty.
+
+**Why no re-import path:** A round-trip-safe import would need to (a) regenerate UUIDs while preserving referential integrity across recipes ↔ ingredients ↔ steps ↔ cookbook_recipes, (b) decide policy on imported follows targeting users that don't exist in the destination project, (c) handle storage-bucket URLs that point at a different Supabase project. None of these have a single right answer for a personal cookbook; the cost of getting them wrong (corrupted data, broken FKs) is much higher than the cost of leaving import out. Captured in the roadmap as "explicitly out of scope for v1."
+
+**Tradeoffs:**
+- **Single-query memory cost.** A user with thousands of recipes + cookbook entries + notifications would build a large JSONB in one go. Acceptable at this project's scale (single-digit recipes per account, tens of notifications). If the corpus grows past ~10MB of JSON per export, switch to a streaming format (NDJSON) or paginate by entity type. Either change is RPC-internal and doesn't shift the auth model.
+- **Image URLs only, not image bytes.** The export references `image_url` columns; the actual cover-image binaries stay in the `recipe-images` bucket. A truly portable export would inline base64 image bytes or zip the bucket contents alongside. Same tradeoff as Storage's bucket privacy gap — image links are public-read so a re-importer can fetch them while the original bucket exists. Acceptable for v1; an "include images" toggle could add an Edge Function step later.
+- **No rate limiting.** A signed-in user can call the RPC repeatedly. The auth gate prevents enumerating other users' data, so the only cost is server CPU on their own data — bounded by the same scale argument above. Supabase Auth's per-IP rate limits cover the abuse case.
+- **Admin-side export not provided.** An admin cannot use this RPC to dump another user's data (the `auth.uid() <> target_id` check throws). This is deliberate — admin moderation actions are about deleting content, not exfiltrating it. If a real legal request for another user's data ever arrives, the path is the Supabase Dashboard / direct SQL by a project owner, not a self-service admin RPC.
 
 ---
 
