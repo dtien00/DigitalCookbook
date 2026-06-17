@@ -259,7 +259,7 @@ export default function CookingMode({
                                         </p>
                                         <div className="flex justify-center mt-10 landscape:mt-6">
                                             <button
-                                                onClick={() => toggleChecked(setCheckedSteps, s.id)}
+                                                onClick={() => {toggleChecked(setCheckedSteps, s.id); isLast ? onExit : setCurrentStep(s => Math.min(steps.length - 1, s + 1))}}
                                                 aria-pressed={sDone}
                                                 tabIndex={isCurrent ? 0 : -1}
                                                 className={`inline-flex items-center gap-2 px-5 py-3 min-h-[44px] rounded-full font-medium transition-colors ${
