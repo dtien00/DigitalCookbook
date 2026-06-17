@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useComments } from '../hooks/useComments'
 import { SkeletonComment } from './Skeleton'
@@ -21,9 +21,36 @@ import ReportButton from './ReportButton'
 //   onRequireAuth()  — invoked when an anonymous user attempts to comment
 
 export default function Comments({ recipeId, userId, isAdmin = false, onRequireAuth, submitReport }) {
-    const { comments, addComment, deleteComment, loading } = useComments(recipeId, userId, isAdmin)
+    const {
+        comments,
+        addComment,
+        deleteComment,
+        loading,
+        commentLikeCount,
+        userLikedComment,
+        toggleCommentLike,
+    } = useComments(recipeId, userId, isAdmin)
     const [draft, setDraft] = useState('')
     const [submitting, setSubmitting] = useState(false)
+
+    // Sort by (likes desc, created_at desc): comments with likes float to the
+    // top in count order; everything at zero stays in newest-first order, which
+    // matches the pre-likes default. Stable sort by virtue of the date tiebreak.
+    const sortedComments = useMemo(() => {
+        return [...comments].sort((a, b) => {
+            const diff = commentLikeCount(b.id) - commentLikeCount(a.id)
+            if (diff !== 0) return diff
+            return new Date(b.created_at) - new Date(a.created_at)
+        })
+    }, [comments, commentLikeCount])
+
+    const handleToggleLike = (commentId) => {
+        if (!userId) {
+            onRequireAuth?.()
+            return
+        }
+        toggleCommentLike(commentId)
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -96,7 +123,7 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                 <p className="font-display italic text-rose">Be the first to comment.</p>
             ) : (
                 <ul className="space-y-4">
-                    {comments.map(c => {
+                    {sortedComments.map(c => {
                         const isOwn = c.user_id === userId
                         return (
                             <CommentItem
@@ -110,6 +137,9 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                                 userId={userId}
                                 onRequireAuth={onRequireAuth}
                                 submitReport={submitReport}
+                                likeCount={commentLikeCount(c.id)}
+                                liked={userLikedComment(c.id)}
+                                onToggleLike={() => {if (!isOwn) {handleToggleLike(c.id)}}}
                             />
                         )
                     })}
@@ -121,7 +151,7 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
 
 // Single comment row: avatar + username + relative time + content + delete
 // (visible to the comment's owner, or to admins as a moderation override).
-function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete, canReport, userId, onRequireAuth, submitReport }) {
+function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete, canReport, userId, onRequireAuth, submitReport, likeCount = 0, liked = false, onToggleLike }) {
     const username = comment.profiles?.username || 'Unknown user'
     const avatarUrl = comment.profiles?.avatar_url
     const initials = username.slice(0, 2).toUpperCase()
@@ -152,6 +182,11 @@ function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete'
                 </div>
                 <p className="mt-1 text-ink whitespace-pre-wrap break-words">{comment.content}</p>
                 <div className="flex items-center gap-3">
+                    <CommentLikeButton
+                        liked={liked}
+                        count={likeCount}
+                        onClick={onToggleLike}
+                    />
                     {canDelete && (
                         <button
                             onClick={handleDeleteClick}
@@ -175,6 +210,34 @@ function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete'
                 </div>
             </div>
         </li>
+    )
+}
+
+// Small inline heart pill for comment rows. Visually quieter than the
+// recipe-card LikeButton (no shadow / blur — the comment list isn't on a
+// hero image, just a paper surface), and sized for the row's controls.
+// Renders the count only when > 0 so unliked comments don't broadcast "0".
+function CommentLikeButton({ liked, count, onClick }) {
+    const label = count === 1 ? '1 like' : `${count} likes`
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={liked ? `Unlike comment, ${label}` : `Like comment, ${label}`}
+            aria-pressed={liked}
+            className="mt-1 min-h-[44px] inline-flex items-center gap-1 text-xs text-ink/70 hover:text-rose transition-colors"
+        >
+            <svg
+                className={`w-4 h-4 ${liked ? 'fill-rose stroke-rose' : 'fill-none stroke-current'} transition-colors`}
+                viewBox="0 0 24 24"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            >
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            {count > 0 && <span className="tabular-nums">{count}</span>}
+        </button>
     )
 }
 

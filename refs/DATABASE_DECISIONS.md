@@ -102,7 +102,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_015_cookbooks.sql` — adds the `cookbooks` and `cookbook_recipes` tables with the parent-visibility-inherited RLS pattern (own-curation, optional public visibility). First migration in the project to use EXISTS-on-parent for write gating on a join table — see "Cookbooks + cookbook_recipes (migration 015, Stage 14 item 1)" below. Idempotent.
 - `supabase_migration_016_user_data_export.sql` — adds the `export_user_data(target_id UUID)` RPC backing Stage 16 item 4's "Download my data" button. SECURITY DEFINER + self-only auth gate (`auth.uid() = target_id`). Returns a single JSONB containing every row the platform holds about the caller. See "GDPR-style user data export RPC (migration 016, Stage 16 item 4)" below. Idempotent (`CREATE OR REPLACE FUNCTION`).
 - `supabase_migration_018_step_photos.sql` — adds nullable `photo_path TEXT` to `steps` (Stage 15 item 1). No RLS changes — the existing steps policies gate on parent recipe visibility / authorship. Companion to a new `recipe-steps` Storage bucket; see "Storage: `recipe-steps` bucket (Stage 15 item 1)" below. Idempotent.
-- Future migrations: `supabase_migration_019_*.sql`, etc.
+- `supabase_migration_019_comment_likes.sql` — adds the `comment_likes` join table (Stage 15 item 4) with composite PK `(comment_id, user_id)`, public SELECT, own-only INSERT (`auth.uid() = user_id`, mirrors the migration-004 fix posture from day one), own-only DELETE, and an additive admin-override DELETE for moderation parity with migration 008. FK on `comment_id` cascades on comment delete so existing comment-delete paths (own + admin-override) clean up automatically. See "Comment likes (migration 019, Stage 15 item 4)" below. Idempotent.
+- Future migrations: `supabase_migration_020_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -206,6 +207,34 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **Comments are public.** Anonymous viewers can read every comment on every public recipe. This matches the social model of casual recipe hubs and mirrors the likes policy. If a future requirement wants comments to be visible only to signed-in users (or only to followers), the SELECT policy needs to flip — but no aggregate-count complication, since unlike likes there's no public count to preserve.
 - **No moderation hooks yet.** A comment is `DELETE`-able only by its author or via a manual SQL delete (which RLS doesn't gate for the `service_role`). If the project grows beyond personal use, a `reports` table + admin-only moderation UI is the natural next step.
 - **No edit-comment support.** The schema technically allows it (no policy blocking UPDATE by the author — there's no policy at all, so RLS denies by default). If editing becomes a requirement, add an UPDATE policy `USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` and a `updated_at` column.
+
+---
+
+## Comment likes (migration 019, Stage 15 item 4)
+
+**Decision:** New `comment_likes` join table with composite PK `(comment_id, user_id)` and a `created_at` column. RLS posture mirrors `likes` (migration-001 + migration-004): public SELECT, own-only INSERT (`auth.uid() = user_id` from day one — no fix-it-later migration needed), own-only DELETE, and an additive admin-override DELETE.
+
+**Why a separate table rather than reusing `likes`:**
+- `likes.recipe_id` is a FK to `recipes`. Reusing it with `comment_id` overloaded into the same column would require either a nullable column pair + CHECK constraint or a polymorphic id (the `reports` antipattern from migration 017). Neither is worth saving one CREATE TABLE.
+- The aggregate query path is different: `likes` is bulk-fetched once for the home grid; `comment_likes` is bulk-fetched per-recipe scoped to that thread's comment ids (~5–50 comments). Separate tables let each path use the cheapest index without one path's needs distorting the other's.
+
+**Why composite PK over a surrogate id:**
+- Uniqueness is the whole point (a user can like a comment at most once). A composite PK enforces it without an extra UNIQUE index.
+- The PK index is `(comment_id, user_id)` — leading edge is `comment_id`, which is exactly what the bulk fetch filters on (`WHERE comment_id IN (...)`). No separate covering index needed.
+
+**Why FK on `comment_id` cascades:**
+- A deleted comment has no meaningful "likes" left to count. The existing comment-delete paths — author DELETE (migration 001) and admin-override DELETE (migration 008) — clean up `comment_likes` for free via the cascade. No trigger, no manual cleanup in the React hook.
+
+**Count strategy:** Bulk-fetch keyed on the thread's comment ids, same shape as `useLikes`. Costs one extra round-trip per recipe-detail mount. Below the threshold where a Postgres view or counter-column-with-trigger would pay off; the upgrade path (swap the hook's data source while keeping the consumer API stable) matches the one documented for `likes`.
+
+**Sort:** Comments order by `(like_count DESC, created_at DESC)` in the client (`useMemo` over the count Map). When all comments are at zero likes the order is identical to the pre-likes default (newest-first); any comment with likes floats above the zero-tier in count order. Done client-side because the count Map updates optimistically and we don't want to round-trip the sort.
+
+**Tradeoffs:**
+- **Public count of who-liked-what.** Same posture as recipe likes — RLS exposes the `user_id` of every liker, not just the count. If a future "private likes" requirement lands, the SELECT policy needs to flip to own-only and counts would need a SECURITY DEFINER aggregate function (same upgrade-path issue noted for `favorites`).
+- **No "milestone" notifications.** A like on your comment is silent. Could pair with the Stage 11 `notifications` table via an AFTER INSERT trigger; deferred until there's a signal it matters.
+- **Seed script doesn't populate.** The existing seed script seeds zero comments, so there's nothing to seed likes against. Carry-forward: when the seed script grows a comment-fixture pass, layer comment-likes on top of it.
+
+**Gotcha — PostgREST embed ambiguity when adding sibling join tables to `profiles`:** dropping `comment_likes` (with `user_id -> profiles.id`) made the prior `comments(... profiles(username, avatar_url))` embed start returning `Could not embed because more than one relationship was found for 'comments' and 'profiles'`. PostgREST saw two paths: (a) the direct `comments.user_id -> profiles.id`, and (b) a two-hop `comments.id -> comment_likes.comment_id -> comment_likes.user_id -> profiles.id`. Resolved by hinting the FK constraint name on the embed: `profiles!comments_user_id_fkey(username, avatar_url)`. Worth remembering before adding any future table that lands `user_id -> profiles.id` while another existing table also references `profiles` from the same source — the **older** `profiles(...)` embed will silently start failing the moment the new FK lands. Easiest preemptive fix: when adding a new `_id -> profiles.id` FK on a table that joins to something already embedding `profiles`, walk grep for `profiles(` in the React codebase and pin those embeds with `!<table>_<col>_fkey` hints in the same PR.
 
 ## Admin role + moderation policies (migration 008)
 
