@@ -208,6 +208,21 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Multi-line content preserves newlines** — paste a comment with embedded `\n`; rendered with `whitespace-pre-wrap` so line breaks survive
 - [ ] **Long words / URLs don't overflow the column** — `break-words` keeps a 200-character no-spaces string from blowing out the layout
 
+## Comment likes checklist
+
+> Verifies Stage 15 item 4 — small heart pill on each comment row. Requires migration 019 applied (`supabase_migration_019_comment_likes.sql` — creates the `comment_likes` join table + RLS). The seed script doesn't seed comments, so post a few from at least two test accounts before walking this checklist.
+
+- [ ] **Heart pill renders on every comment row** — inline below the content next to Delete / Report; small outline heart, no count when 0 likes
+- [ ] **Signed-in click toggles the heart filled rose + count appears** — first click goes to `1`; click again returns to outline with no count
+- [ ] **Anonymous click opens the Auth overlay** — log out, click any heart; same `onRequireAuth` path the comment form uses, no row mutation
+- [ ] **Optimistic-then-rollback on failure** — disable Wi-Fi briefly, click a heart; the fill + count flip immediately, then revert when the network insert errors out (check console for the logged error)
+- [ ] **Sort floats liked comments to the top** — on a thread with mixed liked / unliked comments, all liked rows appear above all zero-tier rows; within each tier, newest-first holds
+- [ ] **Ties break on `created_at DESC`** — two comments both at 1 like sort newest-first; flip the like on the older one to make it 2 and watch it move above
+- [ ] **Counts persist across reload** — like a few comments, refresh the page; counts and filled state survive
+- [ ] **Public counts visible to anonymous viewers** — log out, open the same recipe; counts and rose-filled hearts on others' likes remain visible (the rose fill is from `userLikedComment` which is false anonymously — so anon viewers see outline hearts with counts, not filled)
+- [ ] **Admin-delete cascades** — admin deletes a comment that has likes; reload; the comment is gone and the FK cascade cleaned its `comment_likes` rows (verify by re-creating a comment and checking no stale rows pollute new counts)
+- [ ] **Self-like rejected by RLS** — open browser devtools, attempt `supabase.from('comment_likes').insert({ comment_id: '<some-id>', user_id: '<other-user-uuid>' })`; insert returns 401/403 (the `WITH CHECK (auth.uid() = user_id)` policy denies)
+
 ## Admin moderation checklist
 
 > Requires migration 008 applied (`supabase_migration_008_admin.sql`) and the seed admin account promoted via `bootstrap_admin()` (handled by `npm run seed:test`).
