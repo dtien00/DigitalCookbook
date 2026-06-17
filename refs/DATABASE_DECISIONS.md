@@ -101,7 +101,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_014_recipe_like_counts_view.sql` — adds the `recipes_with_counts` view (`recipes` LEFT JOIN aggregated `likes` subquery exposing `like_count`) with `WITH (security_invoker = true)` so the underlying `recipes` RLS still does the filtering. Backs Stage 13 v2's Most-/Least-liked sort. See "`recipes_with_counts` view for popularity-sort" below. Idempotent.
 - `supabase_migration_015_cookbooks.sql` — adds the `cookbooks` and `cookbook_recipes` tables with the parent-visibility-inherited RLS pattern (own-curation, optional public visibility). First migration in the project to use EXISTS-on-parent for write gating on a join table — see "Cookbooks + cookbook_recipes (migration 015, Stage 14 item 1)" below. Idempotent.
 - `supabase_migration_016_user_data_export.sql` — adds the `export_user_data(target_id UUID)` RPC backing Stage 16 item 4's "Download my data" button. SECURITY DEFINER + self-only auth gate (`auth.uid() = target_id`). Returns a single JSONB containing every row the platform holds about the caller. See "GDPR-style user data export RPC (migration 016, Stage 16 item 4)" below. Idempotent (`CREATE OR REPLACE FUNCTION`).
-- Future migrations: `supabase_migration_017_*.sql`, etc.
+- `supabase_migration_018_step_photos.sql` — adds nullable `photo_path TEXT` to `steps` (Stage 15 item 1). No RLS changes — the existing steps policies gate on parent recipe visibility / authorship. Companion to a new `recipe-steps` Storage bucket; see "Storage: `recipe-steps` bucket (Stage 15 item 1)" below. Idempotent.
+- Future migrations: `supabase_migration_019_*.sql`, etc.
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -523,6 +524,42 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 - **No `IF NOT EXISTS` on the target.** A report can be filed against a target that gets deleted seconds later; the admin sees "Target no longer exists" instead of the content. Acceptable — the report's reason text is itself the artifact worth reviewing, and an orphaned report often *means* the author already acted on it.
 - **No email notification to admins on new report.** The roadmap flagged this as a possible follow-up via a Postgres trigger + `pg_net` Edge Function call. Deferred: sending-domain wiring isn't in place, the admin dashboard polls naturally on next visit, and the volume is low enough that real-time alerts aren't yet load-bearing. Captured as a Stage 16 carry-forward.
 - **No reporter notification on resolution.** Could piggyback on the Stage 11 `notifications` table but adds a fan-out path; deferred for the same low-volume reason.
+
+---
+
+## Storage: `recipe-steps` bucket (Stage 15 item 1)
+
+**Decision:** A second public-read Supabase Storage bucket, `recipe-steps`, holds per-step instructional photos. Mirrors the operational shape of `recipe-images`: public-read for grid + detail page fetches without a signed-URL dance, authenticated writes only.
+
+**Bucket settings:**
+- Public: ON (anonymous fetch allowed).
+- File size limit: 5 MB. Per-step photos are realistically ~100–500 KB; 5 MB covers pre-resize buffer for users who upload directly off a phone camera.
+- Allowed MIME types: `image/jpeg`, `image/png`, `image/webp`. Locks out HEIC / TIFF / SVG / animated formats that the browser would handle inconsistently.
+
+**Policies (dashboard, per-bucket):**
+- INSERT: `bucket_id = 'recipe-steps'`, role `authenticated`.
+- UPDATE: same — overwrite-on-edit needs UPDATE for the `upsert: true` path.
+- DELETE: same — covered for future cleanup features even though the current code doesn't delete bucket objects.
+- SELECT: public-read via the bucket toggle (no explicit policy needed).
+
+**Path convention:** `recipe-steps/<recipe_id>/<step_id>.<ext>` where `<ext>` is one of `jpg|jpeg|png|webp`. The recipe-id subfolder keeps the bucket browsable and lets a future "delete recipe → delete bucket prefix" job target a single prefix. Step-id is the actual `steps.id` UUID from Postgres, which is why uploads happen *after* the step row is inserted (Option A in the upload-strategy decision below).
+
+**Path stored in DB, not URL:** `steps.photo_path` is the storage path (e.g. `abc-recipe-uuid/def-step-uuid.jpg`), not the full public URL. Render-time `supabase.storage.from('recipe-steps').getPublicUrl(path)` synthesizes the URL — synchronous, no network. Keeps the schema portable across bucket renames, CDN front-doors, and a future move to signed URLs (only the URL builder changes, not the data).
+
+**Upload strategy — Option A (defer to save), not Option B (temp + rewrite):**
+- CreateRecipe holds the file as a local `File` object with a blob URL preview. On Save, the recipe + steps insert runs first; only then does a second pass upload each pending `File` to `recipe-steps/<recipe_id>/<step_id>.<ext>` and UPDATE the matching step's `photo_path`.
+- Option B (upload to `_pending/<temp_uuid>.jpg` immediately, then `move()` to the final path on save) was rejected — it leaves orphan files for every abandoned create flow and needs a lifecycle / cleanup job that doesn't exist yet. A's only cost is a slightly heavier Save click on slow connections; B's cost is operational debt.
+
+**Partial-failure posture:** the photo-upload pass uses `Promise.allSettled` so a single failed upload doesn't roll back the recipe + step inserts that already committed. Failures toast the user with "Recipe saved, but N photos failed — edit to retry." The recipe is intact; the user can recover by re-editing.
+
+**Edit-mode photo carry-forward:** CreateRecipe's edit flow currently deletes-then-reinserts all steps (any reordering is positional). Existing photos survive because `photoPath` is carried forward in component state and written through to the new step rows' insert. Photo replacement orphans the old storage object (same posture as `recipe-images` cover swaps — accepted tradeoff documented under that bucket's section above).
+
+**Privacy gap (inherited):** Anyone with the URL can fetch a step photo even if the parent recipe is `is_public = false`. Same gap as `recipe-images`; accepted on the same documented standard. Revisit alongside the cover-image bucket when the audience grows beyond friends/family.
+
+**Why a second bucket instead of a `recipe-images` subpath:**
+- Different MIME / size policy (5 MB cap here vs. unlimited on cover images).
+- Different lifecycle: step photos belong to a single recipe and should follow it on delete; cover images are owned by the recipe row directly. Distinct buckets keep that boundary visible.
+- Cleaner operational metrics (per-feature storage growth visible in the dashboard).
 
 ---
 

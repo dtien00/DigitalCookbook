@@ -744,3 +744,47 @@ The toggle reuses the same `.book-spread / .book-page` vocabulary the profile su
 
 **Print / PDF:** `@media print` rules in [src/index.css](../src/index.css) override `.recipe-content-spread` back to a single column when the page is printed. This preserves the existing kitchen-card-friendly print/PDF layout regardless of which mode the user is in on screen. Caveat: html2pdf captures the live DOM via html2canvas, not the print stylesheet, so the in-app PDF download will reflect the current screen mode. Acceptable tradeoff — the user has explicit control via the toggle right before they click Download.
 
+---
+
+# Per-step photos (Stage 15 item 1)
+
+Authors can attach one photo per step in CreateRecipe; readers see a thumbnail inline on RecipeDetail (sheet + spread layouts), expandable into a full-screen lightbox; cooks see the same photo in the bottom-left quadrant of the step canvas in CookingMode, with the Mark-step-done pill paired to its right.
+
+## CreateRecipe authoring affordance
+
+Per-step row, below the instruction textarea: a 24×24 (`w-24 h-24`) thumbnail slot.
+
+- **No photo yet:** dashed-outline tile with a `+` glyph and "Add photo" label. The whole tile is the click target via a wrapper `<label>` that hides the `<input type="file">` — keeps the keyboard semantics of a real file input without the OS-default ugliness.
+- **Photo selected (blob URL preview from `URL.createObjectURL(file)`):** the image fills the tile (`object-cover`), with a small ✕ pill at the top-right corner removing both the pending File and any carry-forward `photoPath` (un-attaching the photo entirely). Removing → save writes `photo_path = NULL`.
+- **Edit mode (existing photo):** same as "Photo selected" but the preview is the public URL of the existing storage object, not a blob URL. Picking a new file replaces it; ✕ un-attaches.
+
+Help text beside the slot reads: *"Optional. One photo per step, ≤ 5 MB. JPG, PNG, or WebP."* — exactly the limits enforced by the bucket so the user isn't surprised by an upload rejection.
+
+The thumbnail is uncolored chrome — palette stays in line with the rest of CreateRecipe (pre-retint indigo/gray utilities). Retint piggybacks on the existing CreateRecipe-on-retint-list item, not on this stage.
+
+## RecipeDetail thumbnail + lightbox
+
+Each step's `<li>` carries the photo as a separate row beneath the label (not inline with the checkbox + instruction). Indented to match the instruction text alignment (`ml-8`). 32×32 (`w-32 h-32 object-cover`) — large enough to read at arm's length without crowding the step list.
+
+The thumbnail is a `<button>` (not a bare `<img>`) — keyboard focus + screen-reader semantics + the `focus-visible:ring-2 focus-visible:ring-rust` ring all come from `<button>`. Hover bumps the border from `paper-shade` to `rust` so the affordance reads as interactive.
+
+**Lightbox:** a `fixed inset-0 z-[120]` overlay at `bg-ink/85` darkening, the image centered with `max-w-full max-h-full object-contain` so it scales to the viewport without cropping. A `w-11 h-11` ✕ button sits at `top-4 right-4`; backdrop click also closes; Escape closes (via a scoped `keydown` listener mounted only while the lightbox is open). The image itself is `onClick={(e) => e.stopPropagation()}` so a tap on the image doesn't close — the backdrop is the close surface.
+
+z-index `120` sits above CookingMode (`100`) and the ingredients sheet (`110`); the lightbox is intentionally non-stacking with cooking-mode (it's not reachable from there).
+
+The thumbnail and lightbox both carry `.no-print` because Stage 8's print stylesheet already linearizes the step list to text-only; rendering thumbnails in a PDF kitchen-card adds bytes for no functional value when the user is reading it on paper. The html2pdf-based "Download PDF" follows the same `.no-print` filter.
+
+## CookingMode bottom-left quadrant
+
+When a step has no photo: layout is unchanged — kicker / instruction text / Mark-step-done pill centered in a single column.
+
+When a step has a photo: the step canvas grows a `grid-cols-2 gap-4 items-center` row below the instruction text:
+- **Bottom-left cell:** the photo, `w-full max-h-64 landscape:max-h-48 object-contain rounded-md justify-self-start`. Contained, not cover-cropped — instructional photos lose meaning under a crop. Landscape gets a tighter cap so the photo doesn't push the pill below the fold on a propped phone.
+- **Bottom-right cell:** the existing Mark-step-done pill, centered in its half via `flex justify-center`.
+
+`items-center` vertically centers the pill against the photo's content box, so the pill doesn't sit tight to the bottom edge of a photo that ran shorter than the max-height.
+
+**No lightbox on this surface.** The cooking-mode canvas is already full-screen; opening a lightbox over it is a near-duplicate "make it bigger" gesture, and tapping the photo would steal a tap the user wants free for the pill. The photo here is presentational only — its taps don't trigger any handler.
+
+The swipe gesture (Stage 9 envelope, captured at the cooking-mode root) is unaffected — touches inside the photo region bubble normally through the carousel root, since the photo isn't a button and doesn't intercept.
+

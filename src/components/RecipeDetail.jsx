@@ -45,6 +45,8 @@ export default function RecipeDetail({
     const [checkedSteps, setCheckedSteps] = useState(() => new Set())
     const [pdfLoading, setPdfLoading] = useState(false)
     const [cooking, setCooking] = useState(false)
+    // Stage 15 item 1 — lightbox URL for an expanded step photo. Null = closed.
+    const [lightboxUrl, setLightboxUrl] = useState(null)
     const [swipeX, setSwipeX] = useState(0)
     const touchRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0, tracking: false })
     // Tracks whether cooking-mode entry was the source of the current
@@ -78,6 +80,18 @@ export default function RecipeDetail({
         fullscreenRequestedRef.current = false
         setCooking(false)
     }
+
+    const stepPhotoUrl = (path) => {
+        if (!path) return null
+        return supabase.storage.from('recipe-steps').getPublicUrl(path).data.publicUrl
+    }
+
+    useEffect(() => {
+        if (!lightboxUrl) return
+        const onKey = (e) => { if (e.key === 'Escape') setLightboxUrl(null) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [lightboxUrl])
 
     // Stage 14 item 1 — body layout toggle. "sheet" = single-column scroll
     // (the original layout); "spread" = two-page book layout with ingredients
@@ -358,6 +372,7 @@ export default function RecipeDetail({
                 <ol className="step-list">
                     {steps.map(step => {
                         const checked = checkedSteps.has(step.id)
+                        const photoUrl = stepPhotoUrl(step.photo_path)
                         return (
                             <li key={step.id}>
                                 <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -371,6 +386,21 @@ export default function RecipeDetail({
                                         {step.instruction}
                                     </span>
                                 </label>
+                                {photoUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setLightboxUrl(photoUrl)}
+                                        aria-label={`Expand step photo`}
+                                        className="no-print mt-2 ml-8 block rounded-md overflow-hidden border border-paper-shade hover:border-rust transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rust"
+                                    >
+                                        <img
+                                            src={photoUrl}
+                                            alt=""
+                                            loading="lazy"
+                                            className="w-32 h-32 object-cover block"
+                                        />
+                                    </button>
+                                )}
                             </li>
                         )
                     })}
@@ -661,6 +691,33 @@ export default function RecipeDetail({
                     setCheckedSteps={setCheckedSteps}
                     onExit={handleExitCooking}
                 />
+            )}
+            {lightboxUrl && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Step photo"
+                    className="fixed inset-0 z-[120] bg-ink/85 flex items-center justify-center p-4"
+                    onClick={() => setLightboxUrl(null)}
+                >
+                    <button
+                        type="button"
+                        aria-label="Close photo"
+                        onClick={(e) => { e.stopPropagation(); setLightboxUrl(null) }}
+                        className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center rounded-full bg-paper/90 hover:bg-paper text-ink"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                    <img
+                        src={lightboxUrl}
+                        alt=""
+                        className="max-w-full max-h-full object-contain"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
             )}
         </div>
     )
