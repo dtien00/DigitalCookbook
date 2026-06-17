@@ -744,3 +744,49 @@ The toggle reuses the same `.book-spread / .book-page` vocabulary the profile su
 
 **Print / PDF:** `@media print` rules in [src/index.css](../src/index.css) override `.recipe-content-spread` back to a single column when the page is printed. This preserves the existing kitchen-card-friendly print/PDF layout regardless of which mode the user is in on screen. Caveat: html2pdf captures the live DOM via html2canvas, not the print stylesheet, so the in-app PDF download will reflect the current screen mode. Acceptable tradeoff — the user has explicit control via the toggle right before they click Download.
 
+---
+
+# Cooking mode (Stage 15 item 5)
+
+Full-screen kitchen-focused step view launched from a prominent rust "Start cooking" CTA above the recipe content on [RecipeDetail.jsx](../src/components/RecipeDetail.jsx). [CookingMode.jsx](../src/components/CookingMode.jsx) portals to `document.body` so it overlays any route — header, footer, comments, admin panel all vanish behind it. Surface is the standard `bg-paper paper-grain` so the rustic-paper feel (and any active backdrop) carries straight in.
+
+## Layout
+
+Three regions, stacked column with `flex-col` and `flex-shrink-0` chrome:
+- **Header** — exit (`×`) on the left, recipe title centered with a small "Cooking" rust kicker above, ingredients-list trigger on the right. All buttons are `w-11 h-11` (44px tap target) on `bg-paper-shade` circles.
+- **Progress strip** — "Step N of M" + percentage on a 1.5px rust progress bar. Sits just under the header, telegraphs how much of the recipe is left.
+- **Step canvas (flex-1)** — one step per page, large `font-serif text-2xl sm:text-3xl` with `landscape:text-3xl sm:landscape:text-4xl` so a kitchen-propped phone in landscape gets a meaningful type bump. Step text is `text-center` and limited to `max-w-2xl` so it's readable from arm's reach. A "Mark step done" pill below the text doubles as advance-to-next (or exit on the last step) — the hand is already there.
+- **Footer** — Previous / step dots (capped at 12 visible, with `+N` overflow indicator) / Next-or-Finish. Finish on the last step is rust-filled to telegraph the terminal action.
+
+## Step carousel mechanic
+
+All steps are pre-rendered into a single horizontal flex row that `translateX`'s by `(-currentStep * 100) / steps.length%`. The user's drag adds `swipeX` pixels on top of that translate; on commit, React batches `setCurrentStep` + `setSwipeX(0)` into one render so the row animates smoothly from "drag position with old step" to "rest position with new step" — CSS transition takes over once `swipeX === 0`. Each step has its own `overflow-y-auto` so long instructions vertical-scroll independently without disturbing the row's horizontal translation.
+
+The visual feel: a thumb-swipe pulls the next step into view as you drag, then snaps to it on release. No flash of empty content between steps; no React unmount/remount churn.
+
+## Gesture envelope
+
+Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40px vertical drift commits a step change; under threshold springs back via a 300ms cubic-bezier transition. Tracking lives in a `useRef` (start + last coords + `tracking` flag) so per-frame `touchmove` updates don't churn React state — only `swipeX` (capped at ±200px) goes through state. `touchAction: 'pan-y'` on the carousel root tells the browser horizontal pans are ours and vertical scrolling stays native, so long step text can scroll without hijacking. Multi-touch (`e.touches.length !== 1`) is ignored so pinch-zoom doesn't fire spurious navigation. The mid-gesture `dy > 40 && dy > |dx|` abandon check kills tracking the instant the user is clearly scrolling, not swiping.
+
+`stopPropagation` at the cooking-mode root prevents touches from bubbling through React's synthetic event tree to RecipeDetail's swipe-back-to-home handler. React bubbles by component tree, not DOM tree, so portaling to `document.body` does NOT insulate the parent — the explicit `stopPropagation` is load-bearing.
+
+## Wake Lock
+
+`navigator.wakeLock.request('screen')` on mount; `release()` on unmount. The lock auto-releases when the tab becomes hidden, so a `visibilitychange` listener re-acquires on return-to-visible — otherwise tabbing away and back would let the screen dim mid-recipe. Acquisition failures (missing user gesture, hidden at acquire-time, unsupported browser) are swallowed silently; older Safari (< 16.4) just lets the screen dim normally, the rest of the view works.
+
+## Landscape fullscreen
+
+`handleStartCooking` on RecipeDetail requests fullscreen synchronously **inside the click handler** when the entry happens in landscape (`window.matchMedia('(orientation: landscape)').matches`). The Fullscreen API requires an active user-gesture context — moving the request into a `useEffect` on CookingMode mount would lose the gesture and silently fail. A `fullscreenRequestedRef` tracks whether the cooking-mode entry was the source of the fullscreen state, so `handleExitCooking` only calls `exitFullscreen()` when it was — yanking the user out of a fullscreen they were already in for some other reason would surprise. iOS Safari doesn't support `requestFullscreen` on non-video elements; the `.catch` swallows that and any user denial.
+
+## Ingredients slide-up sheet
+
+`z-[110]` (above the cooking-mode portal's `z-[100]`), bottom-anchored sheet up to `80vh`. Backdrop is a dimmer `bg-ink/40` button so a tap outside the sheet closes it. Ingredients reuse the servings multiplier passed down from RecipeDetail, so quantities scale identically on both surfaces — the user doesn't see one quantity in the recipe view and a different one once they "Start cooking". `scaleQuantity` was extracted from RecipeDetail.jsx into [src/lib/scaleQuantity.js](../src/lib/scaleQuantity.js) for this reason.
+
+## Checklist state continuity
+
+`checkedIngredients` and `checkedSteps` Sets are owned by RecipeDetail and threaded down as props. Toggles inside cooking mode mutate the same Sets, so exiting back to RecipeDetail preserves whatever the user marked off — and re-entering cooking mode picks up where they were. Kitchen-session scope is unchanged: the Sets reset when `recipe.id` changes (the existing Stage 7 effect), so leaving the recipe and coming back starts clean.
+
+## Keyboard
+
+`Escape` closes the ingredients sheet if open, otherwise exits cooking mode. `←` / `→` arrow keys advance/retreat steps. No focus trap inside the dialog (it's full-screen and the only tabbable controls are the cooking-mode chrome itself); `role="dialog"` + `aria-modal="true"` + `aria-label="Cooking {title}"` give screen readers the right framing.
+
