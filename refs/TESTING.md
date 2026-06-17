@@ -330,6 +330,54 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Per-step photos checklist
+
+> Verifies Stage 15 item 1 — author can attach one photo per step in CreateRecipe; reader sees a thumbnail + lightbox on RecipeDetail; CookingMode shows the photo in the step canvas. Requires migration 018 applied and the `recipe-steps` Storage bucket created per DATABASE_DECISIONS.md → *Storage: `recipe-steps` bucket*.
+
+**Author flow (CreateRecipe):**
+- [ ] **Slot visible on every step row** — adding a step shows the dashed "Add photo" tile below its instruction textarea
+- [ ] **File picker accepts JPG/PNG/WebP** — system picker shows images filtered to those types
+- [ ] **Reject of disallowed MIME** — try to attach a HEIC or SVG (rename a file's extension if needed); Supabase rejects on upload, toast surfaces the error, recipe stays saved minus that step's photo
+- [ ] **File > 5 MB rejected** — try uploading a >5 MB image; Supabase rejects on upload, surfaces toast, recipe still saves
+- [ ] **Preview shows immediately** — picking a file replaces the dashed tile with the chosen image (blob URL, no upload yet)
+- [ ] **Remove (✕) clears the slot** — click ✕ on a previewed photo; slot returns to the dashed "Add photo" state
+- [ ] **Save uploads pending files** — Save Recipe with N pending step photos; Supabase Storage dashboard shows N new objects under `recipe-steps/<recipe_id>/`
+- [ ] **photo_path patched per row** — after save, `SELECT id, step_number, photo_path FROM steps WHERE recipe_id = '<new-id>'` shows the path on each row that uploaded a photo, NULL on the rest
+- [ ] **Partial failure tolerated** — temporarily revoke Storage write permission (or unplug network mid-upload) on one of multiple pending uploads; recipe saves successfully, toast surfaces "N photos failed to upload", DB has the rest patched correctly
+
+**Edit-mode carry-forward:**
+- [ ] **Existing photo renders in the slot** — edit a recipe with a step photo; the slot shows the existing image (not the dashed tile)
+- [ ] **No changes → no re-upload** — Save without touching photos; Storage object count is unchanged; `photo_path` values match pre-edit
+- [ ] **Replace photo on an existing step** — pick a new file on a slot with an existing photo; Save; the storage object at the old path remains (orphan) but `photo_path` now points at the new upload
+- [ ] **Remove photo via ✕ on edit** — clear an existing photo's slot, Save; the row's `photo_path` is now NULL; old storage object still exists (orphan, same as the recipe-images precedent)
+
+**Reader flow (RecipeDetail):**
+- [ ] **Sheet layout shows thumbnail** — in default `sheet` layout, a step with `photo_path` shows a 128×128 thumbnail indented under the instruction
+- [ ] **Spread layout shows thumbnail** — toggle to `spread`; same thumbnail renders inside the right page's step list
+- [ ] **Steps without photos render unchanged** — mixed recipe (some steps with photos, some without) shows thumbnails only where data exists
+- [ ] **Anonymous viewers see thumbnails on public recipes** — sign out; open a public recipe with step photos; thumbnails render (public-read bucket)
+- [ ] **Lightbox opens on click** — tap a thumbnail; full-screen dark overlay appears with the image centered, ✕ at top-right
+- [ ] **Lightbox closes via ✕** — click the ✕ button; lightbox closes, focus returns to the thumbnail button
+- [ ] **Lightbox closes via backdrop** — click outside the image; lightbox closes
+- [ ] **Lightbox closes via Escape** — keyboard Escape closes the lightbox; pressing Escape with no lightbox open does nothing harmful
+- [ ] **Tap on the image doesn't close** — clicking directly on the photo (not the backdrop) keeps the lightbox open
+- [ ] **Thumbnail keyboard-accessible** — Tab to a step thumbnail; focus ring renders; Enter / Space opens the lightbox
+- [ ] **Print / PDF excludes the thumbnail** — Ctrl+P preview hides thumbnails; "Download PDF" output is text-only steps (`.no-print` filter)
+
+**CookingMode placement:**
+- [ ] **No photo → unchanged layout** — Start cooking on a step with no photo; instruction text + Mark step done pill remain centered as before
+- [ ] **Photo → bottom-left quadrant** — Start cooking on a step with a photo; the photo renders in the bottom-left half of the canvas, contained (not cropped)
+- [ ] **Mark step done → bottom-right, vertically centered** — pill sits in the right half, vertically centered relative to the photo
+- [ ] **Photo NOT tappable** — clicking the photo inside cooking mode does NOT open a lightbox (different from RecipeDetail)
+- [ ] **Photo doesn't break swipe** — swiping left/right starting inside the photo region still advances/retreats the step
+- [ ] **Mixed steps reflow correctly** — a recipe with some photo'd and some text-only steps; advancing through them reflows each step's layout independently
+- [ ] **Photo scales for landscape** — same recipe on a phone in landscape (or devtools landscape emulation); photo caps shorter (`max-h-48`) so the pill stays above the fold
+
+**Storage privacy gap (documented, not blocked):**
+- [ ] **Private-recipe URL still public-fetchable** — get the `photo_path` for a step on a private recipe (signed-in author); construct the public URL; fetch it while signed out — image returns 200. Same gap as `recipe-images`; accepted per DATABASE_DECISIONS.md.
+
+---
+
 ## Cooking mode checklist
 
 > Verifies Stage 15 item 5 — the full-screen step-focus view launched from "Start cooking" on RecipeDetail. Client-only; no migration. Wake Lock + Fullscreen behaviors are browser-dependent, so the checklist calls out where graceful fallback is expected.

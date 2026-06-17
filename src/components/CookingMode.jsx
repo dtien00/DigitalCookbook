@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { supabase } from '../lib/supabaseClient'
 
 // Stage 15 — full-screen kitchen-focused step view. Launched from the
 // "Start cooking" button on RecipeDetail. The recipe's ingredient checklist
@@ -243,6 +244,31 @@ export default function CookingMode({
                         {steps.map((s, i) => {
                             const sDone = checkedSteps.has(s.id)
                             const isCurrent = i === currentStep
+                            // Stage 15 item 1 — step photo (if any) lives
+                            // in the bottom-left quadrant; Mark-step-done
+                            // pill sits in the bottom-right, vertically
+                            // centered. Steps without a photo keep the
+                            // original centered layout.
+                            const photoUrl = s.photo_path
+                                ? supabase.storage.from('recipe-steps').getPublicUrl(s.photo_path).data.publicUrl
+                                : null
+                            const doneButton = (
+                                <button
+                                    onClick={() => {toggleChecked(setCheckedSteps, s.id); if (sDone) return; isLast ? onExit() : setCurrentStep(prev => Math.min(steps.length - 1, prev + 1));}}
+                                    aria-pressed={sDone}
+                                    tabIndex={isCurrent ? 0 : -1}
+                                    className={`inline-flex items-center gap-2 px-5 py-3 min-h-[44px] rounded-full font-medium transition-colors ${
+                                        sDone
+                                            ? 'bg-rust text-paper hover:bg-rust-dark'
+                                            : 'bg-paper-shade text-ink hover:bg-tan/40'
+                                    }`}
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    {sDone ? 'Done' : 'Mark step done'}
+                                </button>
+                            )
                             return (
                                 <div
                                     key={s.id}
@@ -257,23 +283,22 @@ export default function CookingMode({
                                         <p className={`font-serif text-2xl sm:text-3xl landscape:text-3xl sm:landscape:text-4xl leading-relaxed text-center ${sDone ? 'line-through text-ink/40' : 'text-ink'}`}>
                                             {s.instruction}
                                         </p>
-                                        <div className="flex justify-center mt-10 landscape:mt-6">
-                                            <button
-                                                onClick={() => {toggleChecked(setCheckedSteps, s.id); if (sDone) return; isLast ? onExit() : setCurrentStep(prev => Math.min(steps.length - 1, prev + 1));}}
-                                                aria-pressed={sDone}
-                                                tabIndex={isCurrent ? 0 : -1}
-                                                className={`inline-flex items-center gap-2 px-5 py-3 min-h-[44px] rounded-full font-medium transition-colors ${
-                                                    sDone
-                                                        ? 'bg-rust text-paper hover:bg-rust-dark'
-                                                        : 'bg-paper-shade text-ink hover:bg-tan/40'
-                                                }`}
-                                            >
-                                                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                                    <polyline points="20 6 9 17 4 12" />
-                                                </svg>
-                                                {sDone ? 'Done' : 'Mark step done'}
-                                            </button>
-                                        </div>
+                                        {photoUrl ? (
+                                            <div className="mt-8 landscape:mt-4 grid grid-cols-2 gap-4 items-center">
+                                                <img
+                                                    src={photoUrl}
+                                                    alt=""
+                                                    className="w-full max-h-64 landscape:max-h-48 object-contain rounded-md justify-self-start"
+                                                />
+                                                <div className="flex justify-center">
+                                                    {doneButton}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex justify-center mt-10 landscape:mt-6">
+                                                {doneButton}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )

@@ -12,7 +12,13 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
     const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '', notes: '' }])
-    const [steps, setSteps] = useState([{ instruction: '', step_number: 1 }])
+    // Stage 15 item 1 — each step row carries optional photo state:
+    //   photoFile    — File the user just picked (null if untouched)
+    //   photoPreview — blob: URL for a new pick, OR public URL for an
+    //                  existing edit-mode photo. Used for the <img> src.
+    //   photoPath    — storage path carried from DB in edit mode. Null
+    //                  for new steps and for steps the user removed.
+    const [steps, setSteps] = useState([{ instruction: '', step_number: 1, photoFile: null, photoPreview: null, photoPath: null }])
     const [imageFile, setImageFile] = useState(null)
     const [imagePreview, setImagePreview] = useState(recipeToEdit?.image_url || null)
 
@@ -50,7 +56,15 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 .order('step_number', { ascending: true })
 
             if (stepData?.length > 0) {
-                setSteps(stepData.map(s => ({ instruction: s.instruction, step_number: s.step_number })))
+                setSteps(stepData.map(s => ({
+                    instruction: s.instruction,
+                    step_number: s.step_number,
+                    photoFile: null,
+                    photoPath: s.photo_path || null,
+                    photoPreview: s.photo_path
+                        ? supabase.storage.from('recipe-steps').getPublicUrl(s.photo_path).data.publicUrl
+                        : null,
+                })))
             }
         } catch (error) {
             console.error('Error fetching details:', error)
@@ -90,7 +104,32 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     }
 
     const addStep = () => {
-        setSteps([...steps, { instruction: '', step_number: steps.length + 1 }])
+        setSteps([...steps, { instruction: '', step_number: steps.length + 1, photoFile: null, photoPreview: null, photoPath: null }])
+    }
+
+    const handleStepPhotoChange = (index, file) => {
+        if (!file) return
+        const newSteps = [...steps]
+        newSteps[index] = {
+            ...newSteps[index],
+            photoFile: file,
+            photoPreview: URL.createObjectURL(file),
+        }
+        setSteps(newSteps)
+    }
+
+    // Clears both the new pick and any carry-forward path. On save, a step
+    // with no file and no path writes photo_path=null, so the old storage
+    // object becomes orphaned (same posture as recipe-images cover swaps).
+    const handleStepPhotoRemove = (index) => {
+        const newSteps = [...steps]
+        newSteps[index] = {
+            ...newSteps[index],
+            photoFile: null,
+            photoPreview: null,
+            photoPath: null,
+        }
+        setSteps(newSteps)
     }
 
     const handleIngredientChange = (index, field, value) => {
@@ -175,20 +214,63 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 if (ingError) throw ingError
             }
 
-            // Insert Steps
-            const stepsToInsert = steps
-                .filter(s => s.instruction.trim() !== '')
-                .map((step, index) => ({
-                    recipe_id: recipeId,
-                    step_number: index + 1,
-                    instruction: step.instruction
-                }))
+            // Insert Steps. Carry forward existing photo_path values from
+            // edit mode so unchanged photos stay attached after the
+            // delete-then-reinsert cycle above. New file picks go through
+            // a second pass after IDs are minted, since the storage path
+            // includes the step.id.
+            const nonEmptySteps = steps.filter(s => s.instruction.trim() !== '')
+            const stepsToInsert = nonEmptySteps.map((step, index) => ({
+                recipe_id: recipeId,
+                step_number: index + 1,
+                instruction: step.instruction,
+                photo_path: step.photoFile ? null : (step.photoPath || null),
+            }))
 
+            let insertedSteps = []
             if (stepsToInsert.length > 0) {
-                const { error: stepError } = await supabase
+                const { data: stepRows, error: stepError } = await supabase
                     .from('steps')
                     .insert(stepsToInsert)
+                    .select('id, step_number')
+                    .order('step_number', { ascending: true })
                 if (stepError) throw stepError
+                insertedSteps = stepRows
+            }
+
+            // Stage 15 item 1 — Option A: upload pending step photos now
+            // that step IDs exist, then patch photo_path on each row.
+            // Failures here leave the recipe saved with a missing photo;
+            // surface a toast but don't roll back the recipe itself —
+            // the user can re-edit and re-attach.
+            const photoUpdatePromises = []
+            for (let i = 0; i < nonEmptySteps.length; i++) {
+                const step = nonEmptySteps[i]
+                if (!step.photoFile) continue
+                const inserted = insertedSteps[i]
+                if (!inserted) continue
+                photoUpdatePromises.push((async () => {
+                    const ext = (step.photoFile.name.split('.').pop() || 'jpg').toLowerCase()
+                    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg'
+                    const path = `${recipeId}/${inserted.id}.${safeExt}`
+                    const { error: uploadError } = await supabase.storage
+                        .from('recipe-steps')
+                        .upload(path, step.photoFile, { upsert: true, contentType: step.photoFile.type })
+                    if (uploadError) throw uploadError
+                    const { error: updateError } = await supabase
+                        .from('steps')
+                        .update({ photo_path: path })
+                        .eq('id', inserted.id)
+                    if (updateError) throw updateError
+                })())
+            }
+
+            if (photoUpdatePromises.length > 0) {
+                const results = await Promise.allSettled(photoUpdatePromises)
+                const failed = results.filter(r => r.status === 'rejected').length
+                if (failed > 0) {
+                    toast.error(`Recipe saved, but ${failed} step photo${failed === 1 ? '' : 's'} failed to upload. Edit the recipe to retry.`)
+                }
             }
 
             toast.success(isEditMode ? 'Recipe updated successfully!' : 'Recipe created successfully!')
@@ -300,6 +382,39 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     value={step.instruction}
                                     onChange={e => handleStepChange(index, e.target.value)}
                                 />
+                                <div className="mt-2 flex items-start gap-3">
+                                    {step.photoPreview ? (
+                                        <div className="relative">
+                                            <img
+                                                src={step.photoPreview}
+                                                alt={`Step ${index + 1} preview`}
+                                                className="w-24 h-24 object-cover rounded-md border border-gray-300"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleStepPhotoRemove(index)}
+                                                aria-label={`Remove photo for step ${index + 1}`}
+                                                className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-gray-700 hover:bg-gray-900 text-white text-xs"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="w-24 h-24 flex flex-col items-center justify-center text-xs text-gray-500 border border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                                            <span className="text-xl leading-none">+</span>
+                                            <span className="mt-1">Add photo</span>
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                className="hidden"
+                                                onChange={e => handleStepPhotoChange(index, e.target.files?.[0])}
+                                            />
+                                        </label>
+                                    )}
+                                    <p className="text-xs text-gray-500 italic mt-1">
+                                        Optional. One photo per step, ≤ 5 MB. JPG, PNG, or WebP.
+                                    </p>
+                                </div>
                             </div>
                         ))}
                         <button type="button" onClick={addStep} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Step</button>

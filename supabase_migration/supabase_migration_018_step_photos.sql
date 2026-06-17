@@ -1,0 +1,50 @@
+-- Migration 018: add photo_path column to steps (Stage 15 item 1)
+--
+-- Adds an optional Supabase Storage path per step so authors can attach
+-- one photo per step ("here's what the dough should look like at this
+-- point"). Renders as a small thumbnail inline on RecipeDetail (sheet
+-- and spread layouts), opens a full-screen lightbox on tap. Displayed
+-- inline in the bottom-left quadrant of the step canvas in CookingMode
+-- (no lightbox there — the cooking canvas is already full-screen).
+--
+-- Nullable — existing steps get NULL and continue rendering as text-only.
+-- No RLS changes: the steps SELECT / INSERT / UPDATE / DELETE policies
+-- already gate on the parent recipe's visibility and authorship.
+--
+-- ============================================================
+-- Storage bucket setup (manual, Supabase Dashboard)
+-- ============================================================
+-- This migration alone is not enough — also create a Storage bucket
+-- named `recipe-steps` via Supabase Dashboard → Storage → New bucket.
+-- Bucket settings to mirror the existing `recipe-images` precedent
+-- (DATABASE_DECISIONS.md → "Storage: `recipe-images` bucket"):
+--
+--   * Public bucket: YES (public-read; same anonymous-grid-fetch
+--     reasoning — RecipeDetail step thumbnails should load without a
+--     signed-URL round-trip per image).
+--   * Allowed MIME types: image/jpeg, image/png, image/webp
+--   * File size limit: 5 MB (per-step photos are ~100–500 KB after
+--     client-side resize; 5 MB covers the pre-resize buffer)
+--
+-- Storage RLS policies (Dashboard → Storage → recipe-steps → Policies):
+--   * SELECT (read): TRUE  -- public-read, anyone can fetch
+--   * INSERT (upload): bucket_id = 'recipe-steps' AND auth.role() = 'authenticated'
+--   * UPDATE: same as INSERT (overwrite-on-edit needs UPDATE)
+--   * DELETE: bucket_id = 'recipe-steps' AND auth.role() = 'authenticated'
+--
+-- File path convention: recipe-steps/<recipe_id>/<step_id>.jpg
+-- (Subfolder per recipe keeps the bucket browsable and lets a future
+-- recipe-delete cleanup target a single prefix.)
+--
+-- Privacy gap (acknowledged, same as recipe-images): anyone with the
+-- URL can fetch the image even if the parent recipe is `is_public =
+-- false`. The DB hides the recipe via RLS but the image URL is public.
+-- Acceptable today by the documented standard; revisit alongside the
+-- recipe-images bucket when launching to non-friends.
+--
+-- ============================================================
+-- Run in Supabase Dashboard → SQL Editor.
+-- Idempotent — IF NOT EXISTS makes re-runs a no-op.
+
+ALTER TABLE public.steps
+  ADD COLUMN IF NOT EXISTS photo_path TEXT;
