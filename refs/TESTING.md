@@ -378,6 +378,42 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Cooking mode checklist
+
+> Verifies Stage 15 item 5 — the full-screen step-focus view launched from "Start cooking" on RecipeDetail. Client-only; no migration. Wake Lock + Fullscreen behaviors are browser-dependent, so the checklist calls out where graceful fallback is expected.
+
+- [ ] **CTA visible** — every RecipeDetail with at least one step shows a full-width rust "Start cooking" button above the recipe content; recipes with zero steps hide it
+- [ ] **CTA hidden during initial fetch** — the button does not render until `loading === false` (so it can't be tapped before steps exist)
+- [ ] **Enter cooking mode** — tap "Start cooking" → full-screen overlay appears, header shows recipe title + Cooking kicker, progress strip shows "Step 1 of N" / `1/N%`, first step text rendered in the canvas
+- [ ] **Body scroll locked** — RecipeDetail behind the overlay does not scroll while cooking mode is open; restored on exit
+- [ ] **Exit returns to RecipeDetail** — tap `×` in the header → cooking mode closes, scroll position on RecipeDetail is preserved
+- [ ] **Wake Lock acquires** — devtools → Application → … → Sensors / `navigator.wakeLock` (Chromium): on entry, screen-lock should be active; release on exit
+- [ ] **Wake Lock re-acquires on tab return** — switch tabs and back; lock should still report active after returning (re-acquired by the `visibilitychange` listener)
+- [ ] **Wake Lock graceful fallback** — Safari < 16.4 / unsupported browsers should still open the view; the screen may dim, but nothing else regresses
+- [ ] **Landscape fullscreen on entry** — on a phone (or devtools mobile emulator) in landscape, tapping Start cooking should also enter browser fullscreen; portrait entry should NOT request fullscreen
+- [ ] **Fullscreen restored on exit** — exiting cooking mode releases the fullscreen the entry acquired; if you were already in fullscreen for some other reason, exit does NOT yank you out
+- [ ] **Swipe-left advances** — on a touch device (or devtools touch emulation), thumb-swipe right-to-left ≥ 80px → next step
+- [ ] **Swipe-right retreats** — thumb-swipe left-to-right ≥ 80px → previous step
+- [ ] **Sub-threshold spring-back** — swipe < 80px → row springs back to the current step on release
+- [ ] **Vertical scroll preserved** — long step text scrolls vertically inside its panel without triggering a horizontal step change (`touchAction: pan-y` + the dy > 40 abandon check)
+- [ ] **Arrow keys** — `→` advances, `←` retreats, both clamped at the ends
+- [ ] **Escape behavior** — Escape closes the ingredients sheet if open; otherwise exits cooking mode
+- [ ] **Step dots** — bottom row shows up to 12 step dots; the current one is rust at 1.25× scale; completed ones are rust at 40% opacity. Recipes with > 12 steps show `+N` after the dots
+- [ ] **Dot jump** — tapping any dot jumps to that step
+- [ ] **Mark step done** — the "Mark step done" pill on the current step toggles its checked state AND advances to the next step (or exits cooking mode on the last step)
+- [ ] **Finish on last step** — on the last step, the Next button is replaced by a rust Finish button that closes cooking mode
+- [ ] **Checkbox state persists back to RecipeDetail** — mark ingredients and steps inside cooking mode, exit; the ingredient + step checkboxes on RecipeDetail reflect the same state
+- [ ] **Checkbox state persists across re-entry** — exit and re-tap Start cooking; previously checked items are still checked
+- [ ] **Checkbox state resets across recipes** — navigate to a different recipe and into its cooking mode; checkboxes start empty (kitchen-session scope, matches Stage 7)
+- [ ] **Ingredients sheet** — tap the right-side header button → bottom sheet slides up showing ingredients; backdrop dims the cooking page; tap outside or the header `×` closes it
+- [ ] **Ingredients scale with servings multiplier** — set servings to a non-default value on RecipeDetail, enter cooking mode, open the ingredients sheet; quantities should reflect the multiplier (fractions render as ½ ¼ ¾ ⅓ ⅔)
+- [ ] **Toggling ingredients in the sheet updates RecipeDetail** — check off an ingredient in the sheet, exit cooking mode; the same ingredient is checked on RecipeDetail
+- [ ] **Swipes don't bubble to RecipeDetail** — a thumb-swipe right inside cooking mode should advance/retreat steps, NOT trigger Stage 9's swipe-back-to-home. Exiting and then swiping right on RecipeDetail should still navigate home as usual
+- [ ] **Anonymous works** — log out, open a public recipe, Start cooking; all of the above behaviors still work (no auth gate on a client-side cooking aid)
+- [ ] **Empty steps fallback** — if a recipe has zero steps the CTA is hidden (already covered above); if somehow opened (manual state change), the canvas shows "No steps to cook through." rather than crashing
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:
