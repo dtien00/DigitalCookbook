@@ -139,7 +139,7 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                                 submitReport={submitReport}
                                 likeCount={commentLikeCount(c.id)}
                                 liked={userLikedComment(c.id)}
-                                onToggleLike={() => handleToggleLike(c.id)}
+                                onToggleLike={() => {if (!isOwn) {handleToggleLike(c.id)}}}
                             />
                         )
                     })}
