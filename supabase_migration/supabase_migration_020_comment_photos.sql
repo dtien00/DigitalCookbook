@@ -1,0 +1,60 @@
+-- Migration 020: add photo_path column to comments (Stage 15 item 3)
+--
+-- Adds an optional Supabase Storage path per comment so commenters can
+-- attach one result photo to their comment ("here's how mine turned out").
+-- High-trust signal — visually corroborates that the recipe is
+-- reproducible. Renders as a thumbnail below the comment text, opens a
+-- full-screen lightbox on tap (reuses the shared <Lightbox> component
+-- lifted from RecipeDetail step photos).
+--
+-- Nullable — existing comments get NULL and continue rendering as text-only.
+-- No RLS changes: the comments SELECT / INSERT / UPDATE / DELETE policies
+-- (own-only writes via WITH CHECK (auth.uid() = user_id) from migration 005,
+-- public-read, admin-override delete from migration 008) already cover the
+-- new column. The column doesn't introduce a new authorization surface.
+--
+-- ============================================================
+-- Storage bucket setup (manual, Supabase Dashboard)
+-- ============================================================
+-- This migration alone is not enough — also create a Storage bucket
+-- named `comment-photos` via Supabase Dashboard → Storage → New bucket.
+-- Bucket settings to mirror the `recipe-steps` precedent from migration
+-- 018 (DATABASE_DECISIONS.md → "Storage: `recipe-steps` bucket"):
+--
+--   * Public bucket: YES (public-read; comment counts and content are
+--     already public-read via RLS, so the photo follows the same posture
+--     — no signed-URL round-trip per thumbnail).
+--   * Allowed MIME types: image/jpeg, image/png, image/webp
+--   * File size limit: 5 MB (comment photos are ~100-300 KB after
+--     client-side resize to 1200px longest edge at JPEG q=0.85; the 5 MB
+--     ceiling covers the pre-resize buffer for the rare large upload)
+--
+-- Storage RLS policies (Dashboard → Storage → comment-photos → Policies):
+--   * SELECT (read): TRUE  -- public-read, anyone can fetch
+--   * INSERT (upload): bucket_id = 'comment-photos' AND auth.role() = 'authenticated'
+--   * UPDATE: same as INSERT (overwrite-on-replace needs UPDATE)
+--   * DELETE: bucket_id = 'comment-photos' AND auth.role() = 'authenticated'
+--
+-- File path convention: comment-photos/<recipe_id>/<random-uuid>.jpg
+-- (Subfolder per recipe so a future recipe-delete cleanup can target one
+-- prefix. UUID basename rather than <comment_id> because the path is
+-- generated client-side before the comment row exists — see the
+-- predetermined-path upload strategy in DATABASE_DECISIONS.md.)
+--
+-- Privacy gap (acknowledged, same as recipe-images / recipe-steps):
+-- anyone with the URL can fetch the image even if the parent recipe is
+-- `is_public = false`. The DB hides the recipe via RLS but the image URL
+-- is public. Acceptable today by the documented standard; revisit
+-- alongside the other public buckets when launching to non-friends.
+--
+-- Delete-with-photo posture: when a comment with a photo is deleted (own
+-- or admin), the storage object is left behind. Same posture as
+-- recipe-images cover swaps and recipe-steps photo replacements. Orphans
+-- accepted; revisit if Storage costs become material.
+--
+-- ============================================================
+-- Run in Supabase Dashboard → SQL Editor.
+-- Idempotent — IF NOT EXISTS makes re-runs a no-op.
+
+ALTER TABLE public.comments
+  ADD COLUMN IF NOT EXISTS photo_path TEXT;

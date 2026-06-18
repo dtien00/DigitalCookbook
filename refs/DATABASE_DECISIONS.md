@@ -592,6 +592,40 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 
 ---
 
+## Storage: `comment-photos` bucket (Stage 15 item 3)
+
+**Decision:** A third public-read Supabase Storage bucket, `comment-photos`, holds one "here's how mine turned out" photo per comment. Operationally identical to `recipe-steps` — public-read, authenticated writes, 5 MB cap, JPG/PNG/WebP allowlist — but uses a different upload strategy (see below) tuned to the comment-compose UX.
+
+**Bucket settings:** identical to `recipe-steps` (public ON, 5 MB cap, `image/jpeg|png|webp`).
+
+**Policies (dashboard, per-bucket):** identical to `recipe-steps` — `bucket_id = 'comment-photos'` + role `authenticated` on INSERT/UPDATE/DELETE; SELECT TRUE.
+
+**Path convention:** `comment-photos/<recipe_id>/<random-uuid>.<ext>`. Recipe-id subfolder mirrors the `recipe-steps` browseability + future-cleanup-by-prefix benefit. The basename is a client-generated `crypto.randomUUID()` rather than `<comment_id>` — see "Upload strategy" below for why.
+
+**Path stored in DB, not URL:** `comments.photo_path` is the storage path. Render-time `supabase.storage.from('comment-photos').getPublicUrl(path)` synthesizes the URL. Same portability rationale as `recipe-steps` — schema survives bucket renames / CDN swaps / a future move to signed URLs.
+
+**Upload strategy — upload-first-then-insert (predetermined path), NOT defer-to-save:**
+- Comment compose generates the storage path client-side (`crypto.randomUUID()`) BEFORE talking to Supabase, then uploads the resized image, then inserts the comment row with `photo_path` already populated. One round-trip per phase, no UPDATE.
+- Why not Option A from `recipe-steps` (insert row first, then upload, then UPDATE the path)? Because a comment is a single atomic post — there's no batch save event to defer to. Doing it as insert→upload→UPDATE would mean the row appears with no photo and gains one a moment later, which reads as broken (the photo IS most of the value of a result-comment). Upload-first means the row appears already-complete with the photo.
+- Why a UUID basename instead of `<comment_id>`? Because we want the path known BEFORE the comment row exists. Generating UUIDs client-side is cheap and Supabase Storage's path is opaque — the comment row's FK is `photo_path TEXT`, not a derived join.
+
+**Client-side resize before upload:** the roadmap's literal phrasing was "server-side resize to ~1200px"; we softened that to client-side because (a) Supabase Storage has no native server-side image transform, (b) an Edge Function would be a piece of always-on infra to maintain, and (c) the project's posture is "client-side everything, minimal infra." `src/lib/resizeImage.js` does `createImageBitmap` + canvas downscale to 1200px longest edge at JPEG q=0.85. Decode failure (HEIC on non-Safari, corrupt files) falls through to the original File — Storage's MIME allowlist + 5 MB cap are the last line of defense.
+
+**Failure modes:**
+- Upload fails → nothing persisted, error toast surfaces to the user, draft + photo state preserved so they can retry.
+- Insert fails after upload succeeds → the storage object is cleaned up via `storage.remove([path])` so we don't accumulate orphan-on-insert-error. Distinct from the delete-with-photo posture below (delete-time orphans are accepted; insert-error orphans are not, because they signal a bug the user can't see).
+
+**Delete-with-photo posture:** when a comment with a photo is deleted (own or admin), the storage object is left behind. Matches the established `recipe-images` cover-swap and `recipe-steps` photo-replacement posture — orphans cost storage but don't leak data beyond what the public URL already exposed. The comment row is gone, so no live surface can re-discover the path. Revisit alongside the other public buckets when storage costs become material or when launching to non-friends.
+
+**Privacy gap (inherited):** anyone with the URL can fetch a comment photo even if the parent recipe is `is_public = false`. Same gap as `recipe-images` / `recipe-steps`; accepted on the same documented standard.
+
+**Why a third bucket instead of stuffing into `recipe-steps`:**
+- Different ownership: step photos belong to the recipe author; comment photos belong to the commenter. Distinct buckets keep the access/audit boundary visible per-feature.
+- Cleaner operational metrics (per-feature storage growth visible in the dashboard).
+- Allows independent policy evolution — e.g., a future "comment author rate-limit on photo uploads" rule belongs on `comment-photos` only, not on the recipe-author surfaces.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
