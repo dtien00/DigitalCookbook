@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { resizeImage } from '../lib/resizeImage'
 
 // Per-recipe comments hook. Unlike useLikes / useFavorites (which live
 // at the App level and bulk-fetch tiny rows for the whole grid), comments
@@ -25,13 +26,21 @@ import { supabase } from '../lib/supabaseClient'
 // view wants chronological, flip the `ascending` flag.
 //
 // Optimistic UI:
-//   - addComment: pushes a temp-id row immediately, swaps with the real
-//     server row on success (which carries the joined `profiles`).
-//     Rolls back (removes the temp row) on error and re-throws so the
-//     caller can surface the failure.
+//   - addComment(content) (text-only): pushes a temp-id row immediately,
+//     swaps with the real server row on success (which carries the joined
+//     `profiles`). Rolls back (removes the temp row) on error and re-throws
+//     so the caller can surface the failure.
+//   - addComment(content, file) (with photo): NOT optimistic. The photo is
+//     most of the value of a result-comment, so letting the row appear with
+//     text first and the image pop in seconds later reads as broken. Flow:
+//     resize → upload to predetermined path comment-photos/<recipe_id>/<uuid>.jpg
+//     → insert with photo_path. If the insert fails after upload succeeds,
+//     the storage object is deleted to avoid orphans. Caller drives the
+//     compose UI from `uploading`/`posting` sub-states.
 //   - deleteComment: removes immediately, snapshots prior list, restores
 //     on error. Silent failure (logs only) — delete-failed-then-rolled-
-//     back is rare and intuitively re-tryable.
+//     back is rare and intuitively re-tryable. Does NOT delete the
+//     associated photo object — orphans accepted (DATABASE_DECISIONS.md).
 //
 // When userId is null/undefined (anonymous), addComment and deleteComment
 // are no-ops. The Comments component gates the input UI itself and calls
@@ -58,7 +67,7 @@ export function useComments(recipeId, userId, isAdmin = false) {
         ;(async () => {
             const { data, error } = await supabase
                 .from('comments')
-                .select('id, recipe_id, user_id, content, created_at, profiles!comments_user_id_fkey(username, avatar_url)')
+                .select('id, recipe_id, user_id, content, photo_path, created_at, profiles!comments_user_id_fkey(username, avatar_url)')
                 .eq('recipe_id', recipeId)
                 .order('created_at', { ascending: false })
 
@@ -116,16 +125,52 @@ export function useComments(recipeId, userId, isAdmin = false) {
         return () => { active = false }
     }, [recipeId, userId])
 
-    const addComment = useCallback(async (content) => {
+    const addComment = useCallback(async (content, file = null) => {
         if (!userId || !content?.trim()) return
 
         const trimmed = content.trim()
+
+        // Photo path — upload-first, then insert. No optimistic UI; the row
+        // appears already-complete with the photo. Predetermined path uses
+        // a client-generated UUID so the upload target is known before the
+        // comment row exists (one fewer round-trip than insert→upload→update).
+        if (file) {
+            const resized = await resizeImage(file)
+            const ext = resized.type === 'image/png' ? 'png'
+                : resized.type === 'image/webp' ? 'webp'
+                : 'jpg'
+            const photoPath = `${recipeId}/${crypto.randomUUID()}.${ext}`
+
+            const { error: uploadError } = await supabase.storage
+                .from('comment-photos')
+                .upload(photoPath, resized, { contentType: resized.type || 'image/jpeg' })
+
+            if (uploadError) throw uploadError
+
+            const { data, error } = await supabase
+                .from('comments')
+                .insert({ recipe_id: recipeId, user_id: userId, content: trimmed, photo_path: photoPath })
+                .select('id, recipe_id, user_id, content, photo_path, created_at, profiles!comments_user_id_fkey(username, avatar_url)')
+                .single()
+
+            if (error) {
+                // Insert failed after upload succeeded — clean up the orphan.
+                await supabase.storage.from('comment-photos').remove([photoPath])
+                throw error
+            }
+
+            setComments(prev => [data, ...prev])
+            return
+        }
+
+        // Text-only — existing optimistic flow.
         const tempId = `temp-${Date.now()}-${Math.random()}`
         const optimistic = {
             id: tempId,
             recipe_id: recipeId,
             user_id: userId,
             content: trimmed,
+            photo_path: null,
             created_at: new Date().toISOString(),
             profiles: null, // hydrated by the server response on success
         }
@@ -135,17 +180,14 @@ export function useComments(recipeId, userId, isAdmin = false) {
             const { data, error } = await supabase
                 .from('comments')
                 .insert({ recipe_id: recipeId, user_id: userId, content: trimmed })
-                .select('id, recipe_id, user_id, content, created_at, profiles!comments_user_id_fkey(username, avatar_url)')
+                .select('id, recipe_id, user_id, content, photo_path, created_at, profiles!comments_user_id_fkey(username, avatar_url)')
                 .single()
 
             if (error) throw error
 
-            // Swap the optimistic temp row for the real server row (which
-            // carries the joined profile data).
             setComments(prev => prev.map(c => c.id === tempId ? data : c))
         } catch (e) {
             console.error('Failed to add comment:', e.message)
-            // Roll back — remove the optimistic row.
             setComments(prev => prev.filter(c => c.id !== tempId))
             throw e
         }

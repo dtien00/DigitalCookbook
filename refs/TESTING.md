@@ -223,6 +223,38 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Admin-delete cascades** — admin deletes a comment that has likes; reload; the comment is gone and the FK cascade cleaned its `comment_likes` rows (verify by re-creating a comment and checking no stale rows pollute new counts)
 - [ ] **Self-like rejected by RLS** — open browser devtools, attempt `supabase.from('comment_likes').insert({ comment_id: '<some-id>', user_id: '<other-user-uuid>' })`; insert returns 401/403 (the `WITH CHECK (auth.uid() = user_id)` policy denies)
 
+## Comment result photos checklist
+
+> Verifies Stage 15 item 3 — commenters can attach one "here's how mine turned out" photo to their comment. Requires migration 020 applied (`supabase_migration_020_comment_photos.sql` — adds nullable `photo_path TEXT` on `comments`) AND the `comment-photos` Storage bucket created in the dashboard (public, 5 MB cap, `image/jpeg|png|webp`, INSERT/UPDATE/DELETE gated on `bucket_id='comment-photos' AND auth.role()='authenticated'`).
+
+**Compose:**
+- [ ] **"Add photo" button visible** below the textarea, inline with "Post Comment"; clicking it opens the OS file picker (mobile sheet shows both Camera + Photo Library)
+- [ ] **Pick a JPG/PNG/WebP** under 5 MB → preview thumb (w-32 h-32) appears below the textarea with an × remove button; button label flips from "Add photo" to "Replace photo"
+- [ ] **× clears the preview** — back to "Add photo", thumbnail gone, blob URL revoked (check devtools Network → no leaked object URL)
+- [ ] **Non-image rejection** — try to pick a `.pdf` via devtools (override `accept`); toast "Please pick an image file." appears, no preview
+- [ ] **Over-5 MB rejection** — pick a large image; toast "Photo must be under 5 MB." appears, no preview
+- [ ] **Submit with text + photo** — button label transitions `Post Comment → Uploading… → Posting…`; on success, textarea + photo state clear and the new comment appears at the top of the list with the photo
+
+**Display:**
+- [ ] **Thumbnail renders below the comment text** (w-40 h-40, rounded, paper-shade border) — above the Like / Delete / Report action row
+- [ ] **Tap the thumbnail opens the lightbox** with `aria-label="Comment photo"`; ✕ button, backdrop click, and Escape all close
+- [ ] **Reload page, photo persists** — proves the path is stored in `comments.photo_path` and the public URL is stable
+- [ ] **Anonymous viewer sees the thumbnail + lightbox** — log out, open the recipe; the photo is visible (public-read bucket), tap-to-expand works, no Sign-in CTA on the thumbnail itself
+
+**Cross-recipe + state:**
+- [ ] **Two comments on the same recipe, one with photo one without** — text-only renders without the photo region (no empty box), photo comment renders with thumb; rhythm stays consistent
+- [ ] **Delete own comment with photo** — comment vanishes immediately (optimistic), reload confirms the row is gone; the storage object is left behind (orphan-accepted posture per DATABASE_DECISIONS) — verify via Supabase Dashboard → Storage → comment-photos that the object still exists under `<recipe_id>/`
+- [ ] **Admin delete-with-photo** — log in as admin, delete someone else's comment with a photo; row removed; storage object orphaned (same posture)
+
+**Failure modes:**
+- [ ] **Insert error after upload succeeds → storage cleanup** — open devtools, intercept the comment INSERT request and force a 500; the upload should have succeeded but the comment row should not exist on reload, AND the storage object should be auto-removed (`storage.remove([path])` ran). This proves the rollback path works.
+- [ ] **Upload error → no row created** — break the bucket name temporarily (e.g. rename the bucket); submit a comment with photo; toast surfaces the error, no comment row appears, draft + photo preview preserved so the user can retry
+
+**Mobile (phone width):**
+- [ ] **Compose form fits at 375px** — "Add photo" and "Post Comment" wrap to a single row with comfortable spacing; tap targets ≥44px
+- [ ] **Thumbnail renders below text without overflow** — w-40 h-40 fits within the comment's content column
+- [ ] **Lightbox fills the viewport** with the photo `object-contain`'d, ✕ button stays reachable in the top-right
+
 ## Admin moderation checklist
 
 > Requires migration 008 applied (`supabase_migration_008_admin.sql`) and the seed admin account promoted via `bootstrap_admin()` (handled by `npm run seed:test`).

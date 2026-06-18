@@ -1,8 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useComments } from '../hooks/useComments'
+import { supabase } from '../lib/supabaseClient'
 import { SkeletonComment } from './Skeleton'
 import ReportButton from './ReportButton'
+import Lightbox from './Lightbox'
+
+// Public URL for a comment-photos object. Synchronous — Supabase Storage's
+// public-URL helper just composes the URL, no network. We store the path in
+// the DB (not the full URL) so a future bucket rename / CDN swap doesn't
+// require a backfill.
+const commentPhotoUrl = (path) =>
+    path ? supabase.storage.from('comment-photos').getPublicUrl(path).data.publicUrl : null
+
+// 5 MB ceiling — matches the Storage bucket's file-size limit (migration 020).
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024
 
 // Comment thread for a recipe. Renders below the steps section in
 // RecipeDetail. Three responsibilities:
@@ -31,7 +43,15 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
         toggleCommentLike,
     } = useComments(recipeId, userId, isAdmin)
     const [draft, setDraft] = useState('')
-    const [submitting, setSubmitting] = useState(false)
+    // Submit sub-phases drive button label: idle | uploading | posting.
+    // Uploading covers the storage round-trip; posting covers the insert.
+    const [submitPhase, setSubmitPhase] = useState('idle')
+    const submitting = submitPhase !== 'idle'
+    const [photoFile, setPhotoFile] = useState(null)
+    const [photoPreview, setPhotoPreview] = useState(null)
+    const fileInputRef = useRef(null)
+    // Lightbox state lifted to Comments so any CommentItem can open one.
+    const [lightboxUrl, setLightboxUrl] = useState(null)
 
     // Sort by (likes desc, created_at desc): comments with likes float to the
     // top in count order; everything at zero stays in newest-first order, which
@@ -52,6 +72,31 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
         toggleCommentLike(commentId)
     }
 
+    const handlePickPhoto = (e) => {
+        const file = e.target.files?.[0]
+        // Reset the input so picking the same file twice re-fires onChange
+        // (matters for the Replace flow).
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        if (!file) return
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please pick an image file.')
+            return
+        }
+        if (file.size > MAX_PHOTO_BYTES) {
+            toast.error('Photo must be under 5 MB.')
+            return
+        }
+        if (photoPreview) URL.revokeObjectURL(photoPreview)
+        setPhotoFile(file)
+        setPhotoPreview(URL.createObjectURL(file))
+    }
+
+    const clearPhoto = () => {
+        if (photoPreview) URL.revokeObjectURL(photoPreview)
+        setPhotoFile(null)
+        setPhotoPreview(null)
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!userId) {
@@ -60,16 +105,35 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
         }
         if (!draft.trim()) return
 
-        setSubmitting(true)
         try {
-            await addComment(draft)
+            if (photoFile) {
+                setSubmitPhase('uploading')
+                // resizeImage runs inside addComment before the upload, then
+                // the insert follows. We flip to 'posting' optimistically just
+                // before awaiting — the visible window between phases is
+                // brief but communicates progress.
+                const promise = addComment(draft, photoFile)
+                // Tiny delay so the 'uploading' label is visible at least one
+                // frame even on very fast connections. Then flip to 'posting'
+                // for the DB write; the await below covers both.
+                setTimeout(() => setSubmitPhase((p) => (p === 'uploading' ? 'posting' : p)), 250)
+                await promise
+            } else {
+                setSubmitPhase('posting')
+                await addComment(draft)
+            }
             setDraft('')
+            clearPhoto()
         } catch (error) {
             toast.error('Could not post comment: ' + error.message)
         } finally {
-            setSubmitting(false)
+            setSubmitPhase('idle')
         }
     }
+
+    const submitLabel = submitPhase === 'uploading' ? 'Uploading…'
+        : submitPhase === 'posting' ? 'Posting…'
+        : 'Post Comment'
 
     return (
         <section className="mt-8">
@@ -91,13 +155,54 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                         className="w-full px-4 py-3 border border-paper-shade rounded-lg text-base bg-[#fbf6f1] focus:outline-none focus:ring-2 focus:ring-rust/40 focus:border-rust resize-y"
                         disabled={submitting}
                     />
-                    <div className="flex justify-end mt-2">
+
+                    {photoPreview && (
+                        <div className="mt-2 relative inline-block">
+                            <img
+                                src={photoPreview}
+                                alt="Selected photo preview"
+                                className="w-32 h-32 object-cover rounded-md border border-paper-shade"
+                            />
+                            <button
+                                type="button"
+                                onClick={clearPhoto}
+                                disabled={submitting}
+                                aria-label="Remove selected photo"
+                                className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full bg-ink text-paper text-xs hover:bg-ink/80 disabled:opacity-50"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    )}
+
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handlePickPhoto}
+                        className="hidden"
+                        disabled={submitting}
+                    />
+                    <div className="flex justify-between items-center mt-2 gap-3 flex-wrap">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-sm text-ink hover:text-rust bg-paper-shade hover:bg-tan-soft rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                            {photoFile ? 'Replace photo' : 'Add photo'}
+                        </button>
                         <button
                             type="submit"
                             disabled={!draft.trim() || submitting}
                             className="px-5 py-2 bg-rust hover:bg-rust-dark text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {submitting ? 'Posting...' : 'Post Comment'}
+                            {submitLabel}
                         </button>
                     </div>
                 </form>
@@ -140,21 +245,25 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                                 likeCount={commentLikeCount(c.id)}
                                 liked={userLikedComment(c.id)}
                                 onToggleLike={() => {if (!isOwn) {handleToggleLike(c.id)}}}
+                                onOpenPhoto={setLightboxUrl}
                             />
                         )
                     })}
                 </ul>
             )}
+
+            <Lightbox url={lightboxUrl} ariaLabel="Comment photo" onClose={() => setLightboxUrl(null)} />
         </section>
     )
 }
 
 // Single comment row: avatar + username + relative time + content + delete
 // (visible to the comment's owner, or to admins as a moderation override).
-function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete, canReport, userId, onRequireAuth, submitReport, likeCount = 0, liked = false, onToggleLike }) {
+function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete', onDelete, canReport, userId, onRequireAuth, submitReport, likeCount = 0, liked = false, onToggleLike, onOpenPhoto }) {
     const username = comment.profiles?.username || 'Unknown user'
     const avatarUrl = comment.profiles?.avatar_url
     const initials = username.slice(0, 2).toUpperCase()
+    const photoUrl = commentPhotoUrl(comment.photo_path)
 
     const handleDeleteClick = () => {
         if (window.confirm('Delete this comment?')) onDelete()
@@ -181,6 +290,21 @@ function CommentItem({ comment, isOwn, canDelete = isOwn, deleteLabel = 'Delete'
                     <span className="text-xs text-ink/60">{formatRelativeTime(comment.created_at)}</span>
                 </div>
                 <p className="mt-1 text-ink whitespace-pre-wrap break-words">{comment.content}</p>
+                {photoUrl && (
+                    <button
+                        type="button"
+                        onClick={() => onOpenPhoto?.(photoUrl)}
+                        aria-label="Expand comment photo"
+                        className="mt-2 block rounded-md overflow-hidden border border-paper-shade hover:border-rust transition-colors focus:outline-none focus:ring-2 focus:ring-rust/40"
+                    >
+                        <img
+                            src={photoUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-40 h-40 object-cover"
+                        />
+                    </button>
+                )}
                 <div className="flex items-center gap-3">
                     <CommentLikeButton
                         liked={liked}
