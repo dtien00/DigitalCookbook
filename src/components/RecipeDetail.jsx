@@ -8,10 +8,12 @@ import ShareButton from './ShareButton'
 import AddToCookbookButton from './AddToCookbookButton'
 import ReportButton from './ReportButton'
 import Comments from './Comments'
+import RecipeRail from './RecipeRail'
 import Skeleton from './Skeleton'
 import MfaChallengeGate from './MfaChallengeGate'
 import CookingMode from './CookingMode'
 import Lightbox from './Lightbox'
+import useRecipeRails from '../hooks/useRecipeRails'
 import { scaleQuantity } from '../lib/scaleQuantity'
 
 export default function RecipeDetail({
@@ -107,6 +109,13 @@ export default function RecipeDetail({
     const isAuthor = userId === recipe.author_id
     const baseServings = recipe.servings || 1
     const multiplier = targetServings / baseServings
+
+    // Stage 17a — recommendation rails ("More from this author" / "Similar
+    // recipes"). Fired in parallel with the ingredients/steps fetch above;
+    // each rail self-hides when empty so no parent gating needed.
+    const { authorRecipes, similarRecipes } = useRecipeRails(recipe)
+    const authorName = recipe.author?.username?.trim() || recipe.author?.full_name?.trim()
+    const authorRailTitle = authorName ? `More from ${authorName}` : 'More from this author'
 
     useEffect(() => {
         fetchRecipeDetails()
@@ -662,6 +671,9 @@ export default function RecipeDetail({
                         {stepsSection}
                     </div>
                 )}
+
+                <RecipeRail title={authorRailTitle} recipes={authorRecipes} />
+                <RecipeRail title="Similar recipes" recipes={similarRecipes} />
 
                 <div className="no-print mt-6">
                     <Comments
