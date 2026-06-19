@@ -17,6 +17,15 @@ export default function RecipeRail({ title, recipes }) {
 
     const headingId = `rail-${slugify(title)}`
 
+    // Stop touch events from bubbling to RecipeDetail's Stage 9 swipe-back
+    // handler. Without this, a thumb-scroll rightward on the rail (the same
+    // direction as a back-swipe) registers as an 80px+ horizontal gesture
+    // on the parent and pops the user out to the home hub mid-browse.
+    // Vertical page scroll is unaffected — it's handled natively via
+    // touchAction: 'pan-y' on the RecipeDetail root, not through React's
+    // synthetic touch tree.
+    const stopTouch = (e) => e.stopPropagation()
+
     return (
         <section className="no-print mt-8" aria-labelledby={headingId}>
             <h3
@@ -28,6 +37,10 @@ export default function RecipeRail({ title, recipes }) {
             <div
                 className="flex gap-4 overflow-x-auto pb-2 snap-x"
                 role="list"
+                onTouchStart={stopTouch}
+                onTouchMove={stopTouch}
+                onTouchEnd={stopTouch}
+                onTouchCancel={stopTouch}
             >
                 {recipes.map(r => (
                     <Link
