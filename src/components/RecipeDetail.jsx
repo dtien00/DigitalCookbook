@@ -6,6 +6,7 @@ import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
 import ShareButton from './ShareButton'
 import AddToCookbookButton from './AddToCookbookButton'
+import ExportIngredientsButton from './ExportIngredientsButton'
 import ReportButton from './ReportButton'
 import Comments from './Comments'
 import RecipeRail from './RecipeRail'
@@ -358,6 +359,16 @@ export default function RecipeDetail({
                         )
                     })}
                 </ul>
+            )}
+            {!loading && ingredients.length > 0 && (
+                <div className="no-print mt-4">
+                    <ExportIngredientsButton
+                        recipeTitle={recipe.title}
+                        ingredients={ingredients}
+                        checkedIngredients={checkedIngredients}
+                        multiplier={multiplier}
+                    />
+                </div>
             )}
         </section>
     )
