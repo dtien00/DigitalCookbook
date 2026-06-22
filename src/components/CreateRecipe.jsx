@@ -187,7 +187,42 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     }
 
     const addStep = () => {
+        // Focus the new step's textarea once it renders (parallels addIngredient).
+        pendingFocusRef.current = `step:${steps.length}`
         setSteps([...steps, { instruction: '', step_number: steps.length + 1, photoFile: null, photoPreview: null, photoPath: null }])
+    }
+
+    // Focus a step's instruction textarea (registered in inputRefs under a
+    // `step:` key, alongside the ingredient field refs).
+    const focusStep = (index) => {
+        const el = inputRefs.current[`step:${index}`]
+        if (el) el.focus()
+    }
+
+    // Ctrl/Cmd+Enter adds + focuses the next step (or advances to it). Plain
+    // Enter is left alone — a step is a textarea that needs Enter for newlines
+    // within an instruction, so unlike the single-line ingredient inputs this
+    // never repurposes the bare key.
+    const handleStepKeyDown = (index, e) => {
+        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
+        e.preventDefault()
+        if (index === steps.length - 1) addStep()
+        else focusStep(index + 1)
+    }
+
+    // Drop a step row. Keeps at least one row (the button is hidden at length 1).
+    // step_number is recomputed from position on save, but renumber the
+    // survivors so state stays self-consistent. A pending pick's blob: preview
+    // is an object URL — revoke it so it doesn't leak; edit-mode previews are
+    // https storage URLs (orphaned on save, same posture as a cover swap), so
+    // leave those alone.
+    const removeStep = (index) => {
+        if (steps.length === 1) return
+        const preview = steps[index].photoPreview
+        if (preview && preview.startsWith('blob:')) URL.revokeObjectURL(preview)
+        setSteps(steps
+            .filter((_, i) => i !== index)
+            .map((s, i) => ({ ...s, step_number: i + 1 })))
     }
 
     const handleStepPhotoChange = (index, file) => {
@@ -499,10 +534,25 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                         <h3>Steps</h3>
                         {steps.map((step, index) => (
                             <div key={index} className="form-group">
-                                <label>Step {index + 1}</label>
+                                <div className="step-head">
+                                    <label>Step {index + 1}</label>
+                                    {steps.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeStep(index)}
+                                            className="ingredient-remove"
+                                            aria-label={`Remove step ${index + 1}`}
+                                            title="Remove this step"
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
                                 <textarea
                                     value={step.instruction}
+                                    ref={el => { inputRefs.current[`step:${index}`] = el }}
                                     onChange={e => handleStepChange(index, e.target.value)}
+                                    onKeyDown={e => handleStepKeyDown(index, e)}
                                 />
                                 <div className="mt-2 flex items-start gap-3">
                                     {step.photoPreview ? (
@@ -539,7 +589,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 </div>
                             </div>
                         ))}
-                        <button type="button" onClick={addStep} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Step</button>
+                        <div className="ingredient-tools">
+                            <button type="button" onClick={addStep} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Step</button>
+                            <span className="ingredient-hint">Tip: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (<kbd>⌘</kbd>+<kbd>Enter</kbd> on Mac) adds the next step.</span>
+                        </div>
                     </section>
 
                     <div className="form-actions">

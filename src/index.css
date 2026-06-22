@@ -1031,6 +1031,26 @@ html[data-backdrop="digital"] .paper-grain {
   color: #b06452;
 }
 
+/* Per-step header: the "Step N" label with a trailing remove control, mirroring
+   .form-section-head. The step delete reuses .ingredient-remove's palette but,
+   unlike the ingredient row, has no flex-stretch parent — so give it an
+   explicit height to sit neatly against the label. */
+.step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.step-head label {
+  margin-bottom: 0;
+}
+
+.step-head .ingredient-remove {
+  height: 30px;
+}
+
 /* Section header with an inline control (e.g. the column-order toggle). */
 .form-section-head {
   display: flex;

@@ -392,6 +392,19 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **photo_path patched per row** — after save, `SELECT id, step_number, photo_path FROM steps WHERE recipe_id = '<new-id>'` shows the path on each row that uploaded a photo, NULL on the rest
 - [ ] **Partial failure tolerated** — temporarily revoke Storage write permission (or unplug network mid-upload) on one of multiple pending uploads; recipe saves successfully, toast surfaces "N photos failed to upload", DB has the rest patched correctly
 
+**Step keyboard entry:**
+- [ ] **Ctrl/Cmd+Enter adds a step** — in the last step's textarea press `Ctrl`+`Enter` (`⌘`+`Enter` on Mac) → a new empty step appears and focus lands in its textarea
+- [ ] **Plain Enter still inserts a newline** — `Enter` alone in a step textarea adds a line break inside the instruction; it does NOT add a step or submit the form
+- [ ] **Ctrl/Cmd+Enter on a middle step advances** — with 3 steps, `Ctrl`+`Enter` in step 1's textarea moves focus to step 2 without adding a new step
+
+**Step row removal:**
+- [ ] **Remove button hidden at one step** — a fresh recipe with a single Step row shows no `×` in the "Step N" header
+- [ ] **Remove appears with ≥2 steps** — add a second step; each step header now shows a trailing `×` matching the ingredient-row delete
+- [ ] **Remove middle step** — with 3 steps (instructions A/B/C), `×` on step 2 → A and C remain, their text intact, and the labels renumber to "Step 1"/"Step 2"
+- [ ] **Can't remove the last step** — delete down to one step → the `×` disappears (always ≥1 step)
+- [ ] **Removing a step frees its pending photo** — attach a photo to a step (blob preview shows), then remove that step; no console error and the object URL is revoked (no leak). Save still uploads only the surviving steps' photos
+- [ ] **step_number stays gapless after removal** — remove a middle step, Save; `SELECT step_number FROM steps WHERE recipe_id='<new-id>' ORDER BY step_number` is a contiguous 1..N with no gap
+
 **Edit-mode carry-forward:**
 - [ ] **Existing photo renders in the slot** — edit a recipe with a step photo; the slot shows the existing image (not the dashed tile)
 - [ ] **No changes → no re-upload** — Save without touching photos; Storage object count is unchanged; `photo_path` values match pre-edit
