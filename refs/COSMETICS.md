@@ -837,3 +837,31 @@ Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40p
 
 `Escape` closes the ingredients sheet if open, otherwise exits cooking mode. `←` / `→` arrow keys advance/retreat steps. No focus trap inside the dialog (it's full-screen and the only tabbable controls are the cooking-mode chrome itself); `role="dialog"` + `aria-modal="true"` + `aria-label="Cooking {title}"` give screen readers the right framing.
 
+---
+
+# CreateRecipe — Ingredient entry
+
+Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation/removal, and a column-order toggle. These are all input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
+
+## Unit combobox
+
+Each row's Unit cell is a custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](../src/components/UnitCombobox.jsx)) rather than a native `<datalist>` (which can't be palette-themed and matches substrings inconsistently across browsers). The input opens a paper-shade dropdown (`#fbf6f1` surface, `#e8dcd2` border, soft drop shadow, `max-height: 220px` with scroll) listing substring matches from [src/lib/measurementUnits.js](../src/lib/measurementUnits.js) — `matchUnits()` searches the canonical label **and** its aliases, so `tbsp` surfaces `tablespoon`. The highlighted option fills with the rust accent (`#b06452` background, `#fbf6f1` text); hover and ↑/↓ both move the highlight. Free text is always allowed — the list is assistance, not a constraint.
+
+## Column-order toggle
+
+A pill button (`.column-layout-toggle`) sits opposite the "Ingredients" heading in a `.form-section-head` flex row. It cycles three presets — **Name · Qty · Unit** → **Qty · Unit · Name** → **Unit · Qty · Name** — and its label always shows the active order. Paper-shade at rest, rust border + rust text on hover. The chosen order drives both the visual layout and the DOM order (so native Tab follows it) and the Enter "last field" target.
+
+## Keyboard affordances
+
+Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0 0 120px` so it doesn't sprawl like Name/Unit. `Enter` on a non-last field advances within the row; on the last field it adds a new row (and focuses it) or jumps to the next row — never submits the form. `Tab` walks the visible order natively. An italic `.ingredient-hint` line beside "Add Ingredient" spells this out, with `<kbd>` chips (`#f2e9e4` fill, `#e8dcd2` border) for `Enter` / `Tab`.
+
+## Removing a row
+
+A trailing `×` button (`.ingredient-remove`) closes each row inside the `.form-row` flex, sitting last regardless of the active column order. Muted glyph (`#9a8a7d`) on a paper-shade fill at rest; on hover it warms to the rust accent (`#b06452` text + border, `#f2e0da` fill) so deletion reads as the slightly-warmer action. It's hidden when only one row remains (there's always ≥1 ingredient row, so no empty state to design). After a removal, focus lands on the first field of whatever row slid into the freed slot — or the new last row when the tail was removed — so keyboard context survives. The button is a normal Tab stop (between Unit and Notes when present), but the `Enter`-to-advance flow never lands on it, so fast entry is undisturbed.
+
+**Steps** reuse the same control. Each step's `.step-head` (a flex row mirroring `.form-section-head`) pairs the "Step N" label with the same `.ingredient-remove` `×`, right-aligned — given an explicit `height: 30px` since, unlike the ingredient row, it has no flex-stretch parent to size against. Same hidden-at-one-row rule. Removing a step renumbers the survivors' labels (the "Step N" label and the saved `step_number` are both positional, so deletion never leaves a gap), and revokes the removed step's pending `blob:` photo preview so the object URL doesn't leak — an existing edit-mode photo (an `https` storage URL) is left to orphan on save, matching the cover-swap posture.
+
+For keyboard entry, `Ctrl`/`Cmd`+`Enter` in a step's textarea adds + focuses the next step (or advances to it). Bare `Enter` is deliberately left alone — a step is a textarea where `Enter` is a newline for prose instructions, so unlike the single-line ingredient inputs the plain key is never repurposed. An `.ingredient-hint` line beside *Add Step* (in a reused `.ingredient-tools` row) spells out the shortcut with `<kbd>` chips.
+
+These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
+

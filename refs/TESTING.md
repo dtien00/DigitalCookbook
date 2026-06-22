@@ -417,6 +417,19 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **photo_path patched per row** — after save, `SELECT id, step_number, photo_path FROM steps WHERE recipe_id = '<new-id>'` shows the path on each row that uploaded a photo, NULL on the rest
 - [ ] **Partial failure tolerated** — temporarily revoke Storage write permission (or unplug network mid-upload) on one of multiple pending uploads; recipe saves successfully, toast surfaces "N photos failed to upload", DB has the rest patched correctly
 
+**Step keyboard entry:**
+- [ ] **Ctrl/Cmd+Enter adds a step** — in the last step's textarea press `Ctrl`+`Enter` (`⌘`+`Enter` on Mac) → a new empty step appears and focus lands in its textarea
+- [ ] **Plain Enter still inserts a newline** — `Enter` alone in a step textarea adds a line break inside the instruction; it does NOT add a step or submit the form
+- [ ] **Ctrl/Cmd+Enter on a middle step advances** — with 3 steps, `Ctrl`+`Enter` in step 1's textarea moves focus to step 2 without adding a new step
+
+**Step row removal:**
+- [ ] **Remove button hidden at one step** — a fresh recipe with a single Step row shows no `×` in the "Step N" header
+- [ ] **Remove appears with ≥2 steps** — add a second step; each step header now shows a trailing `×` matching the ingredient-row delete
+- [ ] **Remove middle step** — with 3 steps (instructions A/B/C), `×` on step 2 → A and C remain, their text intact, and the labels renumber to "Step 1"/"Step 2"
+- [ ] **Can't remove the last step** — delete down to one step → the `×` disappears (always ≥1 step)
+- [ ] **Removing a step frees its pending photo** — attach a photo to a step (blob preview shows), then remove that step; no console error and the object URL is revoked (no leak). Save still uploads only the surviving steps' photos
+- [ ] **step_number stays gapless after removal** — remove a middle step, Save; `SELECT step_number FROM steps WHERE recipe_id='<new-id>' ORDER BY step_number` is a contiguous 1..N with no gap
+
 **Edit-mode carry-forward:**
 - [ ] **Existing photo renders in the slot** — edit a recipe with a step photo; the slot shows the existing image (not the dashed tile)
 - [ ] **No changes → no re-upload** — Save without touching photos; Storage object count is unchanged; `photo_path` values match pre-edit
@@ -483,6 +496,31 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Swipes don't bubble to RecipeDetail** — a thumb-swipe right inside cooking mode should advance/retreat steps, NOT trigger Stage 9's swipe-back-to-home. Exiting and then swiping right on RecipeDetail should still navigate home as usual
 - [ ] **Anonymous works** — log out, open a public recipe, Start cooking; all of the above behaviors still work (no auth gate on a client-side cooking aid)
 - [ ] **Empty steps fallback** — if a recipe has zero steps the CTA is hidden (already covered above); if somehow opened (manual state change), the canvas shows "No steps to cook through." rather than crashing
+
+---
+
+## CreateRecipe ingredient entry checklist
+
+> Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/removal/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.
+
+- [ ] **Fraction accepted** — in Qty type `1 1/2`; Save; on RecipeDetail the line reads `1 ½ <unit> <name>` (not `1.5`)
+- [ ] **Simple fraction** — `1/2` saves and renders as `½`; `3/4` → `¾`
+- [ ] **Unicode glyph** — pasting `½` into Qty saves to `0.5`
+- [ ] **Empty Qty** — leaving Qty blank still saves (stores `0`, same as before)
+- [ ] **Unit autocomplete opens** — focus a Unit field → dropdown shows the unit list on the paper-shade surface
+- [ ] **Substring match** — type `spo` → `teaspoon` and `tablespoon` appear; type `tbsp` → `tablespoon` appears (alias match)
+- [ ] **Select by mouse** — click a suggestion → it fills the Unit field and the list closes
+- [ ] **Select by keyboard** — `↓` to highlight (rust background), `Enter` selects it and stops (does NOT add a row); a second `Enter` then commits the row
+- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → it saves as typed
+- [ ] **Enter on last column adds a row** — with the default Name · Qty · Unit order, `Enter` in the Unit field of the last row creates a new empty row and focus lands in its first field
+- [ ] **Enter advances within a row** — `Enter` in Name focuses Qty; `Enter` in Qty focuses Unit; no accidental form submit at any point
+- [ ] **Remove a row** — add 3 rows; click the trailing `×` on the middle one → it disappears, the other two remain, and focus moves to the row that took its slot
+- [ ] **Last row can't be emptied away** — delete down to one row → the `×` button disappears (you can't remove the final row)
+- [ ] **Remove preserves data** — fill rows A/B/C, delete B → A and C keep their Name/Qty/Unit/Notes intact (no shift corruption)
+- [ ] **Tab order** — `Tab` walks Name → Qty → Unit → (× remove, when >1 row) → Notes → next row's first field in the visible order
+- [ ] **Column toggle cycles** — the pill by the "Ingredients" heading cycles Name · Qty · Unit → Qty · Unit · Name → Unit · Qty · Name; the inputs reorder and the label tracks the order
+- [ ] **Last-column target follows layout** — switch to Qty · Unit · Name; now `Enter` in the Name field (last) adds the new row
+- [ ] **Edit-mode prefill** — edit a recipe with a `0.5`-quantity ingredient; the Qty field shows `½`, and `1.5` shows `1 ½`
 
 ---
 
