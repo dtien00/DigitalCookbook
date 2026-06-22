@@ -139,6 +139,21 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setIngredients([...ingredients, { name: '', quantity: '', unit: '', notes: '' }])
     }
 
+    // Drop an ingredient row. Always leaves at least one row (the button is
+    // hidden at length 1), so there's no empty-state to handle. Refs rebind
+    // positionally on re-render, so only the now-unused tail keys need pruning;
+    // focus then lands on whatever row slid into the freed slot.
+    const removeIngredient = (index) => {
+        if (ingredients.length === 1) return
+        const tail = ingredients.length - 1
+        for (const field of ['name', 'quantity', 'unit']) {
+            delete inputRefs.current[`${tail}:${field}`]
+        }
+        const next = ingredients.filter((_, i) => i !== index)
+        pendingFocusRef.current = `${Math.min(index, next.length - 1)}:${ingredientLayout[0]}`
+        setIngredients(next)
+    }
+
     // Cycle to the next column-order preset (Name-first -> Amount-first ->
     // Unit-first -> ...). Only the visual arrangement changes.
     const cycleLayout = () => {
@@ -454,6 +469,17 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                             />
                                         )
                                     })}
+                                    {ingredients.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeIngredient(index)}
+                                            className="ingredient-remove"
+                                            aria-label={`Remove ingredient ${index + 1}`}
+                                            title="Remove this ingredient"
+                                        >
+                                            ×
+                                        </button>
+                                    )}
                                 </div>
                                 <input
                                     placeholder="Notes (optional — e.g. or any neutral oil)"

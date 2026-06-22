@@ -463,7 +463,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ## CreateRecipe ingredient entry checklist
 
-> Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.
+> Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/removal/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.
 
 - [ ] **Fraction accepted** — in Qty type `1 1/2`; Save; on RecipeDetail the line reads `1 ½ <unit> <name>` (not `1.5`)
 - [ ] **Simple fraction** — `1/2` saves and renders as `½`; `3/4` → `¾`
@@ -476,7 +476,10 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → it saves as typed
 - [ ] **Enter on last column adds a row** — with the default Name · Qty · Unit order, `Enter` in the Unit field of the last row creates a new empty row and focus lands in its first field
 - [ ] **Enter advances within a row** — `Enter` in Name focuses Qty; `Enter` in Qty focuses Unit; no accidental form submit at any point
-- [ ] **Tab order** — `Tab` walks Name → Qty → Unit → Notes → next row's first field in the visible order
+- [ ] **Remove a row** — add 3 rows; click the trailing `×` on the middle one → it disappears, the other two remain, and focus moves to the row that took its slot
+- [ ] **Last row can't be emptied away** — delete down to one row → the `×` button disappears (you can't remove the final row)
+- [ ] **Remove preserves data** — fill rows A/B/C, delete B → A and C keep their Name/Qty/Unit/Notes intact (no shift corruption)
+- [ ] **Tab order** — `Tab` walks Name → Qty → Unit → (× remove, when >1 row) → Notes → next row's first field in the visible order
 - [ ] **Column toggle cycles** — the pill by the "Ingredients" heading cycles Name · Qty · Unit → Qty · Unit · Name → Unit · Qty · Name; the inputs reorder and the label tracks the order
 - [ ] **Last-column target follows layout** — switch to Qty · Unit · Name; now `Enter` in the Name field (last) adds the new row
 - [ ] **Edit-mode prefill** — edit a recipe with a `0.5`-quantity ingredient; the Qty field shows `½`, and `1.5` shows `1 ½`

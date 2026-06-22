@@ -838,7 +838,7 @@ Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40p
 
 # CreateRecipe — Ingredient entry
 
-Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation, and a column-order toggle. All four are input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
+Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation/removal, and a column-order toggle. These are all input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
 
 ## Unit combobox
 
@@ -851,6 +851,10 @@ A pill button (`.column-layout-toggle`) sits opposite the "Ingredients" heading 
 ## Keyboard affordances
 
 Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0 0 120px` so it doesn't sprawl like Name/Unit. `Enter` on a non-last field advances within the row; on the last field it adds a new row (and focuses it) or jumps to the next row — never submits the form. `Tab` walks the visible order natively. An italic `.ingredient-hint` line beside "Add Ingredient" spells this out, with `<kbd>` chips (`#f2e9e4` fill, `#e8dcd2` border) for `Enter` / `Tab`.
+
+## Removing a row
+
+A trailing `×` button (`.ingredient-remove`) closes each row inside the `.form-row` flex, sitting last regardless of the active column order. Muted glyph (`#9a8a7d`) on a paper-shade fill at rest; on hover it warms to the rust accent (`#b06452` text + border, `#f2e0da` fill) so deletion reads as the slightly-warmer action. It's hidden when only one row remains (there's always ≥1 ingredient row, so no empty state to design). After a removal, focus lands on the first field of whatever row slid into the freed slot — or the new last row when the tail was removed — so keyboard context survives. The button is a normal Tab stop (between Unit and Notes when present), but the `Enter`-to-advance flow never lands on it, so fast entry is undisturbed.
 
 These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
 
