@@ -1001,6 +1001,113 @@ html[data-backdrop="digital"] .paper-grain {
   border-radius: 6px;
 }
 
+/* Quantity is short ("1 1/2") — don't let it eat the row like Name/Unit. */
+.form-row input.ingredient-qty {
+  flex: 0 0 120px;
+}
+
+/* Section header with an inline control (e.g. the column-order toggle). */
+.form-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.form-section-head h3 {
+  margin-bottom: 0;
+}
+
+/* Pill button that cycles the ingredient column order. */
+.column-layout-toggle {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #6b5d52;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.column-layout-toggle:hover {
+  background: #fbf6f1;
+  border-color: #b06452;
+  color: #b06452;
+}
+
+/* Unit autocomplete — combobox wrapper hosts the input + suggestion list. */
+.unit-combobox {
+  position: relative;
+  flex: 1;
+}
+
+.unit-combobox input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e8dcd2;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.unit-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fbf6f1;
+  border: 1px solid #e8dcd2;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(30, 30, 36, 0.12);
+}
+
+.unit-suggestion {
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  color: #1e1e24;
+  cursor: pointer;
+}
+
+.unit-suggestion.is-highlighted {
+  background: #b06452;
+  color: #fbf6f1;
+}
+
+/* Add-ingredient button + the keyboard-affordance hint sit on one line. */
+.ingredient-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ingredient-hint {
+  font-size: 0.78rem;
+  color: #6b5d52;
+  font-style: italic;
+}
+
+.ingredient-hint kbd {
+  font-family: inherit;
+  font-style: normal;
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 4px;
+}
+
 .form-group-inline {
   display: flex;
   align-items: center;

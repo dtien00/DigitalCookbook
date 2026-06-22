@@ -380,8 +380,15 @@ Sequence: ships AFTER Stage N+2a (shopping list must exist for "build from plan"
 
 ---
 
+## Ad-hoc polish (not stage-gated)
+
+- [x] **CreateRecipe ingredient-entry ergonomics** — fractions, unit autocomplete, keyboard row creation, and column reorder in [CreateRecipe.jsx](./src/components/CreateRecipe.jsx). *Qty became `type="text"`; new [src/lib/parseQuantity.js](./src/lib/parseQuantity.js) parses `"1 1/2"` / `"1/2"` / unicode glyphs to the `NUMERIC` value on save (empty → 0, preserving prior behavior) and renders stored numbers back to fractions for edit-mode prefill — `scaleQuantity` already re-derives glyphs for readers, so the data model is untouched. New custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](./src/components/UnitCombobox.jsx)) over a canonical unit list ([src/lib/measurementUnits.js](./src/lib/measurementUnits.js), label + alias substring match, e.g. `tbsp`→`tablespoon`) — chosen over native `<datalist>` for palette theming + keyboard control; free text still allowed. A column-order toggle cycles Name·Qty·Unit → Qty·Unit·Name → Unit·Qty·Name (visual only; drives DOM/Tab order and the Enter "last field" target). `Enter` on the last visible field adds + focuses a new row (advances within-row otherwise) and never submits the form; `Tab` walks the visible order natively. Documented in [refs/COSMETICS.md → CreateRecipe — Ingredient entry](./COSMETICS.md) and [refs/TESTING.md → CreateRecipe ingredient entry checklist](./TESTING.md).*
+
+---
+
 ## Other deferred ideas
 
+- **Ingredient row reordering** — move-up/move-down or drag to resequence ingredient rows (changes `order_index`). Deferred from the ingredient-entry polish above, which only reorders the *columns*. Low effort once there's demand; the save path already writes `order_index` from array position.
 - **Recipe forking** ("Save a copy I can edit" of another user's recipe) — natural extension of bookmarks + the Stage 14 cookbooks rewrite. Schema: `recipes` grows nullable `forked_from_id UUID REFERENCES recipes(id)`; CreateRecipe accepts a `?fork=<id>` query param and pre-populates the form from the source recipe. Forks are independent rows — edits don't propagate back. Defer until the cookbooks primitive ships.
 - **Nutritional info** — even approximate per-recipe calorie/macro estimates. Requires either an external API (USDA FoodData Central is free but rate-limited) or a manual author-declared block. Defer until there's a user asking — most casual recipe sites get away without it.
 - **i18n** — no signal of global audience yet. Defer; if and when it becomes real, retrofit with `react-i18next` against the existing strings.

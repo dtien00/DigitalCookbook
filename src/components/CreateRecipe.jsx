@@ -1,6 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
+import { parseQuantity, quantityToDisplay } from '../lib/parseQuantity'
+import UnitCombobox from './UnitCombobox'
+
+// Column-order presets for an ingredient row. Purely a display concern — the
+// data keys never move, so the layout choice doesn't touch what gets saved.
+// The Enter "last field" target is whatever sits last in the active preset.
+const LAYOUT_PRESETS = [
+    ['name', 'quantity', 'unit'],
+    ['quantity', 'unit', 'name'],
+    ['unit', 'quantity', 'name'],
+]
+const FIELD_LABELS = { name: 'Name', quantity: 'Qty', unit: 'Unit' }
 
 export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const isEditMode = !!recipeToEdit
@@ -12,6 +24,12 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
     const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '', notes: '' }])
+    // Active column order for the ingredient triplet (see LAYOUT_PRESETS).
+    const [ingredientLayout, setIngredientLayout] = useState(LAYOUT_PRESETS[0])
+    // Map of `${rowIndex}:${field}` -> input element, for keyboard focus moves.
+    const inputRefs = useRef({})
+    // Field key to focus on the next render (e.g. after Enter adds a new row).
+    const pendingFocusRef = useRef(null)
     // Stage 15 item 1 — each step row carries optional photo state:
     //   photoFile    — File the user just picked (null if untouched)
     //   photoPreview — blob: URL for a new pick, OR public URL for an
@@ -34,6 +52,20 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         }
     }, [recipeToEdit])
 
+    // After a render that requested it (e.g. Enter added a row), move focus to
+    // the target field. Runs every render but only acts when a target is set.
+    useEffect(() => {
+        if (!pendingFocusRef.current) return
+        const el = inputRefs.current[pendingFocusRef.current]
+        pendingFocusRef.current = null
+        if (el) el.focus()
+    })
+
+    const focusField = (index, field) => {
+        const el = inputRefs.current[`${index}:${field}`]
+        if (el) el.focus()
+    }
+
     async function fetchExistingDetails() {
         try {
             setLoading(true)
@@ -45,7 +77,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 .order('order_index', { ascending: true })
 
             if (ingData?.length > 0) {
-                setIngredients(ingData.map(i => ({ name: i.name, quantity: i.quantity, unit: i.unit, notes: i.notes || '' })))
+                // Stored numbers prefill as friendly fractions ("0.5" -> "½")
+                // so the text field reads the way the author would type it.
+                setIngredients(ingData.map(i => ({ name: i.name, quantity: quantityToDisplay(i.quantity), unit: i.unit, notes: i.notes || '' })))
             }
 
             // Fetch steps
@@ -100,7 +134,41 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     }
 
     const addIngredient = () => {
+        // Focus the first visible field of the new row once it renders.
+        pendingFocusRef.current = `${ingredients.length}:${ingredientLayout[0]}`
         setIngredients([...ingredients, { name: '', quantity: '', unit: '', notes: '' }])
+    }
+
+    // Cycle to the next column-order preset (Name-first -> Amount-first ->
+    // Unit-first -> ...). Only the visual arrangement changes.
+    const cycleLayout = () => {
+        const idx = LAYOUT_PRESETS.findIndex(p => p.join() === ingredientLayout.join())
+        setIngredientLayout(LAYOUT_PRESETS[(idx + 1) % LAYOUT_PRESETS.length])
+    }
+
+    // Enter was confirmed on `field` of row `index`. Advance within the row, or
+    // — when it's the last visible field — add a new row (last row) or jump to
+    // the next row's first field.
+    const commitIngredientField = (index, field) => {
+        const pos = ingredientLayout.indexOf(field)
+        if (pos < ingredientLayout.length - 1) {
+            focusField(index, ingredientLayout[pos + 1])
+            return
+        }
+        if (index === ingredients.length - 1) {
+            addIngredient()
+        } else {
+            focusField(index + 1, ingredientLayout[0])
+        }
+    }
+
+    // Enter handler for the plain Name / Qty inputs. The Unit field is a
+    // combobox and routes its Enter through onCommit instead (so a highlighted
+    // suggestion gets selected first). preventDefault stops the form submitting.
+    const handleIngredientKeyDown = (index, field, e) => {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        commitIngredientField(index, field)
     }
 
     const addStep = () => {
@@ -201,7 +269,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 .map((ing, index) => ({
                     recipe_id: recipeId,
                     name: ing.name,
-                    quantity: ing.quantity || 0,
+                    // Fractions/mixed numbers ("1 1/2", "½") parse to a number
+                    // for the NUMERIC column; empty/unparseable falls back to 0
+                    // (preserving the prior `ing.quantity || 0` behavior).
+                    quantity: parseQuantity(ing.quantity) ?? 0,
                     unit: ing.unit,
                     notes: ing.notes?.trim() || null,
                     order_index: index
@@ -341,26 +412,48 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     </section>
 
                     <section className="form-section">
-                        <h3>Ingredients</h3>
+                        <div className="form-section-head">
+                            <h3>Ingredients</h3>
+                            <button
+                                type="button"
+                                onClick={cycleLayout}
+                                className="column-layout-toggle"
+                                title="Change the column order of each ingredient row"
+                            >
+                                ⇄ {ingredientLayout.map(f => FIELD_LABELS[f]).join(' · ')}
+                            </button>
+                        </div>
                         {ingredients.map((ing, index) => (
                             <div key={index} className="mb-3">
                                 <div className="form-row">
-                                    <input
-                                        placeholder="Name"
-                                        value={ing.name}
-                                        onChange={e => handleIngredientChange(index, 'name', e.target.value)}
-                                    />
-                                    <input
-                                        placeholder="Qty"
-                                        type="number"
-                                        value={ing.quantity}
-                                        onChange={e => handleIngredientChange(index, 'quantity', e.target.value)}
-                                    />
-                                    <input
-                                        placeholder="Unit (e.g. cups)"
-                                        value={ing.unit}
-                                        onChange={e => handleIngredientChange(index, 'unit', e.target.value)}
-                                    />
+                                    {ingredientLayout.map(field => {
+                                        if (field === 'unit') {
+                                            return (
+                                                <UnitCombobox
+                                                    key="unit"
+                                                    value={ing.unit}
+                                                    placeholder="Unit (e.g. cups)"
+                                                    inputRef={el => { inputRefs.current[`${index}:unit`] = el }}
+                                                    onChange={v => handleIngredientChange(index, 'unit', v)}
+                                                    onCommit={() => commitIngredientField(index, 'unit')}
+                                                />
+                                            )
+                                        }
+                                        const isQty = field === 'quantity'
+                                        return (
+                                            <input
+                                                key={field}
+                                                className={isQty ? 'ingredient-qty' : undefined}
+                                                placeholder={isQty ? 'Qty (e.g. 1 1/2)' : 'Name'}
+                                                type="text"
+                                                inputMode={isQty ? 'text' : undefined}
+                                                value={isQty ? ing.quantity : ing.name}
+                                                ref={el => { inputRefs.current[`${index}:${field}`] = el }}
+                                                onChange={e => handleIngredientChange(index, field, e.target.value)}
+                                                onKeyDown={e => handleIngredientKeyDown(index, field, e)}
+                                            />
+                                        )
+                                    })}
                                 </div>
                                 <input
                                     placeholder="Notes (optional — e.g. or any neutral oil)"
@@ -370,7 +463,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 />
                             </div>
                         ))}
-                        <button type="button" onClick={addIngredient} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Ingredient</button>
+                        <div className="ingredient-tools">
+                            <button type="button" onClick={addIngredient} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Ingredient</button>
+                            <span className="ingredient-hint">Tip: press <kbd>Enter</kbd> on the last field to add a row, or <kbd>Tab</kbd> to step across.</span>
+                        </div>
                     </section>
 
                     <section className="form-section">

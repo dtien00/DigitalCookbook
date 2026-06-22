@@ -461,6 +461,28 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## CreateRecipe ingredient entry checklist
+
+> Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.
+
+- [ ] **Fraction accepted** — in Qty type `1 1/2`; Save; on RecipeDetail the line reads `1 ½ <unit> <name>` (not `1.5`)
+- [ ] **Simple fraction** — `1/2` saves and renders as `½`; `3/4` → `¾`
+- [ ] **Unicode glyph** — pasting `½` into Qty saves to `0.5`
+- [ ] **Empty Qty** — leaving Qty blank still saves (stores `0`, same as before)
+- [ ] **Unit autocomplete opens** — focus a Unit field → dropdown shows the unit list on the paper-shade surface
+- [ ] **Substring match** — type `spo` → `teaspoon` and `tablespoon` appear; type `tbsp` → `tablespoon` appears (alias match)
+- [ ] **Select by mouse** — click a suggestion → it fills the Unit field and the list closes
+- [ ] **Select by keyboard** — `↓` to highlight (rust background), `Enter` selects it and stops (does NOT add a row); a second `Enter` then commits the row
+- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → it saves as typed
+- [ ] **Enter on last column adds a row** — with the default Name · Qty · Unit order, `Enter` in the Unit field of the last row creates a new empty row and focus lands in its first field
+- [ ] **Enter advances within a row** — `Enter` in Name focuses Qty; `Enter` in Qty focuses Unit; no accidental form submit at any point
+- [ ] **Tab order** — `Tab` walks Name → Qty → Unit → Notes → next row's first field in the visible order
+- [ ] **Column toggle cycles** — the pill by the "Ingredients" heading cycles Name · Qty · Unit → Qty · Unit · Name → Unit · Qty · Name; the inputs reorder and the label tracks the order
+- [ ] **Last-column target follows layout** — switch to Qty · Unit · Name; now `Enter` in the Name field (last) adds the new row
+- [ ] **Edit-mode prefill** — edit a recipe with a `0.5`-quantity ingredient; the Qty field shows `½`, and `1.5` shows `1 ½`
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:

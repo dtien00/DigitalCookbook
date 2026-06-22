@@ -834,3 +834,23 @@ Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40p
 
 `Escape` closes the ingredients sheet if open, otherwise exits cooking mode. `←` / `→` arrow keys advance/retreat steps. No focus trap inside the dialog (it's full-screen and the only tabbable controls are the cooking-mode chrome itself); `role="dialog"` + `aria-modal="true"` + `aria-label="Cooking {title}"` give screen readers the right framing.
 
+---
+
+# CreateRecipe — Ingredient entry
+
+Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation, and a column-order toggle. All four are input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
+
+## Unit combobox
+
+Each row's Unit cell is a custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](../src/components/UnitCombobox.jsx)) rather than a native `<datalist>` (which can't be palette-themed and matches substrings inconsistently across browsers). The input opens a paper-shade dropdown (`#fbf6f1` surface, `#e8dcd2` border, soft drop shadow, `max-height: 220px` with scroll) listing substring matches from [src/lib/measurementUnits.js](../src/lib/measurementUnits.js) — `matchUnits()` searches the canonical label **and** its aliases, so `tbsp` surfaces `tablespoon`. The highlighted option fills with the rust accent (`#b06452` background, `#fbf6f1` text); hover and ↑/↓ both move the highlight. Free text is always allowed — the list is assistance, not a constraint.
+
+## Column-order toggle
+
+A pill button (`.column-layout-toggle`) sits opposite the "Ingredients" heading in a `.form-section-head` flex row. It cycles three presets — **Name · Qty · Unit** → **Qty · Unit · Name** → **Unit · Qty · Name** — and its label always shows the active order. Paper-shade at rest, rust border + rust text on hover. The chosen order drives both the visual layout and the DOM order (so native Tab follows it) and the Enter "last field" target.
+
+## Keyboard affordances
+
+Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0 0 120px` so it doesn't sprawl like Name/Unit. `Enter` on a non-last field advances within the row; on the last field it adds a new row (and focuses it) or jumps to the next row — never submits the form. `Tab` walks the visible order natively. An italic `.ingredient-hint` line beside "Add Ingredient" spells this out, with `<kbd>` chips (`#f2e9e4` fill, `#e8dcd2` border) for `Enter` / `Tab`.
+
+These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
+
