@@ -377,6 +377,31 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Shopping list checklist
+
+> Verifies Stage N+2a — the cumulative `/shopping-list` page, the "Add to shopping list" button on RecipeDetail, and the localStorage store (`cookbook.shoppingList`). Client-only, no schema, no auth. Sits next to Stage 18's clipboard "Copy shopping list" button (different destination, same unchecked source).
+
+- [ ] **"List" trigger visible** — home action row, right of the tag chips, next to "Fridge" (cart icon + "List"); rust count badge appears once the list has items, updates live as recipes are added
+- [ ] **"Add to shopping list" present** — open any recipe with ingredients → button sits next to "Copy shopping list" in the Ingredients footer; both hidden while ingredients load and on a zero-ingredient recipe
+- [ ] **Add all (fresh session)** — nothing checked → click Add → toast "Added N ingredients to your shopping list"; badge shows N
+- [ ] **Unchecked filter** — tick an ingredient (e.g. "I already have salt") → Add → that item is excluded; toast count drops by one
+- [ ] **Servings scaling carries** — bump servings (e.g. ×2) before Add → stored quantities are the scaled values (verify on the page or `localStorage.getItem('cookbook.shoppingList')`)
+- [ ] **Notes carry** — an ingredient with a Stage 7 note shows the note as an italic sub-line on the list page and in parentheses in the clipboard copy
+- [ ] **Dedupe by name + unit** — send a second recipe sharing an ingredient (same unit) → quantities sum (e.g. ¼ cup + ¼ cup → ½ cup), one row; different units stay as separate rows
+- [ ] **Fraction display** — summed/scaled decimals render as ½ ¼ ¾ ⅓ ⅔ where applicable
+- [ ] **Check off on the page** — tick a row → `line-through`, muted; session-scoped (not persisted — refresh clears the ticks but keeps the items)
+- [ ] **Copy to clipboard** — produces a header line + `- qty unit name (notes)` rows; success toast with item count
+- [ ] **Print** — Ctrl+P / Print button → chrome hidden, item checkboxes DO print as empty boxes (intentional, unlike the recipe kitchen-card)
+- [ ] **Remove via ✕** — removes a single row; badge updates
+- [ ] **Clear all** — confirm dialog → empties the list, shows the ✦ empty state, "Shopping list cleared" toast
+- [ ] **Empty state** — no items → ✦ + "Your shopping list is empty." + italic-rose prompt to add from a recipe
+- [ ] **Persistence across reload + routes** — add items, refresh / navigate away and back → list survives (localStorage)
+- [ ] **Anonymous works** — logged out, the whole flow functions (no auth gate)
+- [ ] **Deep link** — paste `/shopping-list` into a fresh tab → page resolves (SPA rewrite), shows persisted items
+- [ ] **Mobile (≤ 640px)** — header + Copy/Print/Clear row fit; long item names wrap; full-row tap targets
+
+---
+
 ## Per-step photos checklist
 
 > Verifies Stage 15 item 1 — author can attach one photo per step in CreateRecipe; reader sees a thumbnail + lightbox on RecipeDetail; CookingMode shows the photo in the step canvas. Requires migration 018 applied and the `recipe-steps` Storage bucket created per DATABASE_DECISIONS.md → *Storage: `recipe-steps` bucket*.

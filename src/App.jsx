@@ -11,6 +11,7 @@ import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useReports } from './hooks/useReports'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
+import { useShoppingList } from './hooks/useShoppingList'
 import { useBackdrop } from './hooks/useBackdrop'
 import { useCookbooks } from './hooks/useCookbooks'
 import Auth from './components/Auth'
@@ -27,6 +28,7 @@ import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
 import NotificationsBell from './components/NotificationsBell'
+import ShoppingList from './components/ShoppingList'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -192,6 +194,17 @@ function App() {
     // survives route changes. Filter coupling lands in a follow-up Stage 10
     // item; for now the basket is purely additive.
     const { basket, addIngredient, removeIngredient, clearBasket } = useFridgeBasket()
+
+    // Shopping list (Stage N+2a) — cumulative cross-recipe "what to buy" list,
+    // also localStorage-backed. App-level for the same reasons as the basket:
+    // the count badge in the header stays live as recipes are sent to it, and
+    // the /shopping-list page reads the same in-memory instance via props.
+    const {
+        items: shoppingItems,
+        addItems: addToShoppingList,
+        removeItem: removeShoppingItem,
+        clearList: clearShoppingList,
+    } = useShoppingList()
 
     // Backdrop preference — written to data-backdrop on <html> by the hook
     // so the .paper-grain treatment swaps via CSS at every consumer surface
@@ -405,6 +418,7 @@ function App() {
         basket,
         basketTriggerRef,
         notifications, unreadCount, markRead, markAllRead,
+        shoppingCount: shoppingItems.length,
         onOpenBasket: () => setBasketOpen(true),
         onRecipeClick: handleRecipeClick,
         onBookmarkClick: handleBookmarkClick,
@@ -428,6 +442,7 @@ function App() {
         addRecipeToCookbook: cookbooksApi.addRecipeToCookbook,
         removeRecipeFromCookbook: cookbooksApi.removeRecipeFromCookbook,
         createCookbook: cookbooksApi.createCookbook,
+        addToShoppingList,
         mfa,
         submitReport,
     }
@@ -443,6 +458,16 @@ function App() {
             <Routes>
                 <Route path="/" element={<HomeView {...homeViewProps} />} />
                 <Route path="/recipe/:id" element={<RecipeDetailRoute {...recipeDetailProps} />} />
+                <Route
+                    path="/shopping-list"
+                    element={
+                        <ShoppingList
+                            items={shoppingItems}
+                            onRemove={removeShoppingItem}
+                            onClear={clearShoppingList}
+                        />
+                    }
+                />
                 <Route
                     path="/recipe/:id/edit"
                     element={
@@ -620,6 +645,7 @@ function HomeView({
     sentinelRef,
     isFavorited, likeCount, userLiked,
     basket, basketTriggerRef, onOpenBasket,
+    shoppingCount,
     notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
@@ -1156,6 +1182,32 @@ function HomeView({
                         </span>
                     )}
                 </button>
+                {/* Shopping list trigger — mirrors the Fridge button. Navigates
+                    to the cumulative /shopping-list page; rust count badge when
+                    the list has items. Visible to everyone (no-auth feature). */}
+                <button
+                    type="button"
+                    onClick={() => navigate('/shopping-list')}
+                    aria-label={shoppingCount > 0
+                        ? `Open shopping list (${shoppingCount} item${shoppingCount === 1 ? '' : 's'})`
+                        : 'Open shopping list'}
+                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="9" cy="21" r="1" />
+                        <circle cx="20" cy="21" r="1" />
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                    </svg>
+                    <span>List</span>
+                    {shoppingCount > 0 && (
+                        <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                        >
+                            {shoppingCount}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {loading ? (
@@ -1237,6 +1289,7 @@ function RecipeDetailRoute({
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
+    addToShoppingList,
     mfa, submitReport,
 }) {
     const { id } = useParams()
@@ -1333,6 +1386,7 @@ function RecipeDetailRoute({
             addRecipeToCookbook={addRecipeToCookbook}
             removeRecipeFromCookbook={removeRecipeFromCookbook}
             createCookbook={createCookbook}
+            addToShoppingList={addToShoppingList}
             mfa={mfa}
             submitReport={submitReport}
         />

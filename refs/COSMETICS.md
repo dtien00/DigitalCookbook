@@ -344,6 +344,8 @@ A single global `@media print { .no-print { display: none !important; } }` rule 
 
 Currently tagged: top action row (Back, Like, Bookmark, Download PDF), servings ± / reset buttons, author actions (Edit / Delete), admin moderation panel, comments section wrapper, env banner. The "Servings: N" text + number is kept since the printout should reflect the scaled servings.
 
+**Shopping list page exception (Stage N+2a):** the `/shopping-list` page tags its own chrome (Back, count, Copy / Print / Clear-all row, per-row ✕) `no-print`, but deliberately lets its item checkboxes print. The RecipeDetail print rule that hides checkboxes is scoped to `.ingredient-list`/`.step-list` only, so the shopping list's boxes survive — a printed shopping list with empty boxes is the whole point (tick items at the store), unlike the recipe kitchen-card where the checkbox is a screen-only affordance.
+
 ## What's kept vs. dropped
 
 | Kept | Dropped |
@@ -383,6 +385,7 @@ The app uses `react-router-dom` for URL-driven views as of Stage 8. The state-dr
 | `/new` | Create form | signed-in only — anon redirects to `/` |
 | `/profile` | Profile | signed-in only — anon redirects to `/` |
 | `/bookmarks` | My bookmarks | signed-in only — anon redirects to `/` |
+| `/shopping-list` | Shopping list (Stage N+2a) | anonymous + signed-in — localStorage-backed, no auth required |
 | `*` | Catch-all → `/` (replace) | any — keeps URL bar from displaying a 404 the app can't render |
 
 Auth lives at `/auth`? **No.** It stays as an overlay state (`showAuth`). The slide-in motion (`fixed inset-0 z-50 translate-x-full → translate-x-0`, 450ms ease-out) is documented above as deliberate UX. Treating Auth as a route would either (a) lose the overlay-over-current-page metaphor by replacing the underlying view, or (b) require complex modal-route patterns. Sign-in is invoked in-place from any route, and the URL bar reflects whatever route the user was on when they clicked Sign In — so they return to that exact context after authenticating. A future iteration could expose a `?signin=1` query param if shareable sign-in becomes a need (e.g. an email link to "click here to sign in"), but that's deferred.
