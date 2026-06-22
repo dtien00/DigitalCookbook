@@ -1,5 +1,6 @@
 import { toast } from 'react-hot-toast'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { copyText } from '../lib/copyText'
 
 // Stage 18 — copies the unchecked ingredients (i.e., the ones the cook still
 // needs to acquire) to the clipboard as a plaintext shopping list. Mirrors
@@ -13,38 +14,6 @@ function formatLine(ing, multiplier) {
     const parts = [qty, ing.unit, ing.name].filter(p => p != null && String(p).trim() !== '')
     const head = `- ${parts.join(' ')}`
     return ing.notes ? `${head} (${ing.notes.trim()})` : head
-}
-
-// Modern clipboard API first; falls back to a hidden textarea + execCommand
-// when the page is not a secure context (e.g., LAN-IP dev access at
-// http://192.168.x.x:5175 — Stage 6's `server: { host: true }` makes this
-// path reachable) or when the async API throws for any other reason. The
-// fallback path requires sync execution inside the user gesture, so it's
-// implemented as a regular (non-await) branch.
-async function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        try {
-            await navigator.clipboard.writeText(text)
-            return
-        } catch {
-            // fall through to legacy path
-        }
-    }
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.setAttribute('readonly', '')
-    ta.style.position = 'fixed'
-    ta.style.left = '-9999px'
-    ta.style.top = '0'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    try {
-        const ok = document.execCommand('copy')
-        if (!ok) throw new Error('Clipboard write rejected')
-    } finally {
-        document.body.removeChild(ta)
-    }
 }
 
 export default function ExportIngredientsButton({

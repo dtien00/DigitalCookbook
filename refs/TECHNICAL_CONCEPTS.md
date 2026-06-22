@@ -63,6 +63,20 @@ React's built-in `useState` and `useEffect` are doing all the work today. There'
 
 As features land, we'll likely extract small custom hooks (`useFavorite`, `useLike`, `useComments`) that each wrap a single table's read/write. If data fetching becomes repetitive or stale-state bugs appear, we'll reconsider adding TanStack Query.
 
+> Update: those hooks now exist (`useFavorites`, `useLikes`, `useComments`, `useAdmin`, `useMfa`, `useCookbooks`, …), and routing moved from state-driven dispatch to `react-router-dom` in Stage 8. The two paragraphs above describe the original scaffold; the patterns held up as the app grew.
+
+### Client-side persistent stores (no DB)
+
+Two features keep their state entirely in the browser via `localStorage`, never touching Postgres: the **Fridge Basket** (`useFridgeBasket`, key `cookbook.fridgeBasket`) and the **Shopping List** (`useShoppingList`, key `cookbook.shoppingList`). Both are deliberately *not* server-backed — they model device-local, out-of-app activity (what's in your kitchen; what you're about to buy at the store), require no account, and work for anonymous visitors.
+
+They share one hook shape, worth knowing because future client-only stores should copy it:
+
+- **Read-initial + write-through.** `useState(readInitial)` hydrates from `localStorage` on mount; a `useEffect([state])` writes the whole value back on every change. Both wrap `localStorage` access in `try/catch` so private-mode Safari (which throws on write) degrades to in-memory-only instead of crashing.
+- **Functional `setState` everywhere.** Mutators use `setState(prev => …)` rather than closing over the current value — this project has been bitten by stale-closure bugs, so updates that depend on prior state never read it directly.
+- **Lifted to App level.** Each hook is instantiated once in `App.jsx` and its values/mutators are passed down. That gives a single in-memory source of truth so a header count badge and the dedicated page stay in sync, and the state survives route changes.
+
+The Shopping List adds a **merge-on-add** rule on top of that shape: `addItems()` dedupes incoming ingredients against the existing list by a normalized `name + unit` key, summing quantities when both are numeric and leaving mismatched units as separate rows (no unit-conversion table exists). Quantities are stored as raw numbers so they can be summed; fraction display (`½`, `¼`) is re-derived at render time. See [ROADMAP.md → Stage N+2a](./ROADMAP.md) for the full "Add to shopping list" data flow and the clipboard helper (`src/lib/copyText.js`) shared with Stage 18's export button.
+
 ## 6. Security Posture
 
 - **Secrets**: `.env.local` holds the Supabase URL and anon key, and is gitignored. `credentials.env` is also gitignored. Anyone cloning the repo must supply their own.
