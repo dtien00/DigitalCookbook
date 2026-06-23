@@ -405,6 +405,13 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Provenance recorded** — after adding, `localStorage.getItem('cookbook.shoppingList')` shows each item carrying a `sources` array with the contributing `recipeId` / `recipeTitle`
 - [ ] **Legacy list migrates** — put an old-shape value (item objects with no `sources`) into `cookbook.shoppingList`, reload → list still renders with quantities preserved, each row gains one synthesised source (`recipeId: null`), no console error
 
+**N+2c provenance — chip bar (PR #64):**
+- [ ] **Chip per recipe** — /shopping-list shows a "Recipes in this list" row with one chip per contributing recipe: title + a count badge of how many rows it feeds; chips ordered by when the recipe was first added
+- [ ] **Hover / focus preview** — hovering (or keyboard-focusing) a chip tints its rows with a rust left-stripe + tan band; moving away clears it
+- [ ] **Tap-to-pin** — clicking/tapping a chip pins the highlight (persists after the pointer leaves); clicking it again unpins; clicking a different chip switches the pin
+- [ ] **Overlap** — an ingredient shared by two recipes (e.g. coconut milk) highlights under *either* recipe's chip; non-contributing rows stay plain
+- [ ] **Mobile (≤ 640px)** — chips wrap to fit, highlight bands fit, tap pins (no hover needed)
+
 ---
 
 ## Per-step photos checklist

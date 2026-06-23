@@ -346,6 +346,8 @@ Currently tagged: top action row (Back, Like, Bookmark, Download PDF), servings 
 
 **Shopping list page exception (Stage N+2a):** the `/shopping-list` page tags its own chrome (Back, count, Copy / Print / Clear-all row, per-row ✕) `no-print`, but deliberately lets its item checkboxes print. The RecipeDetail print rule that hides checkboxes is scoped to `.ingredient-list`/`.step-list` only, so the shopping list's boxes survive — a printed shopping list with empty boxes is the whole point (tick items at the store), unlike the recipe kitchen-card where the checkbox is a screen-only affordance.
 
+**Shopping-list provenance chips (Stage N+2c):** the `/shopping-list` page shows a "Recipes in this list" chip row between the action buttons and the items — one `bg-tan-soft text-ink` pill per contributing recipe with a `bg-tan` count badge. Hovering, keyboard-focusing, or tapping a chip highlights that recipe's rows with a 3px `rust` left-stripe + `bg-tan/20` band (the same bookmark-ribbon highlight idiom the Following row uses). The active chip gains `ring-2 ring-rust` and its badge flips to `bg-rust text-paper`. Because touch has no hover, a tap *pins* the highlight (click again to unpin); on desktop, hover previews and click pins. The whole row is `no-print`.
+
 ## What's kept vs. dropped
 
 | Kept | Dropped |
