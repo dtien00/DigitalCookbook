@@ -424,6 +424,31 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Meal plan checklist
+
+> Verifies Stage M+1 item 1 — the `/plan` week grid. **Requires migration 021 applied** (`supabase_migration_021_meal_plans.sql` — run via Dashboard → SQL Editor); until then the grid renders but adds fail with an error toast. Signed-in only. Use any private account (e.g. `test-medium`) and **bookmark a couple of recipes first** — the cell picker reads from your bookmarks, and the seed script doesn't seed favorites.
+
+- [ ] **Route gate** — signed out, visit `/plan` → bounces to `/`. Signed in → grid renders.
+- [ ] **Discovery** — header → Profile dropdown → "Meal Plan" (between Bookmarks and Log out) navigates to `/plan`.
+- [ ] **Grid shape** — seven day columns Mon–Sun with dates, three rows Breakfast / Lunch / Dinner; today's column header is highlighted.
+- [ ] **Week nav** — ‹ / › walk ±7 days and the label updates (e.g. "Jun 22 – 28", cross-month "Jun 29 – Jul 5"); "This week" returns to the current week.
+- [ ] **Add from picker** — tap an empty cell's `+` → modal lists your bookmarks → pick one → the cell fills instantly (optimistic) with the recipe title.
+- [ ] **Add from a recipe card (signed in)** — on the home grid, each card's top-right cluster shows a calendar "+ Add to plan" button left of the bookmark. Sign out → the button is gone (anonymous cards unchanged).
+- [ ] **Add-to-plan modal** — click that button → modal opens titled with the recipe; pick a day (navigable week, today highlighted) + a meal (defaults to Dinner) → "Add to plan" → success toast; open `/plan` and confirm the recipe landed in that cell.
+- [ ] **Modal dismiss** — Escape, ×, backdrop click, and Cancel all close it without adding.
+- [ ] **One per cell** — a filled cell shows the recipe chip (title + `✕`), not a `+`; the DB enforces one row per `(date, slot)` via the unique constraint, so there's never a duplicate.
+- [ ] **Remove** — click a filled cell's `✕` → cell empties immediately; reload → stays empty (persisted server-side).
+- [ ] **Open recipe** — click a filled cell's title → navigates to that recipe's detail page.
+- [ ] **Persistence** — add a few cells, reload → they survive (DB-backed, not localStorage). Sign in in another browser → the same plan appears (own-only RLS, server-side).
+- [ ] **Empty picker** — on an account with zero bookmarks, the picker shows the ✦ "No bookmarks yet" nudge.
+- [ ] **No leakage** — `await supabase.from('meal_plans').select('*')` in devtools returns only your own rows; signed out returns `[]`.
+- [ ] **Desktop drag — tray → cell (≥ 768px)** — a "Drag a bookmark into the week" tray of chips appears above the grid; drag a chip onto a cell → it fills (same result as the picker). The hovered cell shows a rust ring while dragging.
+- [ ] **Desktop drag — move a planned recipe** — drag a filled cell onto another cell → the recipe moves (source clears, destination fills/replaces); dropping a cell back on itself is a no-op.
+- [ ] **Tray hidden on mobile** — at ≤ 640px the tray is not rendered (HTML5 drag doesn't work on touch); the tap-+ picker is the only add path there.
+- [ ] **Mobile (≤ 640px)** — the grid scrolls horizontally (640px inner track); `+`, chip remove `✕`, and picker rows are all tappable.
+
+---
+
 ## Per-step photos checklist
 
 > Verifies Stage 15 item 1 — author can attach one photo per step in CreateRecipe; reader sees a thumbnail + lightbox on RecipeDetail; CookingMode shows the photo in the step canvas. Requires migration 018 applied and the `recipe-steps` Storage bucket created per DATABASE_DECISIONS.md → *Storage: `recipe-steps` bucket*.

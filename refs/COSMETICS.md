@@ -375,6 +375,21 @@ Browsers add their own URL / date header on print by default — re-adding one w
 
 ---
 
+# Meal plan grid (Stage M+1)
+
+The `/plan` week grid (signed-in only) lays out seven day columns (Mon–Sun) × three meal rows (Breakfast / Lunch / Dinner) as a CSS grid with a fixed `70px` label column: `grid-template-columns: 70px repeat(7, minmax(0, 1fr))`. The grid sits in an `overflow-x-auto` wrapper with a `min-w-[640px]` inner track, so on phone widths the columns scroll horizontally rather than crushing to unreadable widths.
+
+- **Filled cell:** `bg-tan-soft` + `border-rust/40` rounded card; truncated recipe title (clickable → recipe detail) + a `rose-dark` remove `✕`.
+- **Empty cell:** dashed `border-ink/25` rounded box with a centered `+` in `rose/50`; hover fills `paper-shade`. Tapping opens the bookmark picker for that cell.
+- **Today's column header** gets a quiet `bg-tan-soft` highlight; other day headers are plain `text-rose`.
+- **Picker:** centered modal (same `fixed inset-0 z-50 bg-ink/40` overlay posture as the Auth slide-in / Fridge modal), backdrop-click + Escape to close, listing the user's bookmarked recipes. ✦ + serif + italic-rose empty-state nudge when the user has no bookmarks yet.
+
+Week navigation is local state (a Monday-anchored `weekStart` date); prev/next walk ±7 days and "This week" jumps home. The viewed week is not persisted — `/plan` always opens on the current week.
+
+**Drag-and-drop (desktop only).** A bookmark **tray** above the grid (`hidden md:block`) is the drag source: each bookmark is a draggable chip, and dropping it on a cell calls the same `addEntry` upsert as the picker. Filled cells are themselves draggable to relocate a planned recipe (drop = `addEntry` destination + `removeEntry` source = a move; dropping on itself is a no-op). The cell under the pointer shows a `ring-2 ring-rust` highlight driven by a `dragOverKey` session value. HTML5 DnD doesn't fire on touch, so the tray is desktop-only and the tap-+ picker stays the universal/mobile path. **From a recipe card (home grid).** Signed-in cards carry an "+ Add to plan" calendar button (`AddToPlanButton`, top-right at `right-16`, just left of the bookmark) that opens `AddToPlanModal` — a centered day+meal picker (navigable week; defaults to today + Dinner) that upserts straight into `meal_plans` via the standalone `addRecipeToPlan` helper. The button is gated to signed-in users (its prop is only passed when a session exists), so anonymous cards are visually unchanged. This is the cross-route path — you can't drag between `/` and `/plan`, so the card affordance is a button + modal rather than a drag.
+
+---
+
 # Routing (Stage 8)
 
 The app uses `react-router-dom` for URL-driven views as of Stage 8. The state-driven view cascade (`showProfile`/`showBookmarks`/`showCreate`/`selectedRecipe`/`editingRecipe`) was replaced with `<Routes>` so deep links work, the back button behaves naturally, and recipe URLs are shareable.
@@ -390,6 +405,7 @@ The app uses `react-router-dom` for URL-driven views as of Stage 8. The state-dr
 | `/profile` | Profile | signed-in only — anon redirects to `/` |
 | `/bookmarks` | My bookmarks | signed-in only — anon redirects to `/` |
 | `/shopping-list` | Shopping list (Stage N+2a) | anonymous + signed-in — localStorage-backed, no auth required |
+| `/plan` | Meal plan week grid (Stage M+1) | signed-in only — anon redirects to `/` |
 | `*` | Catch-all → `/` (replace) | any — keeps URL bar from displaying a 404 the app can't render |
 
 Auth lives at `/auth`? **No.** It stays as an overlay state (`showAuth`). The slide-in motion (`fixed inset-0 z-50 translate-x-full → translate-x-0`, 450ms ease-out) is documented above as deliberate UX. Treating Auth as a route would either (a) lose the overlay-over-current-page metaphor by replacing the underlying view, or (b) require complex modal-route patterns. Sign-in is invoked in-place from any route, and the URL bar reflects whatever route the user was on when they clicked Sign In — so they return to that exact context after authenticating. A future iteration could expose a `?signin=1` query param if shareable sign-in becomes a need (e.g. an email link to "click here to sign in"), but that's deferred.
