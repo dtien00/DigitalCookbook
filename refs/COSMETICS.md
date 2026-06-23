@@ -348,6 +348,8 @@ Currently tagged: top action row (Back, Like, Bookmark, Download PDF), servings 
 
 **Shopping-list provenance chips (Stage N+2c):** the `/shopping-list` page shows a "Recipes in this list" chip row between the action buttons and the items — one `bg-tan-soft text-ink` pill per contributing recipe with a `bg-tan` count badge. Hovering, keyboard-focusing, or tapping a chip highlights that recipe's rows with a 3px `rust` left-stripe + `bg-tan/20` band (the same bookmark-ribbon highlight idiom the Following row uses). The active chip gains `ring-2 ring-rust` and its badge flips to `bg-rust text-paper`. Because touch has no hover, a tap *pins* the highlight (click again to unpin); on desktop, hover previews and click pins. The whole row is `no-print`.
 
+**Shopping-list delete + undo (Stage N+2c, PR #66):** each recipe chip carries a trailing `✕` (its own button, split from the highlight button by a `border-l border-tan/40` inside an `overflow-hidden rounded-md` shell) that removes the recipe **optimistically** — no confirm dialog; the overlap accounting rides in a 6-second Undo toast instead ("Removed X — 1 item removed, 1 shared item reduced", with a `text-rust` **Undo** action on the standard paper-shade toast). Both the chip `✕` and the per-row `✕` drop the removal into a collapsed **"Recently removed (N)"** tray under the list (separated by a `border-t border-paper-shade`; a `▸` chevron rotates 90° on expand). Tray entries reuse the same two-buttons-on-a-pill construction: a `bg-paper-shade` pill showing the item line (or "Recipe · N items") + a muted relative timestamp, then a `↩` restore (`text-rust`) and a `✕` dismiss (`text-ink/30 hover:text-rose-dark`). All `no-print`.
+
 ## What's kept vs. dropped
 
 | Kept | Dropped |

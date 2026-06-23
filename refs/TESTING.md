@@ -412,6 +412,16 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Overlap** — an ingredient shared by two recipes (e.g. coconut milk) highlights under *either* recipe's chip; non-contributing rows stay plain
 - [ ] **Mobile (≤ 640px)** — chips wrap to fit, highlight bands fit, tap pins (no hover needed)
 
+**N+2c provenance — delete + undo (PR #66):**
+- [ ] **Per-recipe delete** — a chip's `✕` removes that recipe optimistically (no dialog): rows it solely owns disappear, shared rows stay and drop by its share (e.g. coconut milk 3→2 cups), its chip vanishes
+- [ ] **Overlap-aware undo toast** — the toast names the split, e.g. "Removed Coconut Rice — 1 item removed, 1 shared item reduced", with an **Undo** that fully restores (shared quantity back up, chip back)
+- [ ] **Per-item delete toast** — a row's `✕` shows "Removed {item}" with an Undo action
+- [ ] **Recently removed tray** — a collapsed "Recently removed (N)" appears; expanding shows each removal (item line, or "Recipe · N items") with a timestamp, a `↩` restore, and a `✕` dismiss
+- [ ] **Restore is lossless** — `↩` on a recipe entry re-raises shared quantities and re-creates sole rows; on an item entry re-folds it source-aware
+- [ ] **Persistence + cap** — the tray survives reload (`localStorage` key `cookbook.shoppingList.removed`), is capped at the last 10, and **Clear all** empties it
+- [ ] **Re-send prunes** — delete a recipe, then re-send it from its page → the stale tray entry auto-drops (no double-restore)
+- [ ] **Mobile (≤ 640px)** — chip `✕`, toast Undo, and tray restore/dismiss are all tappable
+
 ---
 
 ## Per-step photos checklist
