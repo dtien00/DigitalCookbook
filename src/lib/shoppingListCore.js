@@ -206,3 +206,44 @@ export function normalizeStored(parsed) {
             return recompute({ id, name, unit, quantity, notes, sources })
         })
 }
+
+// Derive the distinct recipes contributing to the list — the data behind the
+// "Recipes in this list" provenance chip bar (N+2c, PR #64). One entry per real
+// recipeId (null / unattributed sources are skipped); each carries the title,
+// the count of rows it currently appears in, and its earliest addedAt for stable
+// chip order. A recipe contributing two ingredients to the same row counts that
+// row once.
+export function recipesInList(items) {
+    const byId = new Map()
+    for (const item of items) {
+        const counted = new Set()
+        for (const s of item.sources || []) {
+            if (s.recipeId == null || counted.has(s.recipeId)) continue
+            counted.add(s.recipeId)
+            const prev = byId.get(s.recipeId)
+            if (!prev) {
+                byId.set(s.recipeId, {
+                    recipeId: s.recipeId,
+                    recipeTitle: s.recipeTitle ?? null,
+                    count: 1,
+                    addedAt: s.addedAt ?? null,
+                })
+            } else {
+                prev.count += 1
+                if (prev.recipeTitle == null && s.recipeTitle != null) prev.recipeTitle = s.recipeTitle
+                if (s.addedAt != null && (prev.addedAt == null || s.addedAt < prev.addedAt)) {
+                    prev.addedAt = s.addedAt
+                }
+            }
+        }
+    }
+    const cmpTitle = (a, b) =>
+        (a.recipeTitle || '').localeCompare(b.recipeTitle || '') || a.recipeId.localeCompare(b.recipeId)
+    return Array.from(byId.values()).sort((a, b) => {
+        if (a.addedAt == null && b.addedAt == null) return cmpTitle(a, b)
+        if (a.addedAt == null) return 1
+        if (b.addedAt == null) return -1
+        if (a.addedAt !== b.addedAt) return a.addedAt - b.addedAt
+        return cmpTitle(a, b)
+    })
+}
