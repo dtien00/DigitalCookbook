@@ -247,3 +247,42 @@ export function recipesInList(items) {
         return cmpTitle(a, b)
     })
 }
+
+// Restore a previously-removed item (undo of an individual per-row remove). Folds
+// the item back source-aware: merges its sources into a matching (name+unit) row
+// if one reappeared, else re-adds the row. Counterpart to removeItem.
+export function restoreItem(list, item) {
+    if (!item || typeof item.name !== 'string' || item.name.trim() === '') return list
+    const sources = Array.isArray(item.sources) ? item.sources : []
+    const key = keyOf(item)
+    const idx = list.findIndex(it => keyOf(it) === key)
+    if (idx === -1) {
+        return [...list, recompute({
+            id: typeof item.id === 'string' && item.id ? item.id : makeId(),
+            name: item.name.trim(),
+            unit: item.unit ?? null,
+            quantity: null,
+            notes: null,
+            sources: sources.slice(),
+        })]
+    }
+    const merged = { ...list[idx], sources: [...list[idx].sources, ...sources] }
+    const next = list.slice()
+    next[idx] = recompute(merged)
+    return next
+}
+
+// Classify a removed recipe's contribution against the post-removal list, for the
+// "1 removed · 1 reduced" summary in the undo toast: an ingredient still present
+// (by name+unit) was a shared row that got reduced; one that's gone was removed
+// outright. Returns name lists in contribution order.
+export function summarizeContribution(contribution, listAfter) {
+    const present = new Set((listAfter || []).map(keyOf))
+    const removed = []
+    const reduced = []
+    for (const c of contribution || []) {
+        if (present.has(keyOf(c))) reduced.push(c.name)
+        else removed.push(c.name)
+    }
+    return { removed, reduced }
+}

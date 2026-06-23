@@ -203,6 +203,10 @@ function App() {
         items: shoppingItems,
         addRecipe: addToShoppingList,
         removeItem: removeShoppingItem,
+        removeRecipe: removeShoppingRecipe,
+        recentlyRemoved: shoppingRecentlyRemoved,
+        restoreRemoved: restoreShoppingRemoved,
+        dismissRemoved: dismissShoppingRemoved,
         clearList: clearShoppingList,
     } = useShoppingList()
 
@@ -464,6 +468,10 @@ function App() {
                         <ShoppingList
                             items={shoppingItems}
                             onRemove={removeShoppingItem}
+                            onRemoveRecipe={removeShoppingRecipe}
+                            recentlyRemoved={shoppingRecentlyRemoved}
+                            onRestore={restoreShoppingRemoved}
+                            onDismiss={dismissShoppingRemoved}
                             onClear={clearShoppingList}
                         />
                     }
