@@ -372,6 +372,8 @@ export default function RecipeDetail({
                     />
                     {addToShoppingList && (
                         <SendToShoppingListButton
+                            recipeId={recipe.id}
+                            recipeTitle={recipe.title}
                             ingredients={ingredients}
                             checkedIngredients={checkedIngredients}
                             multiplier={multiplier}

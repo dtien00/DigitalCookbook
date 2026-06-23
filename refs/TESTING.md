@@ -400,6 +400,11 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Deep link** — paste `/shopping-list` into a fresh tab → page resolves (SPA rewrite), shows persisted items
 - [ ] **Mobile (≤ 640px)** — header + Copy/Print/Clear row fit; long item names wrap; full-row tap targets
 
+**N+2c provenance — data model (PR #63) behaviors testable now (no new UI yet):**
+- [ ] **Re-send replaces, not stacks** — send a recipe to the list, reopen the same recipe, send again → the shared quantities stay the same (no doubling). *(N+2a summed re-sends; N+2c replaces a recipe's prior contribution.)*
+- [ ] **Provenance recorded** — after adding, `localStorage.getItem('cookbook.shoppingList')` shows each item carrying a `sources` array with the contributing `recipeId` / `recipeTitle`
+- [ ] **Legacy list migrates** — put an old-shape value (item objects with no `sources`) into `cookbook.shoppingList`, reload → list still renders with quantities preserved, each row gains one synthesised source (`recipeId: null`), no console error
+
 ---
 
 ## Per-step photos checklist
