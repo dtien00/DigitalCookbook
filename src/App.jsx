@@ -201,7 +201,7 @@ function App() {
     // the /shopping-list page reads the same in-memory instance via props.
     const {
         items: shoppingItems,
-        addItems: addToShoppingList,
+        addRecipe: addToShoppingList,
         removeItem: removeShoppingItem,
         clearList: clearShoppingList,
     } = useShoppingList()

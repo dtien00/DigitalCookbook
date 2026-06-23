@@ -20,6 +20,8 @@ export default function SendToShoppingListButton({
     ingredients,
     checkedIngredients,
     multiplier = 1,
+    recipeId,
+    recipeTitle,
     onAdd,
 }) {
     const unchecked = ingredients.filter(ing => !checkedIngredients.has(ing.id))
@@ -36,7 +38,7 @@ export default function SendToShoppingListButton({
             quantity: toScaledNumber(ing.quantity, multiplier),
             notes: ing.notes ?? null,
         }))
-        onAdd(items)
+        onAdd(recipeId, recipeTitle, items)
         const noun = items.length === 1 ? 'ingredient' : 'ingredients'
         toast.success(`Added ${items.length} ${noun} to your shopping list`)
     }
