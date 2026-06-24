@@ -29,6 +29,9 @@ import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
 import NotificationsBell from './components/NotificationsBell'
 import ShoppingList from './components/ShoppingList'
+import MealPlan from './components/MealPlan'
+import AddToPlanModal from './components/AddToPlanModal'
+import { addRecipeToPlan } from './hooks/useMealPlan'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -225,6 +228,10 @@ function App() {
     const [basketOpen, setBasketOpen] = useState(false)
     const basketTriggerRef = useRef(null)
 
+    // Recipe pending an "Add to plan" cell choice (home-card affordance), or
+    // null when the modal is closed.
+    const [addToPlanRecipe, setAddToPlanRecipe] = useState(null)
+
     useEffect(() => {
         // Check initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -406,6 +413,21 @@ function App() {
         toggleLike(recipeId)
     }
 
+    // "Add to plan" from a recipe card → open the day/meal picker. Only wired
+    // for signed-in users (meal plans are private), so unlike bookmark/like it
+    // needs no anonymous branch.
+    const handleAddToPlanRequest = (recipe) => {
+        setAddToPlanRecipe(recipe)
+    }
+
+    const handleAddToPlanConfirm = async (dateISO, slot) => {
+        if (!addToPlanRecipe || !session) return
+        const { error } = await addRecipeToPlan(session.user.id, dateISO, slot, addToPlanRecipe.id)
+        if (error) toast.error('Could not add to plan: ' + error.message)
+        else toast.success(`Added "${addToPlanRecipe.title}" to your plan`)
+        setAddToPlanRecipe(null)
+    }
+
     // Bundled "shared" props for the home view + recipe detail wrapper.
     // Defined once so each <Route> JSX is short and changes to the shape
     // (e.g. adding a new handler) only need one update, not five.
@@ -429,6 +451,7 @@ function App() {
         onLikeClick: handleLikeClick,
         onLogout: handleLogout,
         onSignIn: () => setShowAuth(true),
+        onAddToPlan: session ? handleAddToPlanRequest : undefined,
         isAdmin,
     }
 
@@ -474,6 +497,14 @@ function App() {
                             onDismiss={dismissShoppingRemoved}
                             onClear={clearShoppingList}
                         />
+                    }
+                />
+                <Route
+                    path="/plan"
+                    element={
+                        session
+                            ? <MealPlan session={session} onBack={() => navigate('/')} onRecipeClick={handleRecipeClick} />
+                            : <Navigate to="/" replace />
                     }
                 />
                 <Route
@@ -633,6 +664,13 @@ function App() {
                     : recipes.filter(r => recipeMatchesBasket(r, basket)).length}
                 loadedCount={recipes.length}
             />
+            {addToPlanRecipe && (
+                <AddToPlanModal
+                    recipe={addToPlanRecipe}
+                    onClose={() => setAddToPlanRecipe(null)}
+                    onAdd={handleAddToPlanConfirm}
+                />
+            )}
         </>
     )
 }
@@ -656,7 +694,7 @@ function HomeView({
     shoppingCount,
     notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
-    onLogout, onSignIn,
+    onLogout, onSignIn, onAddToPlan,
     isAdmin,
 }) {
     const navigate = useNavigate()
@@ -956,6 +994,13 @@ function HomeView({
                                     >
                                         Bookmarks
                                     </button>
+                                    <button
+                                        role="menuitem"
+                                        onClick={() => { navigate('/plan'); setMenuOpen(false) }}
+                                        className="w-full text-left px-4 py-2.5 text-ink font-medium hover:bg-paper-shade transition-colors"
+                                    >
+                                        Meal Plan
+                                    </button>
                                     {isAdmin && (
                                         <button
                                             role="menuitem"
@@ -1248,6 +1293,7 @@ function HomeView({
                                 liked={userLiked(recipe.id)}
                                 likeCount={likeCount(recipe.id)}
                                 onToggleLike={() => onLikeClick(recipe.id)}
+                                onAddToPlan={onAddToPlan ? () => onAddToPlan(recipe) : undefined}
                             />
                         ))}
                     </div>

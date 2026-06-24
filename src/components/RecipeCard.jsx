@@ -1,5 +1,6 @@
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
+import AddToPlanButton from './AddToPlanButton'
 
 // Stage 14 item 1 — each recipe card reads as a closed mini-book on a shelf.
 // The flat-card chrome is gone; the wrapper is now a `.recipe-book` with a
@@ -24,6 +25,7 @@ export default function RecipeCard({
     liked,
     likeCount = 0,
     onToggleLike,
+    onAddToPlan,
 }) {
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -58,6 +60,12 @@ export default function RecipeCard({
                     favorited={favorited}
                     onClick={onToggleFavorite}
                     className="absolute top-3 right-3 z-10"
+                />
+            )}
+            {onAddToPlan && (
+                <AddToPlanButton
+                    onClick={onAddToPlan}
+                    className="absolute top-3 right-16 z-10"
                 />
             )}
             {recipe.is_public === false && (
