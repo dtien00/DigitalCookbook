@@ -530,10 +530,14 @@ async function seedAccount(account, index) {
   const userId = signInData.user.id
   console.log(`  ✓ ${alreadyRegistered ? 'Signed in to existing account' : 'Account created'}`)
 
-  // Update profile bio (the auto-create trigger sets username/full_name but not bio)
+  // Update profile bio (the auto-create trigger sets username/full_name but
+  // not bio). Also pre-dismiss the first-run onboarding tour (migration 022):
+  // seed accounts aren't the "new user" the tour is meant to greet, so a
+  // dismissed timestamp keeps test logins tour-free. Verify the tour itself
+  // with a genuine fresh signup (its onboarding_dismissed_at starts NULL).
   const { error: profileError } = await supabase
     .from('profiles')
-    .update({ bio: account.bio })
+    .update({ bio: account.bio, onboarding_dismissed_at: new Date().toISOString() })
     .eq('id', userId)
   if (profileError) {
     console.warn(`  ⚠ Couldn't update bio: ${profileError.message}`)

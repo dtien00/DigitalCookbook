@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import { useFavorites } from './hooks/useFavorites'
 import { useLikes } from './hooks/useLikes'
 import { useAdmin } from './hooks/useAdmin'
+import { useOnboarding } from './hooks/useOnboarding'
 import { useMfa } from './hooks/useMfa'
 import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
@@ -31,6 +32,7 @@ import NotificationsBell from './components/NotificationsBell'
 import ShoppingList from './components/ShoppingList'
 import MealPlan from './components/MealPlan'
 import AddToPlanModal from './components/AddToPlanModal'
+import OnboardingTour from './components/OnboardingTour'
 import { addRecipeToPlan } from './hooks/useMealPlan'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
@@ -80,6 +82,7 @@ const DEFAULT_SORT_CONFIG = {
 
 function App() {
     const navigate = useNavigate()
+    const location = useLocation()
 
     const [session, setSession] = useState(null)
     // `sessionLoaded` flips true once supabase.auth.getSession() resolves.
@@ -187,6 +190,10 @@ function App() {
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
     const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin, loading: adminLoading } = useAdmin(session?.user.id)
+    // First-run onboarding tour (Stage M). Column-only gate — shows for
+    // signed-in users who've never dismissed it. Rendered only on the home
+    // route (below) so it greets new users on the grid, not mid-task.
+    const { showTour, dismiss: dismissOnboarding } = useOnboarding(session?.user.id)
     const mfa = useMfa(session?.user.id)
     const { isFollowing, getNotifyPref, toggleFollow, setNotifyPref } = useFollowing(session?.user.id)
     const { notifications, unreadCount, markRead, markAllRead } = useNotifications(session?.user.id)
@@ -677,6 +684,12 @@ function App() {
                     onClose={() => setAddToPlanRecipe(null)}
                     onAdd={handleAddToPlanConfirm}
                 />
+            )}
+            {/* First-run onboarding tour. Home route only so it greets new
+                users on the grid rather than interrupting a sub-page; the
+                hook's column-only gate handles the "show once" logic. */}
+            {showTour && location.pathname === '/' && (
+                <OnboardingTour onDismiss={dismissOnboarding} />
             )}
         </>
     )

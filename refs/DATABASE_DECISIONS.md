@@ -104,7 +104,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_018_step_photos.sql` — adds nullable `photo_path TEXT` to `steps` (Stage 15 item 1). No RLS changes — the existing steps policies gate on parent recipe visibility / authorship. Companion to a new `recipe-steps` Storage bucket; see "Storage: `recipe-steps` bucket (Stage 15 item 1)" below. Idempotent.
 - `supabase_migration_019_comment_likes.sql` — adds the `comment_likes` join table (Stage 15 item 4) with composite PK `(comment_id, user_id)`, public SELECT, own-only INSERT (`auth.uid() = user_id`, mirrors the migration-004 fix posture from day one), own-only DELETE, and an additive admin-override DELETE for moderation parity with migration 008. FK on `comment_id` cascades on comment delete so existing comment-delete paths (own + admin-override) clean up automatically. See "Comment likes (migration 019, Stage 15 item 4)" below. Idempotent.
 - `supabase_migration_021_meal_plans.sql` — adds the `meal_plans` table (Stage M+1 item 1) backing the `/plan` week grid: one row per `(user_id, plan_date, slot)` cell, enforced by a UNIQUE constraint that doubles as the upsert conflict target (re-dropping a recipe on an occupied cell REPLACES it rather than erroring). Own-only RLS across **all four** operations — unlike the favorites pattern (003), an explicit UPDATE policy is required because the add path is `upsert ... ON CONFLICT DO UPDATE`. `slot` is `TEXT` + `CHECK (slot IN ('breakfast','lunch','dinner','misc'))` rather than a Postgres ENUM (lightweight, matches `notifications.kind`, no `ALTER TYPE` to extend later). `recipe_id` / `user_id` both `ON DELETE CASCADE`. No public-read and **no admin override** — meal plans are private personal planning, not moderatable content (contrast the admin-override DELETEs on recipes/comments/likes/favorites). The unique index leads with `(user_id, plan_date)`, covering the dominant "fetch one user's week" range query, so no extra index. Idempotent.
-- Future migrations: `supabase_migration_022_*.sql`, etc. *(020 = `comment_photos`, not separately written up in this list.)*
+- `supabase_migration_022_onboarding.sql` — adds nullable `onboarding_dismissed_at TIMESTAMPTZ` to `profiles` (Stage M item 2) backing the first-run onboarding tour. No RLS changes — `profiles` already has an owner-only UPDATE policy, and the migration-010 trigger only reverts `is_admin` tampering, so the dismissal write passes. No index (read only as part of fetching the caller's own profile row by PK). See "Onboarding dismissal flag (migration 022, Stage M item 2)" below. Idempotent (`ADD COLUMN IF NOT EXISTS`).
+- Future migrations: `supabase_migration_023_*.sql`, etc. *(020 = `comment_photos`, not separately written up in this list.)*
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -624,6 +625,22 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 - Different ownership: step photos belong to the recipe author; comment photos belong to the commenter. Distinct buckets keep the access/audit boundary visible per-feature.
 - Cleaner operational metrics (per-feature storage growth visible in the dashboard).
 - Allows independent policy evolution — e.g., a future "comment author rate-limit on photo uploads" rule belongs on `comment-photos` only, not on the recipe-author surfaces.
+
+---
+
+## Onboarding dismissal flag (migration 022, Stage M item 2)
+
+The first-run onboarding tour shows once for brand-new accounts and must stay dismissed across re-logins and devices. Migration 022 adds a single nullable `onboarding_dismissed_at TIMESTAMPTZ` to `profiles`:
+- `NULL` → never dismissed; the tour is eligible to show.
+- set → dismissed at this instant; never show again.
+
+**Why a timestamp, not a boolean:** costs nothing extra and answers "when did they finish onboarding" later without a second migration.
+
+**No RLS changes.** `profiles` already has an owner-only UPDATE policy, so a user can write their own row's `onboarding_dismissed_at`. The migration-010 BEFORE-UPDATE trigger only reverts `is_admin` changes by non-admins; it leaves every other column (including this one) untouched, so the dismissal write passes. Anonymous users have no profile row, so the tour never applies (also enforced client-side — the `useOnboarding` hook short-circuits when there's no `userId`).
+
+**No index.** The column is only ever read while fetching the caller's own single profile row by primary key.
+
+**Gate is column-only, by deliberate departure from the roadmap.** The roadmap framed eligibility as "accounts < 24h old". Once dismissal is tracked, "new user" collapses to "hasn't dismissed yet" — the age check adds nothing and makes the tour untestable on existing accounts. Eligibility is therefore purely `onboarding_dismissed_at IS NULL`, which also means the tour can be re-triggered on any account by nulling the column. The seed script pre-sets the timestamp so the five test accounts stay tour-free; the tour is verified with a genuine fresh signup (whose column starts `NULL`).
 
 ---
 

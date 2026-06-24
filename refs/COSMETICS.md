@@ -887,3 +887,15 @@ For keyboard entry, `Ctrl`/`Cmd`+`Enter` in a step's textarea adds + focuses the
 
 These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
 
+---
+
+## First-run onboarding tour (Stage M item 2)
+
+A lightweight 3-step welcome overlay shown once to brand-new signed-in users on the home grid ([OnboardingTour.jsx](../src/components/OnboardingTour.jsx)). Deliberately **not** a spotlight/coachmark tour anchored to specific cards — the masonry grid reflows by viewport and library size, so a positioned highlight would be fragile and break at phone width. Instead it's a centered modal that names each affordance in copy with a matching glyph; the grid stays visible behind the scrim so the references land.
+
+**Surface.** Backdrop is `fixed inset-0 z-[55] bg-ink/40` (same scrim tone as the AddToPlan modal). `z-[55]` sits above the floating density / scroll-to-top buttons (`z-40`) and the profile/sort dropdowns (`z-50`) but below the EnvBanner strip (`z-[60]`) so the env warning is never occluded; it can't collide with the Auth slide-in (`z-50`) since the tour is signed-in-only and Auth only opens for anonymous users. The card is `bg-paper border border-paper-shade rounded-lg shadow-xl max-w-sm` with `p-6` and centered text.
+
+**Step anatomy.** A 64px `bg-tan-soft` disc holds a `text-rust` glyph (image-card / filled bookmark / plus-in-circle, one per step), above a `font-display text-xl text-ink` heading and a `font-serif text-ink/70` body line. Three dot indicators sit below — the current step filled `bg-rust`, the rest `bg-paper-shade`.
+
+**Controls.** Footer splits a `text-rose` *Skip* link (left) from the navigation cluster (right): a `bg-paper-shade` *Back* button (omitted on step 1) and a `bg-rust text-paper` primary that reads *Next* until the last step, then *Got it*. Both buttons carry `min-h-[44px]` for kitchen-thumb tap targets. The whole thing is dismissible four ways — Skip, finishing the last step, clicking the backdrop ("skip-on-any-click"), or Escape — all routed through the same one-way `onDismiss` that persists `profiles.onboarding_dismissed_at` (see DATABASE_DECISIONS → "Onboarding dismissal flag"). Focus moves to the primary button on mount and on every step change so keyboard users land inside the dialog (`role="dialog"`, `aria-modal`, labelled by the heading + body).
+
