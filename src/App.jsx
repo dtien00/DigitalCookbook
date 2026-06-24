@@ -503,7 +503,14 @@ function App() {
                     path="/plan"
                     element={
                         session
-                            ? <MealPlan session={session} onBack={() => navigate('/')} onRecipeClick={handleRecipeClick} />
+                            ? <MealPlan
+                                session={session}
+                                onBack={() => navigate('/')}
+                                onRecipeClick={handleRecipeClick}
+                                addToShoppingList={addToShoppingList}
+                                basket={basket}
+                                onViewShoppingList={() => navigate('/shopping-list')}
+                            />
                             : <Navigate to="/" replace />
                     }
                 />

@@ -447,6 +447,14 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Tray hidden on mobile** — at ≤ 640px the tray is not rendered (HTML5 drag doesn't work on touch); the tap-+ picker is the only add path there.
 - [ ] **Mobile (≤ 640px)** — the grid scrolls horizontally (640px inner track); `+`, chip remove `✕`, and picker rows are all tappable.
 
+**Build shopping list from plan (item 2):**
+- [ ] **Button state** — the rust "Build shopping list" button (top-right of the `/plan` header) is disabled on an empty week; plan at least one recipe → it enables.
+- [ ] **Build** — with recipes planned, click it → toast "Added N items from M recipes…" and you land on `/shopping-list` with those ingredients, each attributed to its recipe (provenance chip).
+- [ ] **Repeated planning sums** — plan the same recipe in two cells → Build → its quantities are doubled, under one provenance source (not two).
+- [ ] **Idempotent rebuild** — click Build again → quantities don't double again (re-send replaces that recipe's contribution).
+- [ ] **Fridge subtraction** — add an ingredient a planned recipe uses to the Fridge Basket, then Build → that ingredient is skipped; the toast notes "N skipped (in your fridge)".
+- [ ] **All-in-fridge** — if every ingredient of the planned recipes is in the basket → toast "Everything those recipes need is already in your fridge"; nothing added.
+
 ---
 
 ## Per-step photos checklist

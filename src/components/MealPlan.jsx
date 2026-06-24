@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { toISODate, startOfWeek, addDays } from '../lib/week'
@@ -24,7 +25,26 @@ const SLOTS = [
 ]
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export default function MealPlan({ session, onBack, onRecipeClick }) {
+// Word-boundary tokens, lowercased. Mirrors the home-grid fridge matcher so
+// "build from plan" subtracts fridge items the same way the basket filter
+// reads them ("egg" won't match "eggplant"; "olive oil" matches
+// "extra-virgin olive oil").
+function tokenizeName(s) {
+    return (s || '').toLowerCase().split(/\W+/).filter(Boolean)
+}
+
+// True if some Fridge Basket entry fully matches this ingredient name — every
+// token of a basket entry appears in the ingredient's name tokens.
+function inFridgeBasket(name, basket) {
+    if (!basket || basket.length === 0) return false
+    const nameTokens = new Set(tokenizeName(name))
+    return basket.some(b => {
+        const bt = tokenizeName(b)
+        return bt.length > 0 && bt.every(t => nameTokens.has(t))
+    })
+}
+
+export default function MealPlan({ session, onBack, onRecipeClick, addToShoppingList, basket = [], onViewShoppingList }) {
     const userId = session?.user.id
     const todayISO = toISODate(new Date())
 
@@ -39,7 +59,7 @@ export default function MealPlan({ session, onBack, onRecipeClick }) {
     const weekStartISO = toISODate(days[0])
     const weekEndISO = toISODate(days[6])
 
-    const { getEntry, addEntry, removeEntry, loading } = useMealPlan(userId, weekStartISO, weekEndISO)
+    const { entries, getEntry, addEntry, removeEntry, loading } = useMealPlan(userId, weekStartISO, weekEndISO)
 
     // Bookmarked recipes feed the cell picker. Fetched once on mount (mirrors
     // MyBookmarks' query) so opening the picker is instant.
@@ -97,6 +117,81 @@ export default function MealPlan({ session, onBack, onRecipeClick }) {
         setPicker(null)
     }
 
+    // Item 2 — "Build shopping list from plan". Walks every recipe planned in
+    // the visible week, fetches their ingredients, sums quantities across
+    // repeated plannings (a recipe planned twice contributes 2x), subtracts
+    // anything already in the Fridge Basket, and writes the result into the
+    // Stage N+2a shopping list via addRecipe — one call per distinct recipe so
+    // each lands as its own provenance source (N+2c). Quantities are the
+    // recipe's authored amounts (for its own servings); there's no per-cell
+    // serving target, so no extra scaling factor is applied. addRecipe REPLACES
+    // a recipe's prior contribution, so re-building (or building after a manual
+    // send) is idempotent rather than double-counting.
+    const [building, setBuilding] = useState(false)
+    const handleBuildShoppingList = async () => {
+        const planned = new Map() // recipeId -> { title, count }
+        for (const entry of entries.values()) {
+            const r = entry.recipe
+            if (!r?.id) continue
+            const cur = planned.get(r.id)
+            if (cur) cur.count += 1
+            else planned.set(r.id, { title: r.title, count: 1 })
+        }
+        if (planned.size === 0) {
+            toast('Add some recipes to your plan first')
+            return
+        }
+
+        setBuilding(true)
+        try {
+            const { data, error } = await supabase
+                .from('ingredients')
+                .select('recipe_id, name, quantity, unit, notes')
+                .in('recipe_id', Array.from(planned.keys()))
+            if (error) throw error
+
+            const byRecipe = new Map()
+            for (const ing of data || []) {
+                if (!byRecipe.has(ing.recipe_id)) byRecipe.set(ing.recipe_id, [])
+                byRecipe.get(ing.recipe_id).push(ing)
+            }
+
+            let added = 0
+            let subtracted = 0
+            let recipesContributing = 0
+            for (const [recipeId, meta] of planned) {
+                const items = []
+                for (const ing of byRecipe.get(recipeId) || []) {
+                    if (inFridgeBasket(ing.name, basket)) { subtracted += 1; continue }
+                    const qty = (typeof ing.quantity === 'number' && !Number.isNaN(ing.quantity))
+                        ? parseFloat((ing.quantity * meta.count).toFixed(2))
+                        : null
+                    items.push({ name: ing.name, unit: ing.unit ?? null, quantity: qty, notes: ing.notes ?? null })
+                }
+                if (items.length > 0) {
+                    addToShoppingList(recipeId, meta.title, items)
+                    added += items.length
+                    recipesContributing += 1
+                }
+            }
+
+            if (added === 0) {
+                toast('Everything those recipes need is already in your fridge')
+                return
+            }
+            const itemNoun = added === 1 ? 'item' : 'items'
+            const recipeNoun = recipesContributing === 1 ? 'recipe' : 'recipes'
+            const sub = subtracted > 0 ? ` · ${subtracted} skipped (in your fridge)` : ''
+            toast.success(`Added ${added} ${itemNoun} from ${recipesContributing} ${recipeNoun}${sub}`)
+            onViewShoppingList?.()
+        } catch (e) {
+            console.error('Failed to build shopping list:', e.message)
+            toast.error('Could not build shopping list: ' + e.message)
+        } finally {
+            setBuilding(false)
+        }
+    }
+
     // Begin dragging a chip out of the bookmark tray (a copy into the grid).
     const handleTrayDragStart = (e, recipe) => {
         dragDataRef.current = { recipe }
@@ -152,6 +247,19 @@ export default function MealPlan({ session, onBack, onRecipeClick }) {
                             Meal Plan
                         </h1>
                     </div>
+                    <button
+                        onClick={handleBuildShoppingList}
+                        disabled={building || entries.size === 0}
+                        title={entries.size === 0 ? 'Plan some recipes this week first' : 'Sum this week’s ingredients into your shopping list'}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="9" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                        </svg>
+                        {building ? 'Building…' : 'Build shopping list'}
+                    </button>
                 </header>
 
                 {/* Week navigator */}
