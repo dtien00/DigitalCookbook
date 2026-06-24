@@ -579,6 +579,23 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Open Graph unfurl checklist
+
+> Verifies the Stage M item-1 Vercel Edge Middleware ([`middleware.js`](../middleware.js)) that injects per-recipe Open Graph / Twitter-card meta tags for link unfurls. **Cannot be tested under `vite dev`** — the Edge runtime only runs on Vercel, so verify against a deployed **Preview** URL (push the branch; Vercel auto-builds a Preview). Use `curl -A <crawler-ua>` to impersonate a scraper without a real social client. Needs a **public** recipe id (any `test-public@example.com` recipe) and a **private** id (any private recipe from accounts 1–4) to exercise the RLS-safe fallback.
+
+- [ ] **Crawler gets a recipe card** — `curl -A facebookexternalhit '<preview>/recipe/<public-id>'` returns HTML whose `<title>` and `og:title` are the recipe title, `og:description` the (truncated) description, `og:image` the cover URL, and `twitter:card` is `summary_large_image`
+- [ ] **Image-less recipe → summary card** — a public recipe with no `image_url` omits `og:image` and sets `twitter:card` to `summary`
+- [ ] **Private recipe → generic card (RLS-safe)** — `curl -A facebookexternalhit '<preview>/recipe/<private-id>'` returns the generic "Digital Cookbook" card with NO recipe title/description/image leaked, `og:url` pointing at `/`
+- [ ] **Non-existent id → generic card** — a random UUID that isn't a recipe returns the same generic card
+- [ ] **Malformed id → generic, no crash** — `/recipe/not-a-uuid` returns the generic card
+- [ ] **Edit sub-route → generic** — `curl -A facebookexternalhit '<preview>/recipe/<public-id>/edit'` returns the generic card (edit pages aren't shareable)
+- [ ] **Human gets the SPA** — `curl '<preview>/recipe/<public-id>'` with a normal browser UA (or no `-A`) returns the SPA `index.html` (has `<div id="root">`), NOT the crawler card
+- [ ] **Search engines get the SPA** — `curl -A Googlebot '<preview>/recipe/<public-id>'` returns the SPA, not a stub (Googlebot is intentionally excluded from crawler detection)
+- [ ] **XSS-safe** — a recipe whose title contains `<`, `>`, `"`, `&` renders them escaped in the meta tags (no raw markup injected)
+- [ ] **Real unfurl sanity** — paste a public `/recipe/:id` Preview URL into Slack/Discord (or the [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) / [Twitter Card Validator]) and confirm the card shows title + image
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:

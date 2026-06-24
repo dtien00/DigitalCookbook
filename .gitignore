@@ -57,6 +57,9 @@ Thumbs.db
 .vite/
 vite.config.*.timestamp-*
 
+# Vercel CLI link state (org/project ids + local env pulls) — never commit.
+.vercel/
+
 # Test coverage (if you add testing later)
 coverage/
 
