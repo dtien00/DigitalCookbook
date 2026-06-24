@@ -34,7 +34,38 @@ const PlusIcon = (props) => (
         <line x1="8" y1="12" x2="16" y2="12" />
     </svg>
 )
+// Calendar glyph for the meal planner step.
+const CalendarIcon = (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+    </svg>
+)
+// Fridge + cart glyphs are copied verbatim from the home-grid Fridge and
+// List buttons (App.jsx) so the tour icon maps to the button the user goes
+// looking for afterward.
+const FridgeIcon = (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="5" y="3" width="14" height="18" rx="2" />
+        <line x1="5" y1="11" x2="19" y2="11" />
+        <line x1="9" y1="7" x2="9" y2="8" />
+        <line x1="9" y1="15" x2="9" y2="16" />
+    </svg>
+)
+const CartIcon = (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <circle cx="9" cy="21" r="1" />
+        <circle cx="20" cy="21" r="1" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+)
 
+// Order follows the app's "plan → shop → cook" loop: discover a recipe, save
+// it, plan the week, check what's in the fridge, build the buy-list for what's
+// missing, then contribute your own. Keep it tight — the tour is skippable at
+// any step, but a long first-run flow loses people, so each line is one breath.
 const STEPS = [
     {
         Icon: CardIcon,
@@ -45,6 +76,21 @@ const STEPS = [
         Icon: BookmarkIcon,
         title: 'Save your favorites',
         body: 'Tap the bookmark on any card to keep recipes you want to come back to. Find them anytime under Profile → Bookmarks.',
+    },
+    {
+        Icon: CalendarIcon,
+        title: 'Plan your week',
+        body: 'Open Meal Plan from your profile menu to drop recipes into a Mon–Sun grid for breakfast, lunch, and dinner.',
+    },
+    {
+        Icon: FridgeIcon,
+        title: 'Track your fridge',
+        body: 'Tap Fridge to jot down what you already have. The grid narrows to recipes you can make right now.',
+    },
+    {
+        Icon: CartIcon,
+        title: 'Build a shopping list',
+        body: 'Send any recipe’s ingredients to your List — or build one straight from your meal plan, minus what’s already in your fridge.',
     },
     {
         Icon: PlusIcon,

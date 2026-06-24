@@ -600,13 +600,14 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ## Onboarding tour checklist
 
-> Verifies Stage M item 2 — the 3-step first-run overlay ([`OnboardingTour.jsx`](../src/components/OnboardingTour.jsx)) shown once to brand-new signed-in users on the home grid. **Requires migration 022 applied** (`supabase_migration_022_onboarding.sql` — adds `profiles.onboarding_dismissed_at`); until it's applied the hook fails its fetch gracefully and the tour simply never shows.
+> Verifies Stage M item 2 — the 6-step first-run overlay ([`OnboardingTour.jsx`](../src/components/OnboardingTour.jsx)) shown once to brand-new signed-in users on the home grid. Steps: tap a recipe → save favorites → plan your week → track your fridge → build a shopping list → add your own. **Requires migration 022 applied** (`supabase_migration_022_onboarding.sql` — adds `profiles.onboarding_dismissed_at`); until it's applied the hook fails its fetch gracefully and the tour simply never shows.
 >
 > **The five seed accounts are pre-dismissed** (the seed script sets `onboarding_dismissed_at`), so they will NOT show the tour — that's intentional, it keeps test logins tour-free. Exercise the tour one of two ways: **(a)** sign up a brand-new account (its column starts `NULL`), or **(b)** on any existing account, run `UPDATE profiles SET onboarding_dismissed_at = NULL WHERE id = '<user-id>';` in the SQL editor and reload.
 
-- [ ] **Shows for a fresh account** — sign up a new account; on first landing on the home grid (`/`) the centered 3-step overlay appears (step 1 "Tap any recipe")
-- [ ] **Steps advance** — *Next* walks step 1 → 2 → 3; the dot indicator and glyph/heading update each step; *Back* appears from step 2 and walks backward
-- [ ] **Final step finishes** — on step 3 the primary button reads *Got it*; clicking it closes the tour
+- [ ] **Shows for a fresh account** — sign up a new account; on first landing on the home grid (`/`) the centered 6-step overlay appears (step 1 "Tap any recipe")
+- [ ] **Steps advance** — *Next* walks all six steps (recipe → favorites → meal plan → fridge → shopping list → add your own); the dot row, glyph, and heading update each step; *Back* appears from step 2 and walks backward
+- [ ] **Glyphs match the real controls** — the fridge step's icon matches the home-grid Fridge button and the shopping-list step's icon matches the List button
+- [ ] **Final step finishes** — on the last step the primary button reads *Got it*; clicking it closes the tour
 - [ ] **Dismiss paths** — Skip (any step), backdrop click, and Escape each close the tour
 - [ ] **Stays dismissed** — after any dismissal, reload the page and re-visit `/`: the tour does NOT reappear (the dismissal persisted to `onboarding_dismissed_at`)
 - [ ] **Survives re-login** — log out and back in: still no tour (dismissal is server-side, not per-session)
