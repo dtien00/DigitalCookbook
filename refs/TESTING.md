@@ -85,6 +85,8 @@ The script's 15 recipe templates each carry full **ingredients** (8–14 each, w
 
 This enrichment was added so the Stage 10 fridge-basket filter is exercisable end-to-end against seeded data — without ingredients, the basket would match nothing regardless of what you typed. The earlier seed only populated titles + descriptions + tags.
 
+The profile update also sets `onboarding_dismissed_at` (migration 022) so the five seed accounts skip the first-run onboarding tour — they're not the "new user" the tour greets, and a pre-dismissed flag keeps test logins tour-free. Verify the tour itself with a genuine fresh signup (see the Onboarding tour checklist). *Note: re-seeding requires migration 022 applied, or the profile update errors on the unknown column.*
+
 ### When to re-seed
 
 - After a schema change that adds new recipe columns — to populate them with sensible defaults
@@ -593,6 +595,25 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Search engines get the SPA** — `curl -A Googlebot '<preview>/recipe/<public-id>'` returns the SPA, not a stub (Googlebot is intentionally excluded from crawler detection)
 - [ ] **XSS-safe** — a recipe whose title contains `<`, `>`, `"`, `&` renders them escaped in the meta tags (no raw markup injected)
 - [ ] **Real unfurl sanity** — paste a public `/recipe/:id` Preview URL into Slack/Discord (or the [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) / [Twitter Card Validator]) and confirm the card shows title + image
+
+---
+
+## Onboarding tour checklist
+
+> Verifies Stage M item 2 — the 6-step first-run overlay ([`OnboardingTour.jsx`](../src/components/OnboardingTour.jsx)) shown once to brand-new signed-in users on the home grid. Steps: tap a recipe → save favorites → plan your week → track your fridge → build a shopping list → add your own. **Requires migration 022 applied** (`supabase_migration_022_onboarding.sql` — adds `profiles.onboarding_dismissed_at`); until it's applied the hook fails its fetch gracefully and the tour simply never shows.
+>
+> **The five seed accounts are pre-dismissed** (the seed script sets `onboarding_dismissed_at`), so they will NOT show the tour — that's intentional, it keeps test logins tour-free. Exercise the tour one of two ways: **(a)** sign up a brand-new account (its column starts `NULL`), or **(b)** on any existing account, run `UPDATE profiles SET onboarding_dismissed_at = NULL WHERE id = '<user-id>';` in the SQL editor and reload.
+
+- [ ] **Shows for a fresh account** — sign up a new account; on first landing on the home grid (`/`) the centered 6-step overlay appears (step 1 "Tap any recipe")
+- [ ] **Steps advance** — *Next* walks all six steps (recipe → favorites → meal plan → fridge → shopping list → add your own); the dot row, glyph, and heading update each step; *Back* appears from step 2 and walks backward
+- [ ] **Glyphs match the real controls** — the fridge step's icon matches the home-grid Fridge button and the shopping-list step's icon matches the List button
+- [ ] **Final step finishes** — on the last step the primary button reads *Got it*; clicking it closes the tour
+- [ ] **Dismiss paths** — Skip (any step), backdrop click, and Escape each close the tour
+- [ ] **Stays dismissed** — after any dismissal, reload the page and re-visit `/`: the tour does NOT reappear (the dismissal persisted to `onboarding_dismissed_at`)
+- [ ] **Survives re-login** — log out and back in: still no tour (dismissal is server-side, not per-session)
+- [ ] **Home route only** — the tour only mounts on `/`; deep-linking straight to `/recipe/:id` or `/profile` on a fresh account does not pop it mid-page
+- [ ] **Anonymous never sees it** — browsing signed-out shows no tour on the home grid
+- [ ] **Mobile width** — at phone width (375px) the card is centered, readable, and Skip / Back / Next stay tappable
 
 ---
 
