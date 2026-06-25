@@ -446,5 +446,5 @@ Sequence: ships AFTER Stage N+2a (shopping list must exist for "build from plan"
 - **Fridge and List (Scroll Independent)** - In consideration of minimalist/efficient spacing of UI, have List vertically below the Fridge button, and also make it still available to select when scrolled down. This prevents needless/wasteful scrolling up to adjust the fridge/shopping list; also move this to the left side underneath the cell format toggle to prevent accidental touching when scrolling.
 - **UI Button Image Revamp** - Used to keep track of potential buttons to give a visual rehaul to make it more user friendly.
     - \+ New Recipe (Make into a notepad visual)
-    - Private (Change to a crossed eye visual; like hidden password toggle)
+    - --Completed-- Private (Change to a crossed eye visual; like hidden password toggle)
     - Profile bar revamp; it's a little rudimentary. Try to make it more accessible/modern access for users. Similar to an app.

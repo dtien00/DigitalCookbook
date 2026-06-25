@@ -73,8 +73,11 @@ export default function RecipeCard({
                     aria-label="Private recipe"
                     className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 bg-ink/70 backdrop-blur-sm text-paper text-[10px] font-medium rounded-full px-2 py-0.5"
                 >
-                    <svg aria-hidden="true" viewBox="0 0 16 16" className="w-3 h-3" fill="currentColor">
-                        <path d="M5 6V4.5a3 3 0 0 1 6 0V6h.5A1.5 1.5 0 0 1 13 7.5v5A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-5A1.5 1.5 0 0 1 4.5 6H5Zm1.5 0h3V4.5a1.5 1.5 0 0 0-3 0V6Z" />
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+                        <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+                        <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+                        <path d="m2 2 20 20" />
                     </svg>
                     Private
                 </span>
