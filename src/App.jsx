@@ -939,6 +939,65 @@ function HomeView({
             {densityIcon}
         </button>
 
+        {/* Fridge button. Mirrors density toggle on the left edge.
+            Same scroll-trigger so all appear and disappear together.
+            */}
+        <button
+            ref={basketTriggerRef}
+            type="button"
+            onClick={onOpenBasket}
+            aria-label={basket.length === 0
+                ? 'Open fridge basket'
+                : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
+            aria-haspopup="dialog"
+            aria-hidden={!scrolled}
+            className={`fixed top-18 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="3" width="14" height="18" rx="2" />
+                <line x1="5" y1="11" x2="19" y2="11" />
+                <line x1="9" y1="7" x2="9" y2="8" />
+                <line x1="9" y1="15" x2="9" y2="16" />
+            </svg>
+            {/* <span>Fridge</span> */}
+            {basket.length > 0 && (
+                <span
+                    aria-hidden="true"
+                    className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                >
+                    {basket.length}
+                </span>
+            )}
+        </button>
+
+        {/* Shopping list button. Mirrors density toggle on the left edge.
+            Same scroll-trigger so all appear and disappear together.
+            */}
+        <button
+            type="button"
+            onClick={() => navigate('/shopping-list')}
+            aria-label={shoppingCount > 0
+                ? `Open shopping list (${shoppingCount} item${shoppingCount === 1 ? '' : 's'})`
+                : 'Open shopping list'}
+            aria-hidden={!scrolled}
+            className={`fixed top-32 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+            </svg>
+            
+            {shoppingCount > 0 && (
+                <span
+                    aria-hidden="true"
+                    className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                >
+                    {shoppingCount}
+                </span>
+            )}
+        </button>
+
         {/* Scroll-to-top button. Mirrors the density toggle on the
             right edge. Same scroll-trigger as the toggle so the two
             appear and disappear together. */}
