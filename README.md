@@ -1,5 +1,7 @@
 # Digital Cookbook
 
+[![CI](https://github.com/dtien00/DigitalCookbook/actions/workflows/ci.yml/badge.svg)](https://github.com/dtien00/DigitalCookbook/actions/workflows/ci.yml)
+
 A Pinterest-style recipe hub for casually posting, browsing, bookmarking, liking, and commenting on recipes. Built for personal use first, with a social layer on top.
 
 ## Status
@@ -57,10 +59,43 @@ You'll also want a Supabase Storage bucket named `recipe-images` (public read).
 ### Run
 
 ```bash
-npm run dev      # Start the dev server (default: http://localhost:5173)
-npm run build    # Production build
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
+npm run dev        # Start the dev server (default: http://localhost:5173)
+npm run build      # Production build
+npm run preview    # Preview production build
+npm run lint       # Run ESLint
+npm test           # Run the Vitest unit suite once
+npm run test:watch # Vitest in watch mode
+```
+
+## Testing & CI
+
+Unit tests run on [Vitest](https://vitest.dev/). The current suite covers the
+shopping-list provenance/merge engine ([src/lib/shoppingListCore.js](./src/lib/shoppingListCore.js)) —
+a pure, framework-free module, so the tests need no DOM or renderer.
+
+```bash
+npm test            # one-shot
+npm run test:watch  # watch mode
+```
+
+Every push to `main` and every pull request runs [GitHub Actions](./.github/workflows/ci.yml):
+**lint** (ESLint), **unit tests** (Vitest), a **production build**, and a **Docker image build**.
+
+## Docker
+
+The app ships as a multi-stage image — Node builds the Vite bundle, then nginx
+serves the static output with an SPA fallback so client-side routes (`/recipe/:id`, …) resolve:
+
+```bash
+# Build. Supabase's URL + anon key are public-by-design (RLS is the guard), so
+# they're passed as build args; omit them to get a build that just can't connect.
+docker build \
+  --build-arg VITE_SUPABASE_URL="https://YOUR-PROJECT.supabase.co" \
+  --build-arg VITE_SUPABASE_ANON_KEY="your-anon-key" \
+  -t digital-cookbook .
+
+# Serve on http://localhost:8080
+docker run --rm -p 8080:80 digital-cookbook
 ```
 
 ## File Structure
