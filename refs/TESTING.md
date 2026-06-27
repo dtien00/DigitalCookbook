@@ -595,6 +595,24 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## RecipeDetail reorder checklist
+
+> Verifies the `ui-addons` author-only drag-to-reorder on [RecipeDetail.jsx](../src/components/RecipeDetail.jsx). Reorder is **local until "Save order"**, which writes `order_index` (ingredients) / `step_number` (steps) via the existing *"Authors can manage …"* RLS — no migration. Reorder uses Pointer Events so it works with mouse, touch, and pen. **Must be tested signed in as the recipe's author** (drag handles are gated on `userId === recipe.author_id`); use a recipe owned by the logged-in test account.
+
+- [ ] **Handles author-only** — viewing your OWN recipe, each ingredient and step row shows a six-dot grip on the left; viewing someone else's recipe (or logged out), no grips appear
+- [ ] **Drag an ingredient** — press a grip and drag down/up; the list reflows live and the row drops where released
+- [ ] **Drag a step** — same for the steps list; the visible step numbers (the `<ol>` markers) renumber to match the new order as you drag
+- [ ] **Save bar appears** — after any reorder a banner reads "You've changed the order of this recipe." with **Discard** and **Save order**
+- [ ] **Save persists** — tap "Save order" → success toast "Order saved"; reload the page → the new order is still there
+- [ ] **Discard reverts** — reorder, then tap "Discard" → the list returns to the last-saved order and the banner disappears
+- [ ] **Switching recipes resets** — reorder without saving, navigate to another recipe and back → the unsaved reorder is gone (no stale dirty banner)
+- [ ] **Book + Sheet layouts** — reorder works in both the single-sheet and the book-spread layout toggle
+- [ ] **No accidental check** — dragging a row does NOT toggle its ingredient/step checkbox when you release over it
+- [ ] **Touch on phone** — on a real phone, dragging a grip reorders without the page scrolling or the swipe-back gesture firing
+- [ ] **Checkboxes still work** — tapping a checkbox (not the grip) still strikes through the item as before
+
+---
+
 ## CreateRecipe ingredient entry checklist
 
 > Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/removal/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.

@@ -661,6 +661,16 @@ The Cooking Mode Timer's Phase 2 lets a recipe author attach an optional countdo
 
 **Relationship to the deferred `recipes.cook_time`.** Stage 13's carry-forward `cook_time` is a recipe-level *total* (integer minutes, for sorting); `duration_seconds` is per-step. Complementary, not a dependency — a future `cook_time` could be derived by summing a recipe's step durations, but neither blocks the other.
 
+## RecipeDetail author reorder write path (no migration, `ui-addons`)
+
+The `ui-addons` author-only drag-reorder on RecipeDetail persists the new order by **updating the existing order columns in place**, row-by-row: `order_index` on `ingredients` and `step_number` on `steps`. No schema change, no migration.
+
+**Why per-row UPDATE here, vs CreateRecipe's delete-then-reinsert.** The editor rebuilds a recipe's whole ingredient/step set on save (it has to — rows can be added, removed, edited, and re-photo'd), so a wholesale delete + reinsert is simplest there. RecipeDetail reorder only permutes existing rows, so plain `UPDATE … WHERE id = …` per row is the minimal, lowest-risk write — it keeps every row's `id` stable (so step photos in the `recipe-steps` bucket, keyed by `step.id`, stay attached) and touches nothing but the order scalar.
+
+**Safe without a transaction.** Neither `ingredients.order_index` nor `steps.step_number` has a UNIQUE (or `(recipe_id, …)` unique) constraint — see migration 001 — so writing sequential positions one statement at a time can never transiently collide. A reorder that swaps two steps doesn't need the two-phase "park at a temp value" dance a unique index would force.
+
+**No RLS changes.** The original *"Authors can manage ingredients/steps"* policies (migration 001, `FOR ALL USING (… auth.uid() = author_id)`) already cover UPDATE, so only the recipe's author can write the new order. Non-authors never see the drag handles client-side, and the policy is the server-side backstop.
+
 ---
 
 ## Future considerations (not yet decided)
