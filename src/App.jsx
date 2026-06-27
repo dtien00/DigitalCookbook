@@ -498,6 +498,7 @@ function App() {
         mfa,
         submitReport,
         onOpenTimerSheet: () => setTimerSheetOpen(true),
+        onStartTimer: startTimer,
     }
 
     const handleCreateComplete = () => {
@@ -1460,7 +1461,7 @@ function RecipeDetailRoute({
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
     addToShoppingList,
     mfa, submitReport,
-    onOpenTimerSheet,
+    onOpenTimerSheet, onStartTimer,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1560,6 +1561,7 @@ function RecipeDetailRoute({
             mfa={mfa}
             submitReport={submitReport}
             onOpenTimerSheet={onOpenTimerSheet}
+            onStartTimer={onStartTimer}
         />
     )
 }

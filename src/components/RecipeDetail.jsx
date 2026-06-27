@@ -17,6 +17,7 @@ import CookingMode from './CookingMode'
 import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { formatMs } from '../lib/parseDuration'
 
 export default function RecipeDetail({
     recipe,
@@ -43,6 +44,7 @@ export default function RecipeDetail({
     mfa,
     submitReport,
     onOpenTimerSheet,
+    onStartTimer,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -428,6 +430,23 @@ export default function RecipeDetail({
                                         />
                                     </button>
                                 )}
+                                {/* Stage 19 Phase 2 — one-tap preset timer for a
+                                    step with an authored duration; usable while
+                                    reading the recipe without entering cooking mode. */}
+                                {step.duration_seconds && onStartTimer && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onStartTimer({ durationMs: step.duration_seconds * 1000, label: `Step ${step.step_number}` })}
+                                        className="no-print mt-2 ml-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-paper-shade text-ink hover:bg-tan/40 transition-colors text-sm font-medium"
+                                    >
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <circle cx="12" cy="13" r="8" />
+                                            <path d="M12 9v4l2 2" />
+                                            <path d="M9 2h6" />
+                                        </svg>
+                                        Start {formatMs(step.duration_seconds * 1000)} timer
+                                    </button>
+                                )}
                             </li>
                         )
                     })}
@@ -740,6 +759,7 @@ export default function RecipeDetail({
                     setCheckedSteps={setCheckedSteps}
                     onExit={handleExitCooking}
                     onOpenTimerSheet={onOpenTimerSheet}
+                    onStartTimer={onStartTimer}
                 />
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />

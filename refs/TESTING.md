@@ -558,7 +558,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ## Cooking-mode timer checklist
 
-> Verifies Stage 19 Phase 1 — the ad-hoc kitchen timer. Client-only, no migration; state is localStorage (`cookbook.timers`). Audio/vibration are device-dependent, so the checklist notes where graceful fallback is expected. Phase 2 (per-step preset durations) is not covered here.
+> Verifies Stage 19 — the cooking-mode kitchen timer. Phase 1 (ad-hoc timer) is client-only, no migration; state is localStorage (`cookbook.timers`). Phase 2 (per-step preset durations) needs **migration 023** (`steps.duration_seconds`) applied first — see the Phase 2 sub-list. Audio/vibration are device-dependent, so the checklist notes where graceful fallback is expected.
 
 - [ ] **Entry points** — a "Timer" button shows next to "Start cooking" on RecipeDetail; a clock icon shows in the CookingMode header (beside the ingredients `≡`); both open the set sheet
 - [ ] **Set sheet** — shows preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) and a custom field; the input is auto-focused on open
@@ -579,6 +579,18 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Escape isolation** — open the set sheet from inside cooking mode, press Escape; the sheet closes but cooking mode stays open (does NOT exit)
 - [ ] **No-audio fallback** — on a browser without WebAudio/vibration the timer still counts and shows the visual expiry state; no console error
 - [ ] **Anonymous works** — logged out, the timer is fully usable (no auth gate on a client-side aid)
+
+**Phase 2 — per-step preset durations (requires migration 023 applied):**
+
+- [ ] **Pre-migration read safety** — BEFORE applying 023, existing recipes still open and cook normally with no preset chips and no console error (the missing column reads as `undefined`)
+- [ ] **⚠ Pre-migration write hazard** — BEFORE applying 023, saving any recipe (new or edit) fails with a column error; this is expected — apply the migration first
+- [ ] **Author a duration** — in CreateRecipe, each step row has an optional "Timer" field; enter `10` or `5:30`; save succeeds
+- [ ] **Round-trips on edit** — re-open that recipe in edit mode; the Timer field shows the saved value as `mm:ss` (e.g. `10:00`)
+- [ ] **Blank stays blank** — a step with no Timer value saves `null` and shows no chip when viewing
+- [ ] **Chip on RecipeDetail** — a step with a duration shows a "Start N:00 timer" pill below the step text; tap → a floating timer starts labelled "Step N"
+- [ ] **Chip in CookingMode** — same step shows the "Start N:00 timer" chip beside the *Mark step done* pill (both with and without a step photo); tap → labelled timer starts and floats over the cooking surface
+- [ ] **Preset + ad-hoc coexist** — a step with a duration shows its chip; the header clock still opens the ad-hoc set sheet for any other duration
+- [ ] **Sub-minute** — author `0:30`; the chip reads "Start 0:30 timer" and starts a 30-second timer
 
 ---
 
