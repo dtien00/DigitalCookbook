@@ -561,9 +561,10 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 > Verifies Stage 19 — the cooking-mode kitchen timer. Phase 1 (ad-hoc timer) is client-only, no migration; state is localStorage (`cookbook.timers`). Phase 2 (per-step preset durations) needs **migration 023** (`steps.duration_seconds`) applied first — see the Phase 2 sub-list. Audio/vibration are device-dependent, so the checklist notes where graceful fallback is expected.
 
 - [ ] **Entry points** — a "Timer" button shows next to "Start cooking" on RecipeDetail; a clock icon shows in the CookingMode header (beside the ingredients `≡`); both open the set sheet
-- [ ] **Set sheet** — shows preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) and a custom field; the input is auto-focused on open
+- [ ] **Set sheet** — opens to the preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) plus an **"Add a custom time"** button; the custom input is NOT shown yet (ui-addons)
+- [ ] **Reveal custom field** — tap "Add a custom time" → the button is replaced by the labelled custom input + Start, and the input takes focus; re-opening the sheet (or closing and reopening) hides it again
 - [ ] **Preset start** — tap a preset → sheet closes, a floating pill appears bottom-left counting down from that duration
-- [ ] **Custom parse** — type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
+- [ ] **Custom parse** — after revealing the field, type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
 - [ ] **Live countdown** — the pill ticks down smoothly (~4×/sec); only the widget repaints, not the whole page
 - [ ] **Pause / Resume** — pause freezes the remaining time and shows a rust play disc; resume continues from the frozen value
 - [ ] **Reset** — restores the full original duration (running stays running from full; paused stays paused at full)
