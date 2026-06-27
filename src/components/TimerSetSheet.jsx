@@ -16,6 +16,10 @@ const PRESET_MINUTES = [1, 3, 5, 10, 15, 30]
 export default function TimerSetSheet({ open, onClose, onStart }) {
     const [custom, setCustom] = useState('')
     const [error, setError] = useState('')
+    // The custom-time entry field stays hidden until the author taps "Add a
+    // custom time", so the sheet opens to just the quick presets — the common
+    // case — and only reveals the input on demand.
+    const [showCustom, setShowCustom] = useState(false)
     const inputRef = useRef(null)
     const restoreFocusRef = useRef(null)
 
@@ -26,9 +30,16 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
         restoreFocusRef.current = document.activeElement
         setCustom('')
         setError('')
+        setShowCustom(false)
+    }, [open])
+
+    // Focus the custom field only once it's revealed — focusing on open would
+    // pull focus to an input the user hasn't asked for yet.
+    useEffect(() => {
+        if (!open || !showCustom) return
         const raf = requestAnimationFrame(() => inputRef.current?.focus())
         return () => cancelAnimationFrame(raf)
-    }, [open])
+    }, [open, showCustom])
 
     useEffect(() => {
         if (!open) return
@@ -115,36 +126,50 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
                         ))}
                     </div>
 
-                    <form onSubmit={startCustom} className="mt-5">
-                        <label htmlFor="timer-custom" className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2 block">
-                            Custom
-                        </label>
-                        <div className="flex gap-2">
-                            <input
-                                id="timer-custom"
-                                ref={inputRef}
-                                type="text"
-                                inputMode="numeric"
-                                value={custom}
-                                onChange={(e) => { setCustom(e.target.value); if (error) setError('') }}
-                                placeholder="e.g. 10  or  5:30"
-                                aria-invalid={!!error}
-                                aria-describedby={error ? 'timer-custom-error' : undefined}
-                                className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-lg bg-[#fbf6f1] border border-paper-shade text-ink font-serif text-base focus:outline-none focus:ring-2 focus:ring-rust/50"
-                            />
-                            <button
-                                type="submit"
-                                className="px-5 py-3 min-h-[44px] rounded-lg bg-rust hover:bg-rust-dark text-paper font-semibold transition-colors shrink-0"
-                            >
-                                Start
-                            </button>
-                        </div>
-                        {error && (
-                            <p id="timer-custom-error" className="mt-2 font-serif italic text-sm text-rose-dark" role="alert">
-                                {error}
-                            </p>
-                        )}
-                    </form>
+                    {showCustom ? (
+                        <form onSubmit={startCustom} className="mt-5">
+                            <label htmlFor="timer-custom" className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2 block">
+                                Custom
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    id="timer-custom"
+                                    ref={inputRef}
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={custom}
+                                    onChange={(e) => { setCustom(e.target.value); if (error) setError('') }}
+                                    placeholder="e.g. 10  or  5:30"
+                                    aria-invalid={!!error}
+                                    aria-describedby={error ? 'timer-custom-error' : undefined}
+                                    className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-lg bg-[#fbf6f1] border border-paper-shade text-ink font-serif text-base focus:outline-none focus:ring-2 focus:ring-rust/50"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-5 py-3 min-h-[44px] rounded-lg bg-rust hover:bg-rust-dark text-paper font-semibold transition-colors shrink-0"
+                                >
+                                    Start
+                                </button>
+                            </div>
+                            {error && (
+                                <p id="timer-custom-error" className="mt-2 font-serif italic text-sm text-rose-dark" role="alert">
+                                    {error}
+                                </p>
+                            )}
+                        </form>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setShowCustom(true)}
+                            className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-lg border border-dashed border-paper-shade text-ink/70 hover:text-ink hover:bg-paper-shade/60 font-medium transition-colors"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Add a custom time
+                        </button>
+                    )}
                 </div>
             </div>
         </div>,

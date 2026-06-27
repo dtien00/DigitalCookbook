@@ -561,9 +561,10 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 > Verifies Stage 19 — the cooking-mode kitchen timer. Phase 1 (ad-hoc timer) is client-only, no migration; state is localStorage (`cookbook.timers`). Phase 2 (per-step preset durations) needs **migration 023** (`steps.duration_seconds`) applied first — see the Phase 2 sub-list. Audio/vibration are device-dependent, so the checklist notes where graceful fallback is expected.
 
 - [ ] **Entry points** — a "Timer" button shows next to "Start cooking" on RecipeDetail; a clock icon shows in the CookingMode header (beside the ingredients `≡`); both open the set sheet
-- [ ] **Set sheet** — shows preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) and a custom field; the input is auto-focused on open
+- [ ] **Set sheet** — opens to the preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) plus an **"Add a custom time"** button; the custom input is NOT shown yet (ui-addons)
+- [ ] **Reveal custom field** — tap "Add a custom time" → the button is replaced by the labelled custom input + Start, and the input takes focus; re-opening the sheet (or closing and reopening) hides it again
 - [ ] **Preset start** — tap a preset → sheet closes, a floating pill appears bottom-left counting down from that duration
-- [ ] **Custom parse** — type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
+- [ ] **Custom parse** — after revealing the field, type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
 - [ ] **Live countdown** — the pill ticks down smoothly (~4×/sec); only the widget repaints, not the whole page
 - [ ] **Pause / Resume** — pause freezes the remaining time and shows a rust play disc; resume continues from the frozen value
 - [ ] **Reset** — restores the full original duration (running stays running from full; paused stays paused at full)
@@ -591,6 +592,25 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Chip in CookingMode** — same step shows the "Start N:00 timer" chip beside the *Mark step done* pill (both with and without a step photo); tap → labelled timer starts and floats over the cooking surface
 - [ ] **Preset + ad-hoc coexist** — a step with a duration shows its chip; the header clock still opens the ad-hoc set sheet for any other duration
 - [ ] **Sub-minute** — author `0:30`; the chip reads "Start 0:30 timer" and starts a 30-second timer
+
+---
+
+## RecipeDetail reorder checklist
+
+> Verifies the `ui-addons` author-only drag-to-reorder on [RecipeDetail.jsx](../src/components/RecipeDetail.jsx). Reorder is **local until "Save order"**, which writes `order_index` (ingredients) / `step_number` (steps) via the existing *"Authors can manage …"* RLS — no migration. Reorder uses Pointer Events so it works with mouse, touch, and pen. **Must be tested signed in as the recipe's author** (drag handles are gated on `userId === recipe.author_id`); use a recipe owned by the logged-in test account.
+
+- [ ] **Handles author-only** — viewing your OWN recipe, each ingredient and step row shows a six-dot grip on the left; viewing someone else's recipe (or logged out), no grips appear
+- [ ] **Drag an ingredient** — press a grip and drag down/up; the list reflows live and the row drops where released
+- [ ] **Drag a step** — same for the steps list; the visible step numbers (the `<ol>` markers) renumber to match the new order as you drag
+- [ ] **Save bar appears** — after any reorder a banner reads "You've changed the order of this recipe." with **Discard** and **Save order**
+- [ ] **Save persists** — tap "Save order" → success toast "Order saved"; reload the page → the new order is still there
+- [ ] **Discard reverts** — reorder, then tap "Discard" → the list returns to the last-saved order and the banner disappears
+- [ ] **Switching recipes resets** — reorder without saving, navigate to another recipe and back → the unsaved reorder is gone (no stale dirty banner)
+- [ ] **Book + Sheet layouts** — reorder works in both the single-sheet and the book-spread layout toggle
+- [ ] **No accidental check** — dragging a row does NOT toggle its ingredient/step checkbox when you release over it
+- [ ] **Touch on phone** — on a real phone, dragging a grip reorders without the swipe-back gesture firing; the page doesn't scroll from the gesture itself except at the edges (next item)
+- [ ] **Edge auto-scroll** — drag a grip to the top or bottom ~70px of the screen and hold; the page scrolls in that direction (slower near the band's edge, faster at the very edge) so you can drop onto a row that was off-screen, and the item keeps reordering as rows pass under your finger. Releasing or moving back out of the band stops the scroll
+- [ ] **Checkboxes still work** — tapping a checkbox (not the grip) still strikes through the item as before
 
 ---
 

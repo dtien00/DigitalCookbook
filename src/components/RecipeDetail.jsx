@@ -16,6 +16,8 @@ import MfaChallengeGate from './MfaChallengeGate'
 import CookingMode from './CookingMode'
 import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
+import { useDragSort } from '../hooks/useDragSort'
+import { arrayMove } from '../lib/dragSortCore'
 import { scaleQuantity } from '../lib/scaleQuantity'
 import { formatMs } from '../lib/parseDuration'
 
@@ -49,6 +51,12 @@ export default function RecipeDetail({
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
     const [loading, setLoading] = useState(true)
+    // Author-only drag reorder (ui-addons). Moves stay local — recorded by these
+    // dirty flags — until the author taps "Save order", which writes the new
+    // positions back to Supabase. Reset whenever a different recipe loads.
+    const [ingredientsDirty, setIngredientsDirty] = useState(false)
+    const [stepsDirty, setStepsDirty] = useState(false)
+    const [savingOrder, setSavingOrder] = useState(false)
     const [targetServings, setTargetServings] = useState(recipe.servings || 1)
     const [checkedIngredients, setCheckedIngredients] = useState(() => new Set())
     const [checkedSteps, setCheckedSteps] = useState(() => new Set())
@@ -127,6 +135,8 @@ export default function RecipeDetail({
         fetchRecipeDetails()
         setCheckedIngredients(new Set())
         setCheckedSteps(new Set())
+        setIngredientsDirty(false)
+        setStepsDirty(false)
         // Re-run only when the recipe changes; `fetchRecipeDetails` is recreated
         // each render and is not a meaningful dependency.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -332,6 +342,59 @@ export default function RecipeDetail({
         }
     }
 
+    // Live, local reorder — the dragged row follows the pointer; persistence is
+    // deferred to handleSaveOrder. Steps carry a visible position (the <ol>
+    // marker and the "Step N" timer label), so renumber step_number to match so
+    // those stay correct before the save round-trips.
+    const moveIngredient = (from, to) => {
+        setIngredients(prev => arrayMove(prev, from, to))
+        setIngredientsDirty(true)
+    }
+    const moveStep = (from, to) => {
+        setSteps(prev => arrayMove(prev, from, to).map((s, i) => ({ ...s, step_number: i + 1 })))
+        setStepsDirty(true)
+    }
+
+    const ingredientSort = useDragSort({ enabled: isAuthor, onMove: moveIngredient })
+    const stepSort = useDragSort({ enabled: isAuthor, onMove: moveStep })
+
+    // Persist the current order. Plain INTEGER columns with no UNIQUE constraint
+    // (see migration 001) and the "Authors can manage …" RLS policies mean we can
+    // overwrite positions row-by-row with no transient-collision risk.
+    const handleSaveOrder = async () => {
+        setSavingOrder(true)
+        try {
+            const writes = []
+            if (ingredientsDirty) {
+                ingredients.forEach((ing, i) => {
+                    writes.push(supabase.from('ingredients').update({ order_index: i }).eq('id', ing.id))
+                })
+            }
+            if (stepsDirty) {
+                steps.forEach((step, i) => {
+                    writes.push(supabase.from('steps').update({ step_number: i + 1 }).eq('id', step.id))
+                })
+            }
+            const results = await Promise.all(writes)
+            const failed = results.find(r => r.error)
+            if (failed) throw failed.error
+            setIngredientsDirty(false)
+            setStepsDirty(false)
+            toast.success('Order saved')
+        } catch (error) {
+            toast.error('Could not save order: ' + error.message)
+        } finally {
+            setSavingOrder(false)
+        }
+    }
+
+    // Throw away local reordering by re-reading the saved order from the DB.
+    const handleDiscardOrder = () => {
+        fetchRecipeDetails()
+        setIngredientsDirty(false)
+        setStepsDirty(false)
+    }
+
     const ingredientsSection = (
         <section>
             <h3>Ingredients</h3>
@@ -342,27 +405,41 @@ export default function RecipeDetail({
                     ))}
                 </ul>
             ) : (
-                <ul className="ingredient-list list-none pl-0">
-                    {ingredients.map(ing => {
+                <ul ref={ingredientSort.listRef} className="ingredient-list list-none pl-0">
+                    {ingredients.map((ing, idx) => {
                         const checked = checkedIngredients.has(ing.id)
+                        const dragging = ingredientSort.dragIndex === idx
                         return (
-                            <li key={ing.id}>
-                                <label className="flex items-start gap-3 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
-                                        className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
-                                    />
-                                    <span className={checked ? 'line-through text-ink/50' : ''}>
-                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
-                                        {ing.notes && (
-                                            <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
-                                                {ing.notes}
-                                            </span>
-                                        )}
-                                    </span>
-                                </label>
+                            <li key={ing.id} data-sort-row className={dragging ? 'opacity-60' : ''}>
+                                <div className="flex items-start gap-2">
+                                    {isAuthor && (
+                                        <button
+                                            type="button"
+                                            {...ingredientSort.handleProps(idx)}
+                                            aria-label={`Drag to reorder ${ing.name}`}
+                                            title="Drag to reorder"
+                                            className="no-print mt-0.5 shrink-0 cursor-grab active:cursor-grabbing text-ink/35 hover:text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust rounded"
+                                        >
+                                            <DragHandleIcon />
+                                        </button>
+                                    )}
+                                    <label className="flex-1 flex items-start gap-3 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
+                                            className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
+                                        />
+                                        <span className={checked ? 'line-through text-ink/50' : ''}>
+                                            {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                            {ing.notes && (
+                                                <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
+                                                    {ing.notes}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </label>
+                                </div>
                             </li>
                         )
                     })}
@@ -401,55 +478,71 @@ export default function RecipeDetail({
                     ))}
                 </ol>
             ) : (
-                <ol className="step-list">
-                    {steps.map(step => {
+                <ol ref={stepSort.listRef} className="step-list">
+                    {steps.map((step, idx) => {
                         const checked = checkedSteps.has(step.id)
                         const photoUrl = stepPhotoUrl(step.photo_path)
+                        const dragging = stepSort.dragIndex === idx
                         return (
-                            <li key={step.id}>
-                                <label className="flex items-start gap-3 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => toggleChecked(setCheckedSteps, step.id)}
-                                        className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
-                                    />
-                                    <span className={checked ? 'line-through text-ink/50' : ''}>
-                                        {step.instruction}
-                                    </span>
-                                </label>
-                                {photoUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setLightboxUrl(photoUrl)}
-                                        aria-label={`Expand step photo`}
-                                        className="no-print mt-2 ml-8 block rounded-md overflow-hidden border border-paper-shade hover:border-rust transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rust"
-                                    >
-                                        <img
-                                            src={photoUrl}
-                                            alt=""
-                                            loading="lazy"
-                                            className="w-32 h-32 object-cover block"
-                                        />
-                                    </button>
-                                )}
-                                {/* Stage 19 Phase 2 — one-tap preset timer for a
-                                    step with an authored duration; usable while
-                                    reading the recipe without entering cooking mode. */}
-                                {step.duration_seconds && onStartTimer && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onStartTimer({ durationMs: step.duration_seconds * 1000, label: `Step ${step.step_number}` })}
-                                        className="no-print mt-2 ml-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-paper-shade text-ink hover:bg-tan/40 transition-colors text-sm font-medium"
-                                    >
-                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                            <circle cx="12" cy="13" r="8" />
-                                            <path d="M12 9v4l2 2" />
-                                            <path d="M9 2h6" />
-                                        </svg>
-                                        Start {formatMs(step.duration_seconds * 1000)} timer
-                                    </button>
-                                )}
+                            <li key={step.id} data-sort-row className={dragging ? 'opacity-60' : ''}>
+                                <div className="flex items-start gap-2">
+                                    {isAuthor && (
+                                        <button
+                                            type="button"
+                                            {...stepSort.handleProps(idx)}
+                                            aria-label={`Drag to reorder step ${step.step_number}`}
+                                            title="Drag to reorder"
+                                            className="no-print mt-1 shrink-0 cursor-grab active:cursor-grabbing text-ink/35 hover:text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust rounded"
+                                        >
+                                            <DragHandleIcon />
+                                        </button>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <label className="flex items-start gap-3 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleChecked(setCheckedSteps, step.id)}
+                                                className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
+                                            />
+                                            <span className={checked ? 'line-through text-ink/50' : ''}>
+                                                {step.instruction}
+                                            </span>
+                                        </label>
+                                        {photoUrl && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setLightboxUrl(photoUrl)}
+                                                aria-label={`Expand step photo`}
+                                                className="no-print mt-2 ml-8 block rounded-md overflow-hidden border border-paper-shade hover:border-rust transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rust"
+                                            >
+                                                <img
+                                                    src={photoUrl}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    className="w-32 h-32 object-cover block"
+                                                />
+                                            </button>
+                                        )}
+                                        {/* Stage 19 Phase 2 — one-tap preset timer for a
+                                            step with an authored duration; usable while
+                                            reading the recipe without entering cooking mode. */}
+                                        {step.duration_seconds && onStartTimer && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onStartTimer({ durationMs: step.duration_seconds * 1000, label: `Step ${step.step_number}` })}
+                                                className="no-print mt-2 ml-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-paper-shade text-ink hover:bg-tan/40 transition-colors text-sm font-medium"
+                                            >
+                                                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                    <circle cx="12" cy="13" r="8" />
+                                                    <path d="M12 9v4l2 2" />
+                                                    <path d="M9 2h6" />
+                                                </svg>
+                                                Start {formatMs(step.duration_seconds * 1000)} timer
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </li>
                         )
                     })}
@@ -719,6 +812,31 @@ export default function RecipeDetail({
                     </div>
                 )}
 
+                {/* ui-addons — author-only reorder save bar. Surfaces once a drag
+                    has changed the local order; the moves don't touch the DB
+                    until "Save order" is tapped. */}
+                {isAuthor && (ingredientsDirty || stepsDirty) && (
+                    <div className="no-print mt-4 flex flex-wrap items-center gap-3 rounded-md border border-tan bg-tan-soft/70 px-4 py-3">
+                        <span className="flex-1 min-w-[12rem] text-sm font-medium text-ink/80">
+                            You've changed the order of this recipe.
+                        </span>
+                        <button
+                            onClick={handleDiscardOrder}
+                            disabled={savingOrder}
+                            className="px-3 py-2 text-sm font-medium text-ink rounded-md hover:bg-paper-shade transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Discard
+                        </button>
+                        <button
+                            onClick={handleSaveOrder}
+                            disabled={savingOrder}
+                            className="px-4 py-2 text-sm font-semibold bg-rust hover:bg-rust-dark text-paper rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {savingOrder ? 'Saving…' : 'Save order'}
+                        </button>
+                    </div>
+                )}
+
                 {layout === 'spread' ? (
                     <div className="book-spread recipe-content-spread mt-4">
                         <section className="book-page book-page-left" aria-label="Ingredients">
@@ -767,6 +885,20 @@ export default function RecipeDetail({
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />
         </div>
+    )
+}
+
+// Six-dot grip used as the author-only drag handle on ingredient/step rows.
+function DragHandleIcon() {
+    return (
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="6" r="1.6" />
+            <circle cx="15" cy="6" r="1.6" />
+            <circle cx="9" cy="12" r="1.6" />
+            <circle cx="15" cy="12" r="1.6" />
+            <circle cx="9" cy="18" r="1.6" />
+            <circle cx="15" cy="18" r="1.6" />
+        </svg>
     )
 }
 
