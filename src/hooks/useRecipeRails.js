@@ -86,6 +86,9 @@ export default function useRecipeRails(recipe) {
 
         run()
         return () => { cancelled = true }
+        // `tagsKey` is the stable serialization of `recipe?.tags`; depending on
+        // the array directly would re-run on every identity change.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recipeId, authorId, tagsKey])
 
     return { authorRecipes, similarRecipes, loading }

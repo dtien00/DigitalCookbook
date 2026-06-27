@@ -1,12 +1,15 @@
 # CI/CD with GitHub Actions — Integration README
 
-> **Status:** Proposal / reference. **Not yet implemented** — there is no `.github/workflows/`
-> directory in the repo today. Deploys currently happen via Vercel's automatic git-push build; there
-> is **no test/lint gate** before code reaches `main`. This README describes GitHub Actions and
-> exactly how a CI pipeline would slot into Digital Cookbook.
+> **Status:** ✅ **Implemented** (PR #75). The repo now ships
+> [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — lint, unit tests, and a production build,
+> plus a separate Docker image-build job, on every push to `main` and every pull request. The design
+> discussion below is kept as the rationale. **As shipped:** the CI lint step gates on **errors**
+> (`npx eslint . --ext js,jsx`); the stricter `npm run lint` (`--max-warnings 0`) is the local gate
+> (now also clean, after the intentional `react-hooks/exhaustive-deps` sites were annotated). Deploy
+> stays with Vercel — CI gates, Vercel ships.
 >
-> Companion docs: [STACKS_EXPAND.md](./STACKS_EXPAND.md) (why), [DOCKER.md](./DOCKER.md) and
-> [TERRAFORM.md](./TERRAFORM.md) (the other two proposed additions).
+> Companion docs: [STACKS_EXPAND.md](./STACKS_EXPAND.md) (why), [DOCKER.md](./DOCKER.md)
+> (also implemented), [TERRAFORM.md](./TERRAFORM.md) (still a proposal).
 
 ---
 

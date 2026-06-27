@@ -1,0 +1,24 @@
+# Keep the build context small and secret-free. node_modules and dist are
+# rebuilt inside the image; .env* are never baked in (Supabase config arrives
+# via --build-arg, see Dockerfile).
+node_modules
+dist
+coverage
+.git
+.github
+.gitignore
+.vite
+.vercel
+.context
+*.log
+
+# Secrets / local-only env. .env.example is kept as documentation.
+.env
+.env.*
+!.env.example
+
+# Local-only material that has no place in an image.
+print_tests
+supabase_migration
+*.md
+!README.md

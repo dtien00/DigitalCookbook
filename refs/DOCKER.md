@@ -1,11 +1,15 @@
 # Docker — Integration README
 
-> **Status:** Proposal / reference. **Not yet implemented** — there is no `Dockerfile` or
-> `docker-compose.yml` in the repo today. This README describes what Docker is, and exactly how it
-> would slot into Digital Cookbook's current Vite + Supabase + Vercel setup.
+> **Status:** ✅ **Implemented** (PR #75). The repo now ships a multi-stage [`Dockerfile`](../Dockerfile),
+> [`nginx.conf`](../nginx.conf) (SPA fallback), and [`.dockerignore`](../.dockerignore); CI builds the
+> image on every change. The design discussion below is kept as the rationale — **as shipped it differs
+> from the proposal in a few ways:** the nginx config lives at repo root (`nginx.conf`, not
+> `docker/nginx.conf`), the build stage uses `node:22-alpine`, only the two Supabase build args are
+> wired (no `VITE_ENV_LABEL`), and **no `docker-compose.yml` shipped** — the local-Supabase dev loop in
+> §3.4 remains a future option.
 >
 > Companion docs: [STACKS_EXPAND.md](./STACKS_EXPAND.md) (why), [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md)
-> and [TERRAFORM.md](./TERRAFORM.md) (the other two proposed additions).
+> (also implemented), [TERRAFORM.md](./TERRAFORM.md) (still a proposal).
 
 ---
 
