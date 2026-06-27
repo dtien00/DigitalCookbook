@@ -27,6 +27,7 @@ export default function CookingMode({
     checkedSteps,
     setCheckedSteps,
     onExit,
+    onOpenTimerSheet,
 }) {
     const [currentStep, setCurrentStep] = useState(0)
     const [showIngredients, setShowIngredients] = useState(false)
@@ -76,8 +77,14 @@ export default function CookingMode({
     useEffect(() => {
         const previousOverflow = document.body.style.overflow
         document.body.style.overflow = 'hidden'
+        // Stage 19 — flag cooking mode so the App-level <TimerWidget> lifts
+        // itself above this surface's bottom footer (Previous / dots / Next)
+        // instead of overlapping the Previous button. A CSS rule keyed on this
+        // class does the shift; see index.css `.timer-widget`.
+        document.body.classList.add('cooking-active')
         return () => {
             document.body.style.overflow = previousOverflow
+            document.body.classList.remove('cooking-active')
         }
     }, [])
 
@@ -182,20 +189,36 @@ export default function CookingMode({
                     <span className="font-display text-xs uppercase tracking-wider text-rust">Cooking</span>
                     <span className="font-serif italic text-sm text-ink/70 truncate max-w-[60vw]">{recipe.title}</span>
                 </div>
-                <button
-                    onClick={() => setShowIngredients(true)}
-                    aria-label="View ingredients"
-                    className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
-                >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M3 6h13" />
-                        <path d="M3 12h13" />
-                        <path d="M3 18h13" />
-                        <circle cx="20" cy="6" r="1" />
-                        <circle cx="20" cy="12" r="1" />
-                        <circle cx="20" cy="18" r="1" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Stage 19 — open the timer quick-set sheet. The running
+                        timer floats over this surface via the App-level
+                        <TimerWidget> (z-[120], above cooking mode's z-[100]). */}
+                    <button
+                        onClick={onOpenTimerSheet}
+                        aria-label="Set a timer"
+                        className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="13" r="8" />
+                            <path d="M12 9v4l2 2" />
+                            <path d="M9 2h6" />
+                        </svg>
+                    </button>
+                    <button
+                        onClick={() => setShowIngredients(true)}
+                        aria-label="View ingredients"
+                        className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M3 6h13" />
+                            <path d="M3 12h13" />
+                            <path d="M3 18h13" />
+                            <circle cx="20" cy="6" r="1" />
+                            <circle cx="20" cy="12" r="1" />
+                            <circle cx="20" cy="18" r="1" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div className="px-4 pt-3 landscape:pt-2 flex-shrink-0">

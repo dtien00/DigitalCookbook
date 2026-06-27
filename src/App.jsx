@@ -15,6 +15,7 @@ import { useFridgeBasket } from './hooks/useFridgeBasket'
 import { useShoppingList } from './hooks/useShoppingList'
 import { useBackdrop } from './hooks/useBackdrop'
 import { useCookbooks } from './hooks/useCookbooks'
+import { useTimers } from './hooks/useTimers'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -33,6 +34,8 @@ import ShoppingList from './components/ShoppingList'
 import MealPlan from './components/MealPlan'
 import AddToPlanModal from './components/AddToPlanModal'
 import OnboardingTour from './components/OnboardingTour'
+import TimerWidget from './components/TimerWidget'
+import TimerSetSheet from './components/TimerSetSheet'
 import { addRecipeToPlan } from './hooks/useMealPlan'
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
@@ -219,6 +222,21 @@ function App() {
         dismissRemoved: dismissShoppingRemoved,
         clearList: clearShoppingList,
     } = useShoppingList()
+
+    // Cooking-mode timer (Stage 19) — App-level so a running timer survives the
+    // CookingMode <-> RecipeDetail boundary and route changes, and the floating
+    // <TimerWidget> overlays any surface. The set sheet is opened from the
+    // CookingMode header, the RecipeDetail "Timer" button, and the widget itself.
+    const {
+        timers,
+        startTimer,
+        pauseTimer,
+        resumeTimer,
+        resetTimer,
+        addMinute: addTimerMinute,
+        dismissTimer,
+    } = useTimers()
+    const [timerSheetOpen, setTimerSheetOpen] = useState(false)
 
     // Backdrop preference — written to data-backdrop on <html> by the hook
     // so the .paper-grain treatment swaps via CSS at every consumer surface
@@ -479,6 +497,7 @@ function App() {
         addToShoppingList,
         mfa,
         submitReport,
+        onOpenTimerSheet: () => setTimerSheetOpen(true),
     }
 
     const handleCreateComplete = () => {
@@ -691,6 +710,23 @@ function App() {
             {showTour && location.pathname === '/' && (
                 <OnboardingTour onDismiss={dismissOnboarding} />
             )}
+            {/* Cooking-mode timer (Stage 19) — floating stack + quick-set sheet.
+                Both portal to <body>; the widget renders nothing when there are
+                no timers, so it's inert on every other surface. */}
+            <TimerWidget
+                timers={timers}
+                onPause={pauseTimer}
+                onResume={resumeTimer}
+                onReset={resetTimer}
+                onAddMinute={addTimerMinute}
+                onDismiss={dismissTimer}
+                onAddTimer={() => setTimerSheetOpen(true)}
+            />
+            <TimerSetSheet
+                open={timerSheetOpen}
+                onClose={() => setTimerSheetOpen(false)}
+                onStart={startTimer}
+            />
         </>
     )
 }
@@ -1424,6 +1460,7 @@ function RecipeDetailRoute({
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
     addToShoppingList,
     mfa, submitReport,
+    onOpenTimerSheet,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1522,6 +1559,7 @@ function RecipeDetailRoute({
             addToShoppingList={addToShoppingList}
             mfa={mfa}
             submitReport={submitReport}
+            onOpenTimerSheet={onOpenTimerSheet}
         />
     )
 }

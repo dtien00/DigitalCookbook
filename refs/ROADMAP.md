@@ -429,6 +429,59 @@ Sequence: ships AFTER Stage N+2a (shopping list must exist for "build from plan"
 
 ---
 
+## Stage 19 - Cooking Mode Timer *(promoted from "Other deferred ideas" — 2026-06-26)*
+
+Goal: cook-along steps that involve waiting ("simmer 20 minutes", "rest the dough 1 hour") get a real kitchen timer. A cook can either start a one-tap **preset timer** authored on the step, or spin up an **ad-hoc timer** for any duration; once running it supports **pause/resume · reset · +1 min**; on expiry it **vibrates and/or chimes**; and the timer is a **floating widget** that survives step navigation and the CookingMode↔RecipeDetail boundary. Extends Stage 15's [CookingMode.jsx](../src/components/CookingMode.jsx).
+
+**Core architectural decision — state lives at App level, not in CookingMode.** The "floating in RecipeDetail *and/or* CookingMode" requirement is load-bearing: a timer must keep running when the cook advances steps, exits cooking mode back to RecipeDetail, or even browses away (pasta doesn't care what tab you're on). `CookingMode` unmounts on exit, so it can't own timer state. State is lifted to App level and shared via a hook, mirroring the Fridge Basket / Shopping List precedent:
+- New `src/hooks/useTimers.js` — owns the timer list, localStorage-backed (`cookbook.timers`), same shape as [useFridgeBasket.js](../src/hooks/useFridgeBasket.js) / [useShoppingList.js](../src/hooks/useShoppingList.js).
+- New `src/components/TimerWidget.jsx` — a floating overlay rendered once at App level (sibling to `<Toaster>`, the Fridge modal, `<OnboardingTour>`), portaled to `body` at **`z-[120]`** so it floats above CookingMode's `z-[100]` and its ingredient sheet's `z-[110]`.
+- `CookingMode` and `RecipeDetail` only *call into* the hook (`startTimer(...)`); neither owns the state.
+
+**Timer mechanics — epoch-based, not interval-decrement.** Decrementing a counter on `setInterval` drifts and freezes under tab-throttling. Each timer is `{ id, label, durationMs, endsAt, remainingMs, status }`. Running: store `endsAt = Date.now() + remainingMs`; a single 250ms ticker recomputes `remainingMs = endsAt - Date.now()` for *display only*. Pause snapshots `remainingMs` and clears `endsAt`; reset restores `durationMs`; +1 min adds 60_000ms. Because `endsAt` is absolute, backgrounding and returning shows the correct remaining time, and localStorage persistence is nearly free (an accidental back-swipe or reload doesn't kill a 20-minute timer).
+
+**Expiry signal.** `navigator.vibrate([...])` (Android-only — iOS Safari ignores it, so vibration is the bonus) plus a WebAudio oscillator beep (no binary asset to ship; cross-platform primary). iOS requires the AudioContext to be unlocked by a user gesture — since every timer is *started by a tap*, resume/prime the AudioContext on `startTimer` so the later chime is permitted. Expired timer flips to a pulsing rose-dark state with a **Stop** button that halts the looping signal; `aria-live="assertive"` announces completion. *Known limitation (documented, not solved in v1):* with the phone screen actually off, mobile throttles timers/audio and the chime may defer until the tab is foregrounded — cooking mode's existing Wake Lock keeps the screen on inside that surface, which mostly sidesteps it; fire-on-visible is the fallback elsewhere; Web Notifications are a future upgrade.
+
+**Phasing:**
+
+| Phase | Schema? | Scope |
+|---|---|---|
+| **1 — Ad-hoc timer** | none | `useTimers` hook + App-level `<TimerWidget>` + clock button in CookingMode header (and RecipeDetail action cluster) + quick-set sheet (3/5/10/15 min presets + custom `mm:ss`) + WebAudio chime + vibration + pause/reset/+1 controls. Satisfies most of the spec with zero migration. |
+| **2 — Per-step presets** | migration 023 (`steps.duration_seconds`) | CreateRecipe per-step optional duration input + edit-mode carry-forward + one-tap "Start N:00" chip on steps in CookingMode (and optionally the RecipeDetail step list). |
+| **3 — Polish** | none | drag-to-reposition the widget, sound on/off setting, distinct chime per concurrent timer, multiple-timer stack tuning. |
+
+**Multiple concurrent timers:** the data model is a list from day one (boiling pasta *while* simmering sauce is the common kitchen case), so the widget renders a small stack (~3) of independent pills. Single-timer is the MVP fallback if Phase 1 scope needs bounding, but the list model makes multiple nearly free.
+
+**Phase 1 items:** *(done on `cooking-mode-timer` — 2026-06-26)*
+- [x] [`src/hooks/useTimers.js`](../src/hooks/useTimers.js) — App-level, localStorage-backed (`cookbook.timers`). API `{ timers, startTimer(opts), pauseTimer(id), resumeTimer(id), resetTimer(id), addMinute(id), dismissTimer(id) }`. Epoch-based (`endsAt`) — the hook holds NO per-tick `now` state, so App re-renders only on a real expiry (a 250ms watcher flips expired timers to `done` and `setTimers` fires solely then); the smooth countdown re-render lives in the widget. `readInitial` re-derives a running timer that ran out while the tab was closed as `done`. try/catch around storage for private-mode Safari (mirrors `useShoppingList`). Reset re-arms to full duration (keeps running if running, else paused); +1:00 extends `endsAt`/remainder and re-starts a done timer.
+- [x] [`src/components/TimerWidget.jsx`](../src/components/TimerWidget.jsx) — App-level portal to `body`, `z-[120]`, bottom-left stack of compact pills. Owns its own 250ms `now` so only this subtree re-renders during a countdown. Each pill: label, serif tabular-nums countdown, pause/resume · reset · +1:00 · ✕, plus a "+ Timer" add affordance. Expired state pulses rose-dark (`motion-safe:animate-pulse`) with a Stop button + `aria-live="assertive"`. Renders nothing when there are no timers, so it's inert on every other surface.
+- [x] [`src/components/TimerSetSheet.jsx`](../src/components/TimerSetSheet.jsx) — bottom sheet (centered on `sm+`), `z-[130]`. Preset chips 1/3/5/10/15/30 min + a custom field parsed by [`src/lib/parseDuration.js`](../src/lib/parseDuration.js) (`parseDurationToMs` accepts bare-minutes / `mm:ss` / `h:mm:ss`; `formatMs` renders back). Focus-traps to the input, restores focus to the opener on close.
+- [x] Clock icon button wired into the [CookingMode.jsx](../src/components/CookingMode.jsx) header (beside the ingredients `≡`) and the [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) action row (next to *Start cooking*), both opening the set sheet.
+- [x] `<TimerWidget>` + `<TimerSetSheet>` mounted once in [App.jsx](../src/App.jsx) off a single `useTimers` instance; `onOpenTimerSheet` threaded into `recipeDetailProps` → RecipeDetail → CookingMode.
+- [x] AudioContext unlock on the originating `startTimer`/resume tap via [`src/lib/timerAlarm.js`](../src/lib/timerAlarm.js) `primeAudio()`; WebAudio two-tone chime + `navigator.vibrate` loop, both graceful no-ops when unavailable.
+
+**Phase 1 gotchas resolved during impl (2026-06-26):**
+- **`RecipeDetailRoute` prop-forward** — the route wrapper destructures an explicit prop allow-list (the same trap noted in Stage 16's `mfa` bug), so `onOpenTimerSheet` had to be added to BOTH the destructure and the `<RecipeDetail>` forward or the RecipeDetail/CookingMode clock buttons silently no-op.
+- **Escape key collision** — CookingMode has a window-level `keydown` that exits cooking mode on Escape. The set sheet's Escape handler registers in the **capture phase** (`addEventListener('keydown', fn, true)`) and `stopPropagation()`s Escape / Arrow keys so closing the sheet doesn't also exit cooking mode or change steps behind the modal (digits still reach the input). Verified in-browser.
+- **Footer collision** — the bottom-left widget overlaps CookingMode's bottom-left *Previous* button. CookingMode toggles `body.cooking-active`; an index.css rule `body.cooking-active .timer-widget { bottom: 5.75rem }` lifts the widget above the footer only while cooking, leaving the low corner everywhere else.
+
+Verified end-to-end in the preview server: start (preset + custom 0:05), live countdown, pause/resume/reset/+1:00, expiry → rose-dark "Time's up" + Stop, localStorage persistence across reload (timer kept counting from `endsAt`), and state survival across the CookingMode↔RecipeDetail boundary. Build clean (157 modules).
+
+**Phase 2 items (deferred behind Phase 1 — needs migration 023):**
+- [ ] Migration 023 adds nullable `steps.duration_seconds INT` — no RLS change (steps gate on parent recipe visibility, exactly like migration 018's `photo_path`). `supabase_migration/` is gitignored, so `git add -f` the file.
+- [ ] [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) per-step optional `mm:ss` duration input; extend the step state shape + `stepsToInsert` payload; edit-mode hydration carries `duration_seconds` forward through the delete-then-reinsert cycle (same as `photo_path`).
+- [ ] One-tap "⏱ Start N:00" chip near the *Mark step done* pill in CookingMode when a step carries a duration; ad-hoc timer still covers steps without one.
+
+**Relationship to Stage 13's deferred `cook_time`:** that carry-forward (recipe-level total minutes, for sorting) is a *different* concept from per-step `duration_seconds`. They're complementary — per-step durations could later sum into a suggested `cook_time` — but neither depends on the other.
+
+**Schema**: Phase 1 none (client-only, localStorage). Phase 2 adds migration 023 (`steps.duration_seconds`).
+
+**Anonymous behavior**: identical for anon and signed-in users — the timer is a client-side kitchen utility, no auth, no DB read/write in Phase 1.
+
+**Exit criteria**: from a recipe with a "simmer 20 minutes" step, a cook can start a timer (preset chip or ad-hoc), advance to the next step or exit to RecipeDetail while it keeps counting, pause / reset / +1 it from the floating widget, and get a chime + vibration when it expires.
+
+---
+
 ## Ad-hoc polish (not stage-gated)
 
 - [x] **CreateRecipe ingredient-entry ergonomics** — fractions, unit autocomplete, keyboard row creation/removal, and column reorder in [CreateRecipe.jsx](./src/components/CreateRecipe.jsx). *Qty became `type="text"`; new [src/lib/parseQuantity.js](./src/lib/parseQuantity.js) parses `"1 1/2"` / `"1/2"` / unicode glyphs to the `NUMERIC` value on save (empty → 0, preserving prior behavior) and renders stored numbers back to fractions for edit-mode prefill — `scaleQuantity` already re-derives glyphs for readers, so the data model is untouched. New custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](./src/components/UnitCombobox.jsx)) over a canonical unit list ([src/lib/measurementUnits.js](./src/lib/measurementUnits.js), label + alias substring match, e.g. `tbsp`→`tablespoon`) — chosen over native `<datalist>` for palette theming + keyboard control; free text still allowed. A column-order toggle cycles Name·Qty·Unit → Qty·Unit·Name → Unit·Qty·Name (visual only; drives DOM/Tab order and the Enter "last field" target). `Enter` on the last visible field adds + focuses a new row (advances within-row otherwise) and never submits the form; `Tab` walks the visible order natively. A trailing `×` per-row delete (`.ingredient-remove`) sits last in the row regardless of column order, hidden when only one row remains (always ≥1 row); after a removal focus lands on the row that slid into the freed slot. Documented in [refs/COSMETICS.md → CreateRecipe — Ingredient entry](./COSMETICS.md) and [refs/TESTING.md → CreateRecipe ingredient entry checklist](./TESTING.md).*
@@ -442,7 +495,7 @@ Sequence: ships AFTER Stage N+2a (shopping list must exist for "build from plan"
 - **Nutritional info** — even approximate per-recipe calorie/macro estimates. Requires either an external API (USDA FoodData Central is free but rate-limited) or a manual author-declared block. Defer until there's a user asking — most casual recipe sites get away without it.
 - **i18n** — no signal of global audience yet. Defer; if and when it becomes real, retrofit with `react-i18next` against the existing strings.
 - **App Format/Distribution** - while the application runs like a social media site (Pinterest), having a dedicated app space for itself will help distribution/spread to additional audiences other than word of mouth browser searching. This will require a domain name, and also considerations of regulations/maintainence required for this 
-- **Cooking Mode Timer** - For some steps, timed/waiting is common. Implement a feature that allows a user to either add a timer for the step, or enable an independent clock modal item that allows the person to set a timer; Once the timer starts, allow the user to [pause, reset, add 1 minute]. When the timer runs out of time, enable vibration or some sound clip to indicate timer is completed. Have the timer be a floating item that is either available in RecipeDetail and/or CookingMode.
+- **Cooking Mode Timer** — *promoted into the roadmap as **Stage 19** on 2026-06-26 (same pattern as the private-recipe badge / ingredient notes). See the Stage 19 section above for the full design + phasing.*
 - **Fridge and List (Scroll Independent)** - In consideration of minimalist/efficient spacing of UI, have List vertically below the Fridge button, and also make it still available to select when scrolled down. This prevents needless/wasteful scrolling up to adjust the fridge/shopping list; also move this to the left side underneath the cell format toggle to prevent accidental touching when scrolling.
 - **UI Button Image Revamp** - Used to keep track of potential buttons to give a visual rehaul to make it more user friendly.
     - \+ New Recipe (Make into a notepad visual)

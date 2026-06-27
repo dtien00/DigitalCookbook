@@ -556,6 +556,32 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Cooking-mode timer checklist
+
+> Verifies Stage 19 Phase 1 — the ad-hoc kitchen timer. Client-only, no migration; state is localStorage (`cookbook.timers`). Audio/vibration are device-dependent, so the checklist notes where graceful fallback is expected. Phase 2 (per-step preset durations) is not covered here.
+
+- [ ] **Entry points** — a "Timer" button shows next to "Start cooking" on RecipeDetail; a clock icon shows in the CookingMode header (beside the ingredients `≡`); both open the set sheet
+- [ ] **Set sheet** — shows preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) and a custom field; the input is auto-focused on open
+- [ ] **Preset start** — tap a preset → sheet closes, a floating pill appears bottom-left counting down from that duration
+- [ ] **Custom parse** — type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
+- [ ] **Live countdown** — the pill ticks down smoothly (~4×/sec); only the widget repaints, not the whole page
+- [ ] **Pause / Resume** — pause freezes the remaining time and shows a rust play disc; resume continues from the frozen value
+- [ ] **Reset** — restores the full original duration (running stays running from full; paused stays paused at full)
+- [ ] **+1:00** — adds a minute to the remaining time
+- [ ] **Expiry** — at 0:00 the pill turns rose-dark, pulses, reads "TIME'S UP", and on a real device plays a chime (audio) + vibrates (Android only; iOS ignores vibration — audio is the signal)
+- [ ] **Stop** — the Stop button on an expired pill dismisses it and silences the alarm; `+1:00` on an expired pill re-arms it running with one minute
+- [ ] **Dismiss `✕`** — removes a running/paused timer
+- [ ] **Multiple timers** — start two; both count independently and stack in the bottom-left
+- [ ] **Persistence across reload** — start a timer, reload the page; it's still there and still counting from where it should be (epoch-based `endsAt`)
+- [ ] **Expired-while-closed** — start a short timer, close the tab before it ends, reopen after it would have expired; it comes back in the "TIME'S UP" state
+- [ ] **Survives surface changes** — start a timer in cooking mode, exit to RecipeDetail, navigate to the home grid; the pill floats on all of them
+- [ ] **Footer dodge** — inside cooking mode the widget sits ABOVE the Previous/Next footer (doesn't cover the Previous button); on RecipeDetail / home it sits in the low bottom-left corner
+- [ ] **Escape isolation** — open the set sheet from inside cooking mode, press Escape; the sheet closes but cooking mode stays open (does NOT exit)
+- [ ] **No-audio fallback** — on a browser without WebAudio/vibration the timer still counts and shows the visual expiry state; no console error
+- [ ] **Anonymous works** — logged out, the timer is fully usable (no auth gate on a client-side aid)
+
+---
+
 ## CreateRecipe ingredient entry checklist
 
 > Verifies the ingredient-editor ergonomics pass on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — fractions, the unit autocomplete, keyboard row creation/removal/navigation, and the column-order toggle. Client-only; no migration. Reach it via "Create Recipe" (signed-in) and, for the edit-mode row, the "Edit" affordance on a recipe you authored.

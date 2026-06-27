@@ -42,6 +42,7 @@ export default function RecipeDetail({
     addToShoppingList,
     mfa,
     submitReport,
+    onOpenTimerSheet,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -669,15 +670,31 @@ export default function RecipeDetail({
                     to scroll past the meta row. Hidden during the initial
                     fetch and on recipes with no steps. */}
                 {!loading && steps.length > 0 && (
-                    <button
-                        onClick={handleStartCooking}
-                        className="no-print w-full mt-4 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
-                    >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <polygon points="6 4 20 12 6 20 6 4" />
-                        </svg>
-                        Start cooking
-                    </button>
+                    <div className="no-print w-full mt-4 flex gap-2">
+                        <button
+                            onClick={handleStartCooking}
+                            className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polygon points="6 4 20 12 6 20 6 4" />
+                            </svg>
+                            Start cooking
+                        </button>
+                        {/* Stage 19 — a timer is useful while reading the recipe
+                            on this page too, not only inside cooking mode. */}
+                        <button
+                            onClick={onOpenTimerSheet}
+                            aria-label="Set a timer"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-3.5 bg-paper-shade hover:bg-tan/40 text-ink font-semibold rounded-md transition-colors shrink-0"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="13" r="8" />
+                                <path d="M12 9v4l2 2" />
+                                <path d="M9 2h6" />
+                            </svg>
+                            <span className="hidden sm:inline">Timer</span>
+                        </button>
+                    </div>
                 )}
 
                 {layout === 'spread' ? (
@@ -722,6 +739,7 @@ export default function RecipeDetail({
                     checkedSteps={checkedSteps}
                     setCheckedSteps={setCheckedSteps}
                     onExit={handleExitCooking}
+                    onOpenTimerSheet={onOpenTimerSheet}
                 />
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />
