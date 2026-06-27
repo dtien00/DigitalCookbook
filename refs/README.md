@@ -26,15 +26,16 @@ Maintained alongside the code — updated in the same change that ships work tou
 
 ## Infrastructure & future-work evaluations
 
-Forward-looking **research and proposals**. Each is explicitly marked *not yet implemented* — they
-exist to evaluate options and document the decision, not to describe shipped code.
+Forward-looking **research and proposals**. **Docker and GitHub Actions CI have since shipped**
+(PR #75) — their docs are kept as the design rationale and now describe live infrastructure; the rest
+remain evaluations of options not (yet) adopted.
 
-| Doc | What it covers |
-|---|---|
-| [STACKS_EXPAND.md](./STACKS_EXPAND.md) | Whether to adopt AWS / Kubernetes / Jenkins / Terraform / Azure / Docker — honest cost/benefit for a solo contributor vs. an industrial upscale. |
-| [DOCKER.md](./DOCKER.md) | What Docker is and exactly how it would integrate with the current Vite + Supabase setup. |
-| [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) | A proposed CI/CD pipeline (lint + build gate) and how it coexists with Vercel's auto-deploy. |
-| [TERRAFORM.md](./TERRAFORM.md) | Infrastructure-as-Code for the Vercel/Supabase project, with the IaC-vs-SQL-migrations boundary. |
+| Doc | Status | What it covers |
+|---|---|---|
+| [STACKS_EXPAND.md](./STACKS_EXPAND.md) | evaluation | Whether to adopt AWS / Kubernetes / Jenkins / Terraform / Azure / Docker — honest cost/benefit for a solo contributor vs. an industrial upscale. |
+| [DOCKER.md](./DOCKER.md) | ✅ implemented | Multi-stage `Dockerfile` + nginx SPA serve, and how it fits the Vite + Supabase setup. |
+| [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) | ✅ implemented | The CI/CD pipeline (lint + test + build + docker) and how it coexists with Vercel's auto-deploy. |
+| [TERRAFORM.md](./TERRAFORM.md) | proposal | Infrastructure-as-Code for the Vercel/Supabase project, with the IaC-vs-SQL-migrations boundary. |
 
 > A companion evaluation, [INSTACART.md](../INSTACART.md), lives at the repo root (it predates this
 > index) and assesses a shoppable-recipes integration in the same research-doc format.
