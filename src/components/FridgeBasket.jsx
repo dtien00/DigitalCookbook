@@ -41,6 +41,8 @@ export default function FridgeBasket({
         return () => {
             document.body.style.overflow = previousOverflow
             clearTimeout(focusTimer)
+            // Intentional: refocus the opener element as it exists at close time.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             openerRef?.current?.focus?.()
         }
     }, [isOpen, openerRef])

@@ -49,6 +49,9 @@ export default function Profile({
     useEffect(() => {
         getProfile()
         getUserRecipes()
+        // Re-fetch on session change only; the two loaders are recreated each
+        // render and are not meaningful dependencies here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session])
 
     useEffect(() => {

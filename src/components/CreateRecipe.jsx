@@ -51,6 +51,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         if (isEditMode) {
             fetchExistingDetails()
         }
+        // Load once per edit target; `fetchExistingDetails`/`isEditMode` both
+        // derive from `recipeToEdit`, so keying on it alone is intentional.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recipeToEdit])
 
     // After a render that requested it (e.g. Enter added a row), move focus to

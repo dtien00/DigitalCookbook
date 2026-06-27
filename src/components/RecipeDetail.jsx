@@ -127,6 +127,9 @@ export default function RecipeDetail({
         fetchRecipeDetails()
         setCheckedIngredients(new Set())
         setCheckedSteps(new Set())
+        // Re-run only when the recipe changes; `fetchRecipeDetails` is recreated
+        // each render and is not a meaningful dependency.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recipe.id])
 
     function toggleChecked(setter, id) {

@@ -117,6 +117,9 @@ export default function CookbookDetail({
 
         load()
         return () => { cancelled = true }
+        // Keyed on the stable `id`/`cachedOwn?.id`, not the whole `cachedOwn`
+        // object — re-running on object identity churn would refetch needlessly.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, cachedOwn?.id])
 
     // ----- inline edit state (owner only) -----
