@@ -608,7 +608,8 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Switching recipes resets** — reorder without saving, navigate to another recipe and back → the unsaved reorder is gone (no stale dirty banner)
 - [ ] **Book + Sheet layouts** — reorder works in both the single-sheet and the book-spread layout toggle
 - [ ] **No accidental check** — dragging a row does NOT toggle its ingredient/step checkbox when you release over it
-- [ ] **Touch on phone** — on a real phone, dragging a grip reorders without the page scrolling or the swipe-back gesture firing
+- [ ] **Touch on phone** — on a real phone, dragging a grip reorders without the swipe-back gesture firing; the page doesn't scroll from the gesture itself except at the edges (next item)
+- [ ] **Edge auto-scroll** — drag a grip to the top or bottom ~70px of the screen and hold; the page scrolls in that direction (slower near the band's edge, faster at the very edge) so you can drop onto a row that was off-screen, and the item keeps reordering as rows pass under your finger. Releasing or moving back out of the band stops the scroll
 - [ ] **Checkboxes still work** — tapping a checkbox (not the grip) still strikes through the item as before
 
 ---
