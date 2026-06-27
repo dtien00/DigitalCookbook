@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { formatMs } from '../lib/parseDuration'
 import { supabase } from '../lib/supabaseClient'
 
 // Stage 15 — full-screen kitchen-focused step view. Launched from the
@@ -27,6 +28,8 @@ export default function CookingMode({
     checkedSteps,
     setCheckedSteps,
     onExit,
+    onOpenTimerSheet,
+    onStartTimer,
 }) {
     const [currentStep, setCurrentStep] = useState(0)
     const [showIngredients, setShowIngredients] = useState(false)
@@ -76,8 +79,14 @@ export default function CookingMode({
     useEffect(() => {
         const previousOverflow = document.body.style.overflow
         document.body.style.overflow = 'hidden'
+        // Stage 19 — flag cooking mode so the App-level <TimerWidget> lifts
+        // itself above this surface's bottom footer (Previous / dots / Next)
+        // instead of overlapping the Previous button. A CSS rule keyed on this
+        // class does the shift; see index.css `.timer-widget`.
+        document.body.classList.add('cooking-active')
         return () => {
             document.body.style.overflow = previousOverflow
+            document.body.classList.remove('cooking-active')
         }
     }, [])
 
@@ -182,20 +191,36 @@ export default function CookingMode({
                     <span className="font-display text-xs uppercase tracking-wider text-rust">Cooking</span>
                     <span className="font-serif italic text-sm text-ink/70 truncate max-w-[60vw]">{recipe.title}</span>
                 </div>
-                <button
-                    onClick={() => setShowIngredients(true)}
-                    aria-label="View ingredients"
-                    className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
-                >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M3 6h13" />
-                        <path d="M3 12h13" />
-                        <path d="M3 18h13" />
-                        <circle cx="20" cy="6" r="1" />
-                        <circle cx="20" cy="12" r="1" />
-                        <circle cx="20" cy="18" r="1" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Stage 19 — open the timer quick-set sheet. The running
+                        timer floats over this surface via the App-level
+                        <TimerWidget> (z-[120], above cooking mode's z-[100]). */}
+                    <button
+                        onClick={onOpenTimerSheet}
+                        aria-label="Set a timer"
+                        className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="13" r="8" />
+                            <path d="M12 9v4l2 2" />
+                            <path d="M9 2h6" />
+                        </svg>
+                    </button>
+                    <button
+                        onClick={() => setShowIngredients(true)}
+                        aria-label="View ingredients"
+                        className="w-11 h-11 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors shrink-0"
+                    >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M3 6h13" />
+                            <path d="M3 12h13" />
+                            <path d="M3 18h13" />
+                            <circle cx="20" cy="6" r="1" />
+                            <circle cx="20" cy="12" r="1" />
+                            <circle cx="20" cy="18" r="1" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div className="px-4 pt-3 landscape:pt-2 flex-shrink-0">
@@ -252,6 +277,24 @@ export default function CookingMode({
                             const photoUrl = s.photo_path
                                 ? supabase.storage.from('recipe-steps').getPublicUrl(s.photo_path).data.publicUrl
                                 : null
+                            // Stage 19 Phase 2 — a step with an authored
+                            // duration offers a one-tap preset timer. Labelled
+                            // by step so the floating widget says which step it
+                            // belongs to. Steps without a duration show nothing
+                            // here; the header clock still starts an ad-hoc one.
+                            const timerChip = s.duration_seconds && onStartTimer ? (
+                                <button
+                                    onClick={() => onStartTimer({ durationMs: s.duration_seconds * 1000, label: `Step ${i + 1}` })}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-full bg-paper-shade text-ink hover:bg-tan/40 transition-colors font-medium"
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <circle cx="12" cy="13" r="8" />
+                                        <path d="M12 9v4l2 2" />
+                                        <path d="M9 2h6" />
+                                    </svg>
+                                    Start {formatMs(s.duration_seconds * 1000)} timer
+                                </button>
+                            ) : null
                             const doneButton = (
                                 <button
                                     onClick={() => {toggleChecked(setCheckedSteps, s.id); if (sDone) return; isLast ? onExit() : setCurrentStep(prev => Math.min(steps.length - 1, prev + 1));}}
@@ -290,12 +333,14 @@ export default function CookingMode({
                                                     alt=""
                                                     className="w-full max-h-64 landscape:max-h-48 object-contain rounded-md justify-self-start"
                                                 />
-                                                <div className="flex justify-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    {timerChip}
                                                     {doneButton}
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex justify-center mt-10 landscape:mt-6">
+                                            <div className="flex flex-col items-center gap-3 mt-10 landscape:mt-6">
+                                                {timerChip}
                                                 {doneButton}
                                             </div>
                                         )}

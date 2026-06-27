@@ -438,6 +438,17 @@ A "shell + outlet" structure (header + search row in App, route content renderin
 
 The Auth overlay stays at `z-50`, above the Routes. The env banner is `z-[60]` so it remains visible during sign-in (the moment the test/prod mistake could happen). No routing change affects these layers.
 
+The full fixed-overlay stack, low to high: Auth overlay `z-50` → env banner `z-[60]` → **CookingMode `z-[100]`** → CookingMode's ingredient slide-up sheet `z-[110]` → **TimerWidget `z-[120]`** (so a running timer floats over cooking mode) → **TimerSetSheet `z-[130]`** (so you can add a timer from inside cooking mode). The 100+ band is reserved for the cooking-mode family; keep new ad-hoc overlays in the 50–60 band unless they must layer over cooking mode.
+
+## Cooking-mode timer (Stage 19)
+
+The kitchen timer is a single App-level `<TimerWidget>` portaled to `<body>`, so a running timer stays visible across the home grid, recipe detail, and cooking mode — set a pasta timer, browse elsewhere, it still rings.
+
+- **Floating pills, bottom-left.** Each timer is a `bg-paper paper-grain` pill (`rounded-xl shadow-lg border-paper-shade`) with a `font-display` uppercase label, a large `font-serif tabular-nums` countdown, and a control row — pause/resume (rust play disc when paused) · reset · `+1:00` · dismiss `✕`. A "+ Timer" pill below the stack opens the set sheet so the widget is self-sufficient once visible.
+- **Expired state** flips the pill to `bg-rose-dark text-paper` with `motion-safe:animate-pulse` and a "TIME'S UP" label; controls collapse to a prominent **Stop** (= dismiss, which also silences the alarm) plus `+1:00`. `aria-live="assertive"` announces completion. Rose-dark carries the alarm tone because the rustic palette has no red — consistent with the Delete / error-toast convention.
+- **Footer-collision lift.** The bottom-left corner is also where CookingMode's *Previous* button lives. CookingMode toggles `body.cooking-active`; an index.css rule `body.cooking-active .timer-widget { bottom: 5.75rem }` raises the widget above the footer **only** while cooking — every other surface keeps the low `bottom-4` corner. A global fixed widget inherently overlays scrolling content elsewhere (same posture as the scroll-to-top / Fridge buttons); only the cooking-mode nav warranted a dedicated dodge.
+- **Set sheet** is a bottom sheet (centered on `sm+`) with preset chips (1/3/5/10/15/30 min) + a custom `mm:ss` field, matching the CookingMode ingredient-sheet vocabulary. Its Escape handler runs in the **capture phase** with `stopPropagation` so closing it doesn't also trip CookingMode's window-level Escape-to-exit.
+
 ## `onAuthStateChange` gotcha
 
 The sign-out-redirect-to-home logic gates on `event === 'SIGNED_OUT'` rather than `!session`. The reason: Supabase fires `INITIAL_SESSION` with `session=null` on every page load for anonymous users — without the event-name gate, every deep link (e.g. `/recipe/:id` pasted into a fresh tab) bounces back to `/` immediately on mount before the route even has a chance to render. A subtle but critical distinction documented in the relevant `useEffect` in `src/App.jsx`.

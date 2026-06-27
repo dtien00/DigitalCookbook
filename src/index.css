@@ -2212,3 +2212,12 @@ textarea {
     cursor: default;
   }
 }
+
+/* Stage 19 (Cooking Mode Timer) — the App-level floating <TimerWidget> sits at
+   bottom-left on the home grid / recipe detail, where that corner is clear.
+   CookingMode's footer (Previous / step dots / Next) also lives bottom-left,
+   so while cooking mode is open (body.cooking-active, toggled by CookingMode)
+   the widget lifts above that footer instead of covering the Previous button. */
+body.cooking-active .timer-widget {
+  bottom: 5.75rem;
+}

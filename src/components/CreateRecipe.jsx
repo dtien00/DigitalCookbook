@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import { parseQuantity, quantityToDisplay } from '../lib/parseQuantity'
+import { parseDurationToMs, formatMs } from '../lib/parseDuration'
 import UnitCombobox from './UnitCombobox'
 
 // Column-order presets for an ingredient row. Purely a display concern — the
@@ -36,7 +37,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     //                  existing edit-mode photo. Used for the <img> src.
     //   photoPath    — storage path carried from DB in edit mode. Null
     //                  for new steps and for steps the user removed.
-    const [steps, setSteps] = useState([{ instruction: '', step_number: 1, photoFile: null, photoPreview: null, photoPath: null }])
+    const [steps, setSteps] = useState([{ instruction: '', step_number: 1, photoFile: null, photoPreview: null, photoPath: null, durationInput: '' }])
     const [imageFile, setImageFile] = useState(null)
     const [imagePreview, setImagePreview] = useState(recipeToEdit?.image_url || null)
 
@@ -98,6 +99,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     photoPreview: s.photo_path
                         ? supabase.storage.from('recipe-steps').getPublicUrl(s.photo_path).data.publicUrl
                         : null,
+                    // Stage 19 Phase 2 — round-trip the stored seconds back to a
+                    // mm:ss string the input can show and re-parse.
+                    durationInput: s.duration_seconds ? formatMs(s.duration_seconds * 1000) : '',
                 })))
             }
         } catch (error) {
@@ -189,7 +193,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const addStep = () => {
         // Focus the new step's textarea once it renders (parallels addIngredient).
         pendingFocusRef.current = `step:${steps.length}`
-        setSteps([...steps, { instruction: '', step_number: steps.length + 1, photoFile: null, photoPreview: null, photoPath: null }])
+        setSteps([...steps, { instruction: '', step_number: steps.length + 1, photoFile: null, photoPreview: null, photoPath: null, durationInput: '' }])
     }
 
     // Focus a step's instruction textarea (registered in inputRefs under a
@@ -259,6 +263,13 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const handleStepChange = (index, value) => {
         const newSteps = [...steps]
         newSteps[index].instruction = value
+        setSteps(newSteps)
+    }
+
+    // Stage 19 Phase 2 — raw timer string per step; parsed to seconds on save.
+    const handleStepDurationChange = (index, value) => {
+        const newSteps = [...steps]
+        newSteps[index] = { ...newSteps[index], durationInput: value }
         setSteps(newSteps)
     }
 
@@ -341,12 +352,19 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             // a second pass after IDs are minted, since the storage path
             // includes the step.id.
             const nonEmptySteps = steps.filter(s => s.instruction.trim() !== '')
-            const stepsToInsert = nonEmptySteps.map((step, index) => ({
-                recipe_id: recipeId,
-                step_number: index + 1,
-                instruction: step.instruction,
-                photo_path: step.photoFile ? null : (step.photoPath || null),
-            }))
+            const stepsToInsert = nonEmptySteps.map((step, index) => {
+                // Parse the author's timer string (bare-minutes / mm:ss) to whole
+                // seconds; blank or unparseable collapses to NULL so the column
+                // stays clean and the step just shows no preset chip.
+                const durMs = parseDurationToMs(step.durationInput)
+                return {
+                    recipe_id: recipeId,
+                    step_number: index + 1,
+                    instruction: step.instruction,
+                    photo_path: step.photoFile ? null : (step.photoPath || null),
+                    duration_seconds: durMs ? Math.round(durMs / 1000) : null,
+                }
+            })
 
             let insertedSteps = []
             if (stepsToInsert.length > 0) {
@@ -586,6 +604,26 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     <p className="text-xs text-gray-500 italic mt-1">
                                         Optional. One photo per step, ≤ 5 MB. JPG, PNG, or WebP.
                                     </p>
+                                </div>
+                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                    <label htmlFor={`step-duration-${index}`} className="text-xs text-gray-600 font-medium whitespace-nowrap inline-flex items-center gap-1">
+                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <circle cx="12" cy="13" r="8" />
+                                            <path d="M12 9v4l2 2" />
+                                            <path d="M9 2h6" />
+                                        </svg>
+                                        Timer
+                                    </label>
+                                    <input
+                                        id={`step-duration-${index}`}
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={step.durationInput}
+                                        onChange={e => handleStepDurationChange(index, e.target.value)}
+                                        placeholder="e.g. 10 or 5:30"
+                                        className="w-32 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                    />
+                                    <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
                                 </div>
                             </div>
                         ))}

@@ -17,6 +17,7 @@ import CookingMode from './CookingMode'
 import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { formatMs } from '../lib/parseDuration'
 
 export default function RecipeDetail({
     recipe,
@@ -42,6 +43,8 @@ export default function RecipeDetail({
     addToShoppingList,
     mfa,
     submitReport,
+    onOpenTimerSheet,
+    onStartTimer,
 }) {
     const [ingredients, setIngredients] = useState([])
     const [steps, setSteps] = useState([])
@@ -427,6 +430,23 @@ export default function RecipeDetail({
                                         />
                                     </button>
                                 )}
+                                {/* Stage 19 Phase 2 — one-tap preset timer for a
+                                    step with an authored duration; usable while
+                                    reading the recipe without entering cooking mode. */}
+                                {step.duration_seconds && onStartTimer && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onStartTimer({ durationMs: step.duration_seconds * 1000, label: `Step ${step.step_number}` })}
+                                        className="no-print mt-2 ml-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-paper-shade text-ink hover:bg-tan/40 transition-colors text-sm font-medium"
+                                    >
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <circle cx="12" cy="13" r="8" />
+                                            <path d="M12 9v4l2 2" />
+                                            <path d="M9 2h6" />
+                                        </svg>
+                                        Start {formatMs(step.duration_seconds * 1000)} timer
+                                    </button>
+                                )}
                             </li>
                         )
                     })}
@@ -669,15 +689,31 @@ export default function RecipeDetail({
                     to scroll past the meta row. Hidden during the initial
                     fetch and on recipes with no steps. */}
                 {!loading && steps.length > 0 && (
-                    <button
-                        onClick={handleStartCooking}
-                        className="no-print w-full mt-4 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
-                    >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <polygon points="6 4 20 12 6 20 6 4" />
-                        </svg>
-                        Start cooking
-                    </button>
+                    <div className="no-print w-full mt-4 flex gap-2">
+                        <button
+                            onClick={handleStartCooking}
+                            className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-rust hover:bg-rust-dark text-paper font-semibold rounded-md transition-colors"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polygon points="6 4 20 12 6 20 6 4" />
+                            </svg>
+                            Start cooking
+                        </button>
+                        {/* Stage 19 — a timer is useful while reading the recipe
+                            on this page too, not only inside cooking mode. */}
+                        <button
+                            onClick={onOpenTimerSheet}
+                            aria-label="Set a timer"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-3.5 bg-paper-shade hover:bg-tan/40 text-ink font-semibold rounded-md transition-colors shrink-0"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="13" r="8" />
+                                <path d="M12 9v4l2 2" />
+                                <path d="M9 2h6" />
+                            </svg>
+                            <span className="hidden sm:inline">Timer</span>
+                        </button>
+                    </div>
                 )}
 
                 {layout === 'spread' ? (
@@ -722,6 +758,8 @@ export default function RecipeDetail({
                     checkedSteps={checkedSteps}
                     setCheckedSteps={setCheckedSteps}
                     onExit={handleExitCooking}
+                    onOpenTimerSheet={onOpenTimerSheet}
+                    onStartTimer={onStartTimer}
                 />
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />
