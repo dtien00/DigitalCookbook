@@ -24,7 +24,6 @@ export default function CookbookDetail({
     cookbooks,           // signed-in user's own cookbooks (from useCookbooks)
     updateCookbook,
     deleteCookbook,
-    addRecipeToCookbook,
     removeRecipeFromCookbook,
     isFavorited,
     onToggleFavorite,
