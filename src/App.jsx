@@ -476,7 +476,6 @@ function App() {
         onLikeClick: handleLikeClick,
         onLogout: handleLogout,
         onSignIn: () => setShowAuth(true),
-        onAddToPlan: session ? handleAddToPlanRequest : undefined,
         isAdmin,
     }
 
@@ -498,6 +497,7 @@ function App() {
         mfa,
         submitReport,
         onOpenTimerSheet: () => setTimerSheetOpen(true),
+        onAddToPlan: session ? handleAddToPlanRequest : undefined,
         onStartTimer: startTimer,
     }
 
@@ -751,7 +751,7 @@ function HomeView({
     shoppingCount,
     notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
-    onLogout, onSignIn, onAddToPlan,
+    onLogout, onSignIn,
     isAdmin,
 }) {
     const navigate = useNavigate()
@@ -1409,7 +1409,6 @@ function HomeView({
                                 liked={userLiked(recipe.id)}
                                 likeCount={likeCount(recipe.id)}
                                 onToggleLike={() => onLikeClick(recipe.id)}
-                                onAddToPlan={onAddToPlan ? () => onAddToPlan(recipe) : undefined}
                             />
                         ))}
                     </div>
@@ -1461,7 +1460,7 @@ function RecipeDetailRoute({
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
     addToShoppingList,
     mfa, submitReport,
-    onOpenTimerSheet, onStartTimer,
+    onOpenTimerSheet, onStartTimer, onAddToPlan,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1548,6 +1547,7 @@ function RecipeDetailRoute({
             liked={userLiked(recipe.id)}
             likeCount={likeCount(recipe.id)}
             onToggleLike={() => onLikeClick(recipe.id)}
+            onAddToPlan={onAddToPlan ? () => onAddToPlan(recipe) : undefined}
             refetchLikes={refetchLikes}
             refetchFavorites={refetchFavorites}
             onRequireAuth={onRequireAuth}

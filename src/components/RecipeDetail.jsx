@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import BookmarkButton from './BookmarkButton'
 import LikeButton from './LikeButton'
+import AddToPlanButton from './AddToPlanButton'
 import ShareButton from './ShareButton'
 import AddToCookbookButton from './AddToCookbookButton'
 import ExportIngredientsButton from './ExportIngredientsButton'
@@ -33,6 +34,7 @@ export default function RecipeDetail({
     liked,
     likeCount = 0,
     onToggleLike,
+    onAddToPlan,
     refetchLikes,
     refetchFavorites,
     onRequireAuth,
@@ -570,6 +572,9 @@ export default function RecipeDetail({
                     <div className="flex items-center gap-3">
                         {onToggleLike && (
                             <LikeButton liked={liked} count={likeCount} onClick={onToggleLike} size="lg" />
+                        )}
+                        {onAddToPlan && (
+                            <AddToPlanButton onClick={onAddToPlan} size="lg"/>
                         )}
                         {onToggleFavorite && (
                             <BookmarkButton favorited={favorited} onClick={onToggleFavorite} size="lg" />
