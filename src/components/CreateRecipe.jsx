@@ -623,7 +623,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                         inputMode="numeric"
                                         value={step.durationInput}
                                         onChange={e => handleStepDurationChange(index, e.target.value)}
-                                        placeholder="e.g. 10 or 5:30"
+                                        placeholder="e.g. 10, 5:30, or 2:00:00 (HH:MM:SS)"
                                         className="w-32 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200"
                                     />
                                     <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
