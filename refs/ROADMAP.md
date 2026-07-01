@@ -487,6 +487,21 @@ Verified: build clean (157 modules); read path safe on existing recipes (7 steps
 
 ---
 
+## Stage 20 - Hardening & Payoff *(new — 2026-07-01, from the FABLE.md review)*
+
+Goal: pay down the debt surfaced by the whole-project review in [FABLE.md](../FABLE.md) (Fable 5, 2026-07-01). No new features — performance, resilience, tests, and doc freshness. Work lands on `fable-hardening`, one commit per fix. Items reference FABLE.md sections for full reasoning.
+
+- [] **README rewrite** (§5.1) — root README still says "early-stage scaffold" and lists shipped features as planned; rewrite against reality, fix `refs/` links + migration-folder setup instructions. Include the DATABASE_SCHEMA.md staleness banner (§5.2) and `credentials.env` cleanup (§6).
+- [] **Route-level code splitting + vendor chunk** (§1.1) — `React.lazy` the route-only components (admin, MFA dialogs, CreateRecipe, MealPlan, ShoppingList, phonebook, CookbookDetail, Profile, CookingMode); `manualChunks` for react/router/supabase. Entry chunk is 623 KB today.
+- [] **Error boundary** (§4.1) — route-level boundary with a rustic-palette fallback; a render bug should never white-screen a cook.
+- [] **Cover/step-photo resize reuse** (§1.3) — wire the existing `resizeImage.js` (comment photos) into CreateRecipe cover + step-photo uploads.
+- [] **Pure-lib test sweep** (§3.1) — Vitest specs for parseQuantity, parseDuration, scaleQuantity, week, measurementUnits; CI already enforces.
+- [] **useLikes split** (§1.2) — stop fetching the whole likes table; counts from `recipes_with_counts`, own-likes from a `user_id`-scoped query.
+- [] **Notification refetch-on-focus** (§1.5) — `visibilitychange` refetch; realtime stays deferred.
+- [] **App.jsx decomposition + context** (§2.1) — extract HomeView/route wrappers; replace the `recipeDetailProps` allow-list (two shipped bugs) with context. Bigger; may warrant its own branch.
+- [] **Toolchain refresh** (§7) — Vite 5→7 + Vitest 3 + ESLint 9 flat config together; React 19 separately. Own branch.
+- [] **Playwright smoke suite** (§3.2) and **PWA** (§7) — larger bets, own branches, sequence last.
+
 ## Ad-hoc polish (not stage-gated)
 
 - [x] **RecipeDetail drag-reorder + timer-sheet declutter** (`ui-addons`) — *Author-only* drag-to-reorder for both ingredient and step lists on [RecipeDetail.jsx](./src/components/RecipeDetail.jsx). A six-dot grip handle renders per row only when `userId === recipe.author_id`; dragging reflows the list live and stays **local until "Save order"** (a banner with Save/Discard appears once the order changes). Save writes `order_index` (ingredients) / `step_number` (steps) row-by-row via the existing *"Authors can manage …"* RLS policies — no schema change, no migration, and safe because neither order column has a UNIQUE constraint. Reorder is driven by Pointer Events (mouse + touch + pen) since native HTML5 drag-and-drop doesn't fire on phones; the pure target-resolution math lives in [src/lib/dragSortCore.js](./src/lib/dragSortCore.js) (unit-tested) behind [src/hooks/useDragSort.js](./src/hooks/useDragSort.js). Dragging into the top/bottom edge band auto-scrolls the page (speed ramps with edge proximity) and keeps reordering as rows pass under a held finger, so long lists are reorderable on a phone past what's on screen. Separately, the [TimerSetSheet.jsx](./src/components/TimerSetSheet.jsx) custom-time entry field is now hidden behind an "Add a custom time" button — the sheet opens to just the quick presets. *The fourth ui-addons idea — a phone "screenshot any page without going back" — was dropped: the in-app PDF export (RecipeDetail) + `window.print()` (ShoppingList) + the `@media print` stylesheet + the browser's own Print→Save-as-PDF on any page already cover full-page capture in place. Documented in [refs/COSMETICS.md](./COSMETICS.md) and [refs/TESTING.md](./TESTING.md).*
