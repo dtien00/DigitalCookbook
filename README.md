@@ -2,36 +2,54 @@
 
 [![CI](https://github.com/dtien00/DigitalCookbook/actions/workflows/ci.yml/badge.svg)](https://github.com/dtien00/DigitalCookbook/actions/workflows/ci.yml)
 
-A Pinterest-style recipe hub for casually posting, browsing, bookmarking, liking, and commenting on recipes. Built for personal use first, with a social layer on top.
+A Pinterest-style recipe hub that grew into a full **plan → shop → cook** loop: browse and bookmark recipes, group them into cookbooks, plan a week of meals, build the shopping list from the plan, then cook hands-free with step-by-step cooking mode and floating kitchen timers.
+
+**Live:** [digital-cookbook-ruddy.vercel.app](https://digital-cookbook-ruddy.vercel.app) — anonymous browsing works without an account. See [LIVE.md](./LIVE.md) for deployment details.
 
 ## Status
 
-Early-stage scaffold. Auth and recipe CRUD work end-to-end against Supabase. Pinterest-style browse UX, bookmarks, likes, and comments are planned — see [ROADMAP.md](./ROADMAP.md) for the staged delivery plan.
+Actively developed. Twenty roadmap stages have shipped since the original scaffold — see [refs/ROADMAP.md](./refs/ROADMAP.md) for the full staged history and what's next.
 
 ## Features
 
-### Built today
-- **Authentication** — Email/password login, signup, password reset (Supabase Auth).
-- **Recipe CRUD** — Create, view, edit, delete recipes with cover image, ingredients, steps, servings, and a public/private toggle.
-- **Image uploads** — Cover images stored in Supabase Storage.
-- **Profile** — Username, full name, bio, password change, and a list of your own recipes.
-- **Search** — Filter the recipe grid by title or description.
+### Browse & discover
+- Pinterest-style masonry grid with library-size-adaptive columns, hover overlays, infinite scroll, and a grid-density toggle
+- Search across titles, descriptions, and tags (comma syntax for tag filters, chip row above the grid), plus sort by date and popularity
+- **Fridge Basket** — enter what's in your fridge and filter to recipes you can actually make (word-boundary token matching, so "egg" ≠ "eggplant")
+- Anonymous public browsing — no account needed to read public recipes; shared links unfurl with real Open Graph cards (title, description, cover image) via Vercel Edge Middleware
+- "More from this author" and "Similar tags" recommendation rails on every recipe
 
-### Planned (see [ROADMAP.md](./ROADMAP.md))
-- Pinterest-style responsive masonry grid with Tailwind
-- Public browsing for non-authenticated visitors
-- Bookmarks, likes, and comments
-- Tags and ingredient-based search
-- Polish: toasts, loading skeletons, accessibility, lazy-loaded images
+### Recipes
+- Full CRUD with cover image, tags, servings, public/private toggle, per-ingredient notes, per-step photos, and per-step timer durations
+- Ingredient entry ergonomics: fraction parsing (`1 1/2`, `½`), unit autocomplete, keyboard-first row management; author-side drag-reorder of ingredients and steps
+- Servings multiplier that rescales quantities (with proper fractions), ingredient/step checklists, private-recipe badges
+- Visual "closed mini-book" card treatment and a book-spread reading layout, with five switchable backdrop themes
+
+### Social
+- Bookmarks, likes, comments (with photo attachments and comment likes), author profiles, follows with in-app new-recipe notifications
+- **Cookbooks** — named public/private collections of your own and bookmarked recipes, browsable as books on your profile spread
+
+### Kitchen
+- **Cooking mode** — full-screen one-step-at-a-time view with wake lock, swipe navigation, and a slide-up scaled-ingredient sheet
+- **Kitchen timers** — preset or ad-hoc, epoch-based (survive reloads and tab-switching), floating widget that follows you between views, chime + vibration on expiry
+- **Shopping list** — send a recipe's unchecked ingredients to a cumulative list with per-recipe provenance, overlap-aware removal, and undo; or copy them as plaintext
+- **Meal plan** — Mon–Sun × breakfast/lunch/dinner week grid (drag-and-drop on desktop), with one-tap "build shopping list from plan" that subtracts your Fridge Basket
+
+### Sharing & export
+- Share links, print-friendly kitchen cards (`@media print`), polished PDF download, GDPR-style "download my data" JSON export
+
+### Auth, admin & operations
+- Email/password plus Google and GitHub OAuth (Supabase Auth)
+- Admin moderation (delete any content, reset counts, delete users) gated behind **TOTP MFA**; user-facing report flow with an admin review queue
+- First-run onboarding tour, maintenance-mode holding page, environment banner on preview deployments
 
 ## Tech Stack
 
-- **Frontend**: [React 18](https://react.dev/) + [Vite 5](https://vitejs.dev/) (JSX, ESM, hot reload).
-- **Backend / DB / Auth / Storage**: [Supabase](https://supabase.com/) (PostgreSQL + Auth + Storage + RLS).
-- **Styling**: Custom CSS today; [Tailwind CSS](https://tailwindcss.com/) is planned for Stage 1.
-- **Lint**: ESLint with React plugins.
-
-> Note: earlier versions of this README described a Next.js + TypeScript + Tailwind stack. That was an aspirational plan, not the actual scaffold. The current code is a plain Vite + React SPA. See [TECHNICAL_CONCEPTS.md](./TECHNICAL_CONCEPTS.md) for the rationale and what's deferred.
+- **Frontend:** [React 18](https://react.dev/) + [Vite 5](https://vitejs.dev/) SPA, [react-router v7](https://reactrouter.com/), [Tailwind CSS v4](https://tailwindcss.com/) with a custom rustic-paper palette ([refs/COSMETICS.md](./refs/COSMETICS.md)), [react-hot-toast](https://react-hot-toast.com/), [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) (lazy-loaded)
+- **Backend:** [Supabase](https://supabase.com/) — Postgres + Auth (incl. OAuth and TOTP MFA) + Storage, with row-level security as the single enforcement layer ([refs/DATABASE_DECISIONS.md](./refs/DATABASE_DECISIONS.md))
+- **Hosting:** Vercel (SPA rewrites via [vercel.json](./vercel.json), Edge Middleware in [middleware.js](./middleware.js) for link unfurls)
+- **Tests & CI:** [Vitest](https://vitest.dev/) unit suite; GitHub Actions runs lint, tests, a production build, and a Docker image build on every push and PR
+- **Docker:** multi-stage image (Node build → nginx with SPA fallback)
 
 ## Getting Started
 
@@ -42,52 +60,47 @@ Early-stage scaffold. Auth and recipe CRUD work end-to-end against Supabase. Pin
 ### Setup
 
 ```bash
-# Install dependencies
 npm install
 
-# Configure environment
 cp .env.example .env.local
-# Then edit .env.local and fill in your Supabase URL and anon key
+# Edit .env.local: fill in your Supabase URL and anon key
 ```
 
 ### Database
 
-Run [supabase_migration.sql](./supabase_migration.sql) against your Supabase project's SQL editor. It creates all tables (profiles, recipes, ingredients, steps, likes, favorites, follows, comments), indexes, and RLS policies, plus an `on_auth_user_created` trigger that auto-creates a profile row for each new user.
+Migrations live in [supabase_migration/](./supabase_migration/) as numbered SQL files. Run them **in order** against your Supabase project's SQL editor, starting with `supabase_migration.sql` (base schema: profiles, recipes, ingredients, steps, likes, favorites, follows, comments, RLS policies, and the auto-profile trigger), then `002` through `023`.
 
-You'll also want a Supabase Storage bucket named `recipe-images` (public read).
+You'll also need three Supabase Storage buckets, each public-read with authenticated writes: `recipe-images`, `recipe-steps`, and `comment-photos`.
+
+To populate a fresh project with demo accounts and recipes:
+
+```bash
+npm run seed:test   # see refs/TESTING.md for the account list
+```
 
 ### Run
 
 ```bash
-npm run dev        # Start the dev server (default: http://localhost:5173)
+npm run dev        # Dev server (LAN-accessible by default for phone testing)
 npm run build      # Production build
-npm run preview    # Preview production build
-npm run lint       # Run ESLint
-npm test           # Run the Vitest unit suite once
-npm run test:watch # Vitest in watch mode
+npm run preview    # Preview the production build
+npm run lint       # ESLint
+npm test           # Vitest, one-shot
+npm run test:watch # Vitest, watch mode
 ```
 
 ## Testing & CI
 
-Unit tests run on [Vitest](https://vitest.dev/). The current suite covers the
-shopping-list provenance/merge engine ([src/lib/shoppingListCore.js](./src/lib/shoppingListCore.js)) —
-a pure, framework-free module, so the tests need no DOM or renderer.
+Unit tests cover the pure, framework-free core modules — currently the shopping-list provenance/merge engine ([src/lib/shoppingListCore.js](./src/lib/shoppingListCore.js)) and the drag-reorder math ([src/lib/dragSortCore.js](./src/lib/dragSortCore.js)). Manual per-feature test checklists live in [refs/TESTING.md](./refs/TESTING.md).
 
-```bash
-npm test            # one-shot
-npm run test:watch  # watch mode
-```
-
-Every push to `main` and every pull request runs [GitHub Actions](./.github/workflows/ci.yml):
-**lint** (ESLint), **unit tests** (Vitest), a **production build**, and a **Docker image build**.
+Every push to `main` and every PR runs [GitHub Actions](./.github/workflows/ci.yml): **lint**, **unit tests**, a **production build**, and a **Docker image build**.
 
 ## Docker
 
-The app ships as a multi-stage image — Node builds the Vite bundle, then nginx
-serves the static output with an SPA fallback so client-side routes (`/recipe/:id`, …) resolve:
+The app ships as a multi-stage image — Node builds the Vite bundle, then nginx serves the static output with an SPA fallback so client-side routes (`/recipe/:id`, …) resolve:
 
 ```bash
-# Build. Supabase's URL + anon key are public-by-design (RLS is the guard), so
+# Supabase's URL + anon key are public-by-design (RLS is the guard), so
 # they're passed as build args; omit them to get a build that just can't connect.
 docker build \
   --build-arg VITE_SUPABASE_URL="https://YOUR-PROJECT.supabase.co" \
@@ -98,37 +111,31 @@ docker build \
 docker run --rm -p 8080:80 digital-cookbook
 ```
 
-## File Structure
+## Project Layout
 
 ```text
 DigitalCookbook/
 ├── src/
-│   ├── components/
-│   │   ├── Auth.jsx          # Login / signup / password reset
-│   │   ├── CreateRecipe.jsx  # Create + edit recipe form (with image upload)
-│   │   ├── RecipeDetail.jsx  # View a recipe's ingredients and steps
-│   │   └── Profile.jsx       # Edit profile, change password, list own recipes
-│   ├── lib/
-│   │   └── supabaseClient.js # Singleton Supabase client
-│   ├── App.jsx               # Top-level state, routing, and recipe grid
-│   ├── App.css               # Component styles (legacy — being migrated)
-│   ├── index.css             # Global styles
-│   └── main.jsx              # Vite/React entry point
-├── public/                   # (planned) static assets
-├── .context/                 # AI working notes (gitignored)
-├── .env.example              # Template for required env vars
-├── .gitignore                # Standard Node/Vite ignores + .env.local + .context/
-├── DATABASE_SCHEMA.md        # Human-readable schema reference
-├── ROADMAP.md                # Staged delivery plan
-├── TECHNICAL_CONCEPTS.md     # Architecture rationale
-├── index.html                # Vite entry HTML
-├── package.json
-├── supabase_migration.sql    # Schema + RLS + triggers
-└── vite.config.js
+│   ├── components/       # ~40 React components (views, modals, buttons, overlays)
+│   ├── hooks/            # App-level data hooks (favorites, likes, cookbooks, timers, …)
+│   ├── lib/              # Pure modules: parsing, scaling, list merging, drag math
+│   ├── App.jsx           # Routing, session, home grid, App-level hook composition
+│   └── index.css         # Tailwind entry + book/backdrop/print CSS vocabularies
+├── supabase_migration/   # Numbered schema migrations (run in order)
+├── scripts/              # seed-test-accounts.js
+├── refs/                 # Living docs — roadmap, DB decisions, cosmetics, testing
+├── .github/workflows/    # CI pipeline
+├── middleware.js         # Vercel Edge Middleware (Open Graph unfurls)
+├── Dockerfile            # Multi-stage production image
+└── vercel.json           # SPA rewrite rules
 ```
 
 ## Documentation
 
-- [ROADMAP.md](./ROADMAP.md) — Staged plan: what's next, what's deferred.
-- [TECHNICAL_CONCEPTS.md](./TECHNICAL_CONCEPTS.md) — Why this stack, what's planned, what's intentionally not done.
-- [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) — Tables, relationships, and RLS overview.
+- [refs/ROADMAP.md](./refs/ROADMAP.md) — staged delivery history and what's next
+- [refs/DATABASE_DECISIONS.md](./refs/DATABASE_DECISIONS.md) — schema, RLS, and storage rationale (the schema source of truth, alongside the migration files)
+- [refs/COSMETICS.md](./refs/COSMETICS.md) — the rustic-paper visual system
+- [refs/TESTING.md](./refs/TESTING.md) — test accounts, seeding, manual checklists
+- [refs/TECHNICAL_CONCEPTS.md](./refs/TECHNICAL_CONCEPTS.md) — architecture rationale
+- [LIVE.md](./LIVE.md) — deployment reference · [MAINTENANCE.md](./MAINTENANCE.md) — maintenance-mode runbook
+- [FABLE.md](./FABLE.md) — 2026-07 whole-project improvement review
