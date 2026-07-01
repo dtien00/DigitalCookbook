@@ -15,6 +15,7 @@ import { useShoppingList } from './hooks/useShoppingList'
 import { useBackdrop } from './hooks/useBackdrop'
 import { useCookbooks } from './hooks/useCookbooks'
 import { useTimers } from './hooks/useTimers'
+import ErrorBoundary from './components/ErrorBoundary'
 import Auth from './components/Auth'
 import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
@@ -508,6 +509,11 @@ function App() {
     return (
         <>
             <EnvBanner />
+            {/* Route-level error boundary (FABLE.md §4.1): a render crash in
+                any routed view shows a reload card instead of white-screening
+                the whole app. Keyed by pathname inside, so navigating away
+                from a crashed route recovers without a reload. */}
+            <ErrorBoundary>
             <Routes>
                 <Route path="/" element={<HomeView {...homeViewProps} />} />
                 <Route path="/recipe/:id" element={<RecipeDetailRoute {...recipeDetailProps} />} />
@@ -672,6 +678,7 @@ function App() {
                     button doesn't trap the user on the bad URL. */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </ErrorBoundary>
             <div
                 aria-hidden={!showAuth}
                 className={`fixed inset-0 z-50 transition-transform duration-[450ms] ease-out ${showAuth ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
