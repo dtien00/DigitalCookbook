@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from './lib/supabaseClient'
@@ -17,26 +17,42 @@ import { useCookbooks } from './hooks/useCookbooks'
 import { useTimers } from './hooks/useTimers'
 import ErrorBoundary from './components/ErrorBoundary'
 import Auth from './components/Auth'
-import CreateRecipe from './components/CreateRecipe'
 import RecipeDetail from './components/RecipeDetail'
-import Profile from './components/Profile'
-import AuthorProfile from './components/AuthorProfile'
-import AdminReports from './components/AdminReports'
-import CookbookDetail from './components/CookbookDetail'
-import FollowingPhonebook from './components/FollowingPhonebook'
-import MyBookmarks from './components/MyBookmarks'
 import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
 import NotificationsBell from './components/NotificationsBell'
-import ShoppingList from './components/ShoppingList'
-import MealPlan from './components/MealPlan'
 import AddToPlanModal from './components/AddToPlanModal'
 import OnboardingTour from './components/OnboardingTour'
 import TimerWidget from './components/TimerWidget'
 import TimerSetSheet from './components/TimerSetSheet'
 import { addRecipeToPlan } from './hooks/useMealPlan'
+
+// Route-only views are code-split (FABLE.md §1.1): each becomes its own
+// chunk fetched on first navigation, keeping the entry bundle to what the
+// two real entry paths (home grid, /recipe/:id deep link) actually need.
+// RecipeDetail and the App-level overlays (Auth, FridgeBasket, timers)
+// stay eager — they're either an entry path or must render instantly.
+const CreateRecipe = lazy(() => import('./components/CreateRecipe'))
+const Profile = lazy(() => import('./components/Profile'))
+const AuthorProfile = lazy(() => import('./components/AuthorProfile'))
+const AdminReports = lazy(() => import('./components/AdminReports'))
+const CookbookDetail = lazy(() => import('./components/CookbookDetail'))
+const FollowingPhonebook = lazy(() => import('./components/FollowingPhonebook'))
+const MyBookmarks = lazy(() => import('./components/MyBookmarks'))
+const ShoppingList = lazy(() => import('./components/ShoppingList'))
+const MealPlan = lazy(() => import('./components/MealPlan'))
+
+// Suspense fallback for lazy routes — mirrors the RecipeDetailRoute
+// loading treatment so a chunk fetch reads as a normal page load.
+function RouteLoading() {
+    return (
+        <div className="paper-grain min-h-screen flex items-center justify-center">
+            <p className="font-display italic text-rose" role="status">Loading…</p>
+        </div>
+    )
+}
 
 // Number of recipes to fetch per infinity-scroll page. 20 balances request
 // overhead against initial-paint speed on phone. Lower it for visible
@@ -514,6 +530,7 @@ function App() {
                 the whole app. Keyed by pathname inside, so navigating away
                 from a crashed route recovers without a reload. */}
             <ErrorBoundary>
+            <Suspense fallback={<RouteLoading />}>
             <Routes>
                 <Route path="/" element={<HomeView {...homeViewProps} />} />
                 <Route path="/recipe/:id" element={<RecipeDetailRoute {...recipeDetailProps} />} />
@@ -678,6 +695,7 @@ function App() {
                     button doesn't trap the user on the bad URL. */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
             </ErrorBoundary>
             <div
                 aria-hidden={!showAuth}
