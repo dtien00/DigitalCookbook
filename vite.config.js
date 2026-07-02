@@ -11,4 +11,17 @@ export default defineConfig({
   // allowedHosts: true disables Vite's host-allowlist DNS-rebinding check
   // so LAN IPs and trycloudflare tunnels work in dev. Dev-only — no effect on build.
   server: { host: true, allowedHosts: true },
+  build: {
+    rollupOptions: {
+      output: {
+        // Stable vendor chunks (FABLE.md §1.1): the framework changes far
+        // less often than app code, so giving it its own chunk lets
+        // returning visitors keep it cached across app deploys.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'supabase': ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
 })

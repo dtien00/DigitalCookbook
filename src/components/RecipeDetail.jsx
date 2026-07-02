@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
@@ -14,13 +14,18 @@ import Comments from './Comments'
 import RecipeRail from './RecipeRail'
 import Skeleton from './Skeleton'
 import MfaChallengeGate from './MfaChallengeGate'
-import CookingMode from './CookingMode'
 import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import { scaleQuantity } from '../lib/scaleQuantity'
 import { formatMs } from '../lib/parseDuration'
+
+// Code-split (FABLE.md §1.1): CookingMode is a full-screen surface used by
+// a fraction of recipe views, so its chunk loads on the first "Start
+// cooking" tap. The fullscreen request stays in handleStartCooking's
+// user-gesture context, so lazy-mounting doesn't affect it.
+const CookingMode = lazy(() => import('./CookingMode'))
 
 export default function RecipeDetail({
     recipe,
@@ -874,6 +879,7 @@ export default function RecipeDetail({
                 </div>
             </div>
             {cooking && (
+                <Suspense fallback={null}>
                 <CookingMode
                     recipe={recipe}
                     steps={steps}
@@ -887,6 +893,7 @@ export default function RecipeDetail({
                     onOpenTimerSheet={onOpenTimerSheet}
                     onStartTimer={onStartTimer}
                 />
+                </Suspense>
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />
         </div>

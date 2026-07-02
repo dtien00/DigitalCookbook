@@ -1,5 +1,7 @@
 # Database Schema: Digital Cookbook
 
+> ⚠️ **Historical document — describes the original base schema only.** Twenty-two migrations have landed since this was written (tags, cookbooks, meal plans, reports, notifications, comment likes, admin/MFA columns, and more). The current sources of truth are the numbered SQL files in [supabase_migration/](./supabase_migration/) and the per-migration rationale in [refs/DATABASE_DECISIONS.md](./refs/DATABASE_DECISIONS.md).
+
 This schema is designed for **PostgreSQL** (via Supabase) and follows a relational structure to support the social and recipe management features.
 
 ## Tables Overview
