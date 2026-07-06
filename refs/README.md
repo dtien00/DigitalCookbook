@@ -23,6 +23,7 @@ Maintained alongside the code — updated in the same change that ships work tou
 | [DATABASE_DECISIONS.md](./DATABASE_DECISIONS.md) | Schema, RLS policies, storage, and the reasoning behind each migration. |
 | [COSMETICS.md](./COSMETICS.md) | The "rustic-paper" design system — palette tokens, typography, component styling. |
 | [TESTING.md](./TESTING.md) | Test accounts, seed data, environments, and manual QA checklists. |
+| [LIVE.md](./LIVE.md) | Deployment reference — Vercel + Supabase hosting and the ongoing-maintenance runbook. |
 
 ## Infrastructure & future-work evaluations
 
