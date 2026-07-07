@@ -167,11 +167,15 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const rowStartField = (row) => row.type === 'section' ? 'section' : ingredientLayout[0]
     const focusRowStart = (index) => focusField(index, rowStartField(rows[index]))
 
-    const addIngredient = () => {
-        // Focus the first visible field of the new row once it renders.
-        pendingFocusRef.current = `${rows.length}:${ingredientLayout[0]}`
-        setRows([...rows, emptyIngredientRow()])
+    // Insert a fresh ingredient row at `index` and focus its first visible
+    // field once it renders. Refs rebind positionally, so mid-list inserts
+    // need no key bookkeeping.
+    const insertIngredientAt = (index) => {
+        pendingFocusRef.current = `${index}:${ingredientLayout[0]}`
+        setRows(prev => [...prev.slice(0, index), emptyIngredientRow(), ...prev.slice(index)])
     }
+
+    const addIngredient = () => insertIngredientAt(rows.length)
 
     // Stage 21 — append a named section row; ingredient rows beneath it (until
     // the next section row) inherit the label on save.
@@ -209,9 +213,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // nothing persists until the recipe saves.
     const rowSort = useDragSort({ onMove: (from, to) => setRows(prev => arrayMove(prev, from, to)) })
 
-    // Enter was confirmed on `field` of row `index`. Advance within the row, or
-    // — when it's the last visible field — add a new row (last row) or jump to
-    // the next row's first field.
+    // Enter was confirmed on `field` of row `index`. Advance within the row;
+    // on the last visible field, keep the entry flow inside the current
+    // section: add a row at the end (last row), insert a fresh ingredient row
+    // in place when the next row is a section heading (never walk into
+    // editing an existing section's name), or jump to the next ingredient row.
     const commitIngredientField = (index, field) => {
         const pos = ingredientLayout.indexOf(field)
         if (pos < ingredientLayout.length - 1) {
@@ -220,6 +226,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         }
         if (index === rows.length - 1) {
             addIngredient()
+        } else if (rows[index + 1].type === 'section') {
+            insertIngredientAt(index + 1)
         } else {
             focusRowStart(index + 1)
         }
@@ -234,13 +242,15 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         commitIngredientField(index, field)
     }
 
-    // Enter on a section-name input follows the same advance contract: last
-    // row adds a fresh ingredient row beneath the new heading, otherwise focus
-    // moves to the next row's first field.
+    // Enter on a section-name input means "now give it an ingredient": a
+    // fresh row is added/inserted beneath the heading unless one already
+    // follows, in which case focus just moves there. Never advances into
+    // another section's name input.
     const handleSectionKeyDown = (index, e) => {
         if (e.key !== 'Enter') return
         e.preventDefault()
         if (index === rows.length - 1) addIngredient()
+        else if (rows[index + 1].type === 'section') insertIngredientAt(index + 1)
         else focusRowStart(index + 1)
     }
 
