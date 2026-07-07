@@ -645,6 +645,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 **Editor ([CreateRecipe.jsx](../src/components/CreateRecipe.jsx))**
 - [ ] **Add Section appends a section row** — distinct look (bold text, paper tint, rust left bar), focus lands in it; `Enter` adds + focuses a fresh ingredient row beneath it
+- [ ] **Enter stays in the section** — with a later section existing, `Enter` on the last field of a section's last ingredient inserts a new ingredient row *in that section* and focuses it — it never moves focus into the next section's name input
 - [ ] **Drag any row** — every row (ingredient and section) has a ⠿ grip; dragging reorders live, including moving a section row above/below ingredient rows
 - [ ] **Remove a section row** — its `×` is always visible; removing it leaves the ingredients in place (they inherit the section above on save)
 - [ ] **Blank section dropped** — an empty-named section row silently disappears on save; ingredients under it inherit the previous named section (or none)
@@ -654,7 +655,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 **Viewer ([RecipeDetail.jsx](../src/components/RecipeDetail.jsx))**
 - [ ] **Grouped rendering** — section names render as rust small-caps sub-headings over a tan rule; the unsectioned lead ingredients render heading-less above the first section
 - [ ] **Collapse toggle** — clicking a heading hides its rows and shows an italic `(n)` count; clicking again restores; state resets when navigating to another recipe
-- [ ] **Cross-boundary drag adopts** — (as author) drag an ingredient from one section into another → after "Save order" + reload it stays in the new section
+- [ ] **Drag is contained to its section** — (as author) dragging an ingredient pins at its group's edges; it cannot cross a heading into another section, and a one-ingredient section cannot be dissolved by dragging its only row (move ingredients between sections in the editor instead)
 - [ ] **Drag expands collapsed groups** — collapse a section, then start any ingredient drag → all sections expand first
 - [ ] **Servings scaling + checklist unaffected** — quantities scale and checkboxes strike through within groups as before
 
