@@ -4,7 +4,7 @@ import {
     hasSections,
     rowsToIngredients,
     ingredientsToRows,
-    adoptSectionAt,
+    clampMoveToSection,
 } from './ingredientSections'
 
 // Pins the Stage 21 grouping + editor row-mapping logic. All plain data —
@@ -123,35 +123,42 @@ describe('ingredientsToRows', () => {
     })
 })
 
-describe('adoptSectionAt', () => {
+describe('clampMoveToSection', () => {
+    // flat indexes:      0            1                    2                    3                  4
     const list = [
         ing('oil'),
-        ing('flour', 'dough'), ing('yeast', 'dough'),
+        ing('flour', 'dough'), ing('yeast', 'dough'), ing('water', 'dough'),
         ing('tomato', 'sauce'),
     ]
 
-    it('adopts the section of the row above after a downward drop', () => {
-        // 'oil' dragged between flour and yeast (flat index 1 after arrayMove).
-        const moved = [list[1], list[0], list[2], list[3]]
-        const out = adoptSectionAt(moved, 1)
-        expect(out[1]).toMatchObject({ name: 'oil', section: 'dough' })
+    it('allows moves within the same section', () => {
+        expect(clampMoveToSection(list, 1, 3)).toBe(3)
+        expect(clampMoveToSection(list, 3, 1)).toBe(1)
     })
 
-    it('adopts the section of the row below when dropped at the top', () => {
-        // 'tomato' dragged to index 0; old first row was unsectioned oil.
-        const moved = [list[3], list[0], list[1], list[2]]
-        const out = adoptSectionAt(moved, 0)
-        expect(out[0]).toMatchObject({ name: 'tomato', section: null })
+    it('clamps a downward drag at the section\'s last row', () => {
+        // 'flour' dragged toward the sauce section → pinned at dough's end.
+        expect(clampMoveToSection(list, 1, 4)).toBe(3)
     })
 
-    it('does not mutate the input array', () => {
-        const moved = [list[1], list[0], list[2], list[3]]
-        adoptSectionAt(moved, 1)
-        expect(moved[1].section).toBeNull()
+    it('clamps an upward drag at the section\'s first row', () => {
+        // 'water' dragged toward the unsectioned lead → pinned at dough's start.
+        expect(clampMoveToSection(list, 3, 0)).toBe(1)
     })
 
-    it('handles a single-item list', () => {
-        const out = adoptSectionAt([ing('flour', 'dough')], 0)
-        expect(out[0].section).toBe('dough')
+    it('pins a one-ingredient section in place (cannot be dissolved)', () => {
+        expect(clampMoveToSection(list, 4, 0)).toBe(4)
+        expect(clampMoveToSection(list, 0, 4)).toBe(0)
+    })
+
+    it('keeps the unsectioned lead run inside itself', () => {
+        const twoLead = [ing('oil'), ing('salt'), ing('flour', 'dough')]
+        expect(clampMoveToSection(twoLead, 0, 2)).toBe(1)
+        expect(clampMoveToSection(twoLead, 1, 0)).toBe(0)
+    })
+
+    it('treats undefined section as null when matching the run', () => {
+        const mixed = [{ name: 'oil' }, ing('salt', null), ing('flour', 'dough')]
+        expect(clampMoveToSection(mixed, 0, 1)).toBe(1)
     })
 })

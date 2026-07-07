@@ -83,15 +83,17 @@ export function ingredientsToRows(ingredients) {
 
 // ---- Viewer drag rule (RecipeDetail) ---------------------------------------
 
-// After an ingredient is dragged to flat index `to`, it adopts the section it
-// landed in: the section of the row now above it, or — dropped at the very
-// top — the section of the row now below (the old first row). Returns a new
-// array; no-op (same reference semantics as input, but always a fresh copy)
-// when the section already matches.
-export function adoptSectionAt(ingredients, to) {
-    const next = [...ingredients]
-    const neighbor = to > 0 ? next[to - 1] : next[1]
-    const section = neighbor ? (neighbor.section ?? null) : (next[to].section ?? null)
-    next[to] = { ...next[to], section }
-    return next
+// Clamp a viewer drag so an ingredient never leaves its section: the drop
+// target is bounded by the contiguous run (same section label) that contains
+// the dragged row. Without this, dragging a one-ingredient section's row past
+// a heading would dissolve the section — restructuring across sections is the
+// editor's job, not the viewer's. Returns the clamped target index (=== from
+// when the drag is pinned at a boundary).
+export function clampMoveToSection(ingredients, from, to) {
+    const section = ingredients[from]?.section ?? null
+    let start = from
+    while (start > 0 && (ingredients[start - 1].section ?? null) === section) start--
+    let end = from
+    while (end < ingredients.length - 1 && (ingredients[end + 1].section ?? null) === section) end++
+    return Math.max(start, Math.min(end, to))
 }

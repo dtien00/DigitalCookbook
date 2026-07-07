@@ -10,6 +10,10 @@ import { targetIndexForY } from '../lib/dragSortCore'
 // Items reorder *live* as the pointer crosses a neighbouring row's vertical
 // midpoint; the caller owns the array (via onMove) and decides when to persist.
 // In RecipeDetail the moves stay local until the author taps "Save order".
+// onMove may return the index the row actually landed at — a caller that
+// constrains moves (e.g. RecipeDetail clamps ingredient drags inside their
+// section) reports the clamped index so the hook keeps tracking the right row;
+// returning undefined means the move landed at the requested target.
 //
 // A drag on touch starts on a handle styled `touch-action: none` so the browser
 // doesn't try to scroll the page out from under the gesture. Because we've taken
@@ -80,10 +84,14 @@ export function useDragSort({ enabled = true, onMove }) {
         const from = drag.current.index
         const target = targetIndexForY(readRects(), clientY, from)
         if (target == null || target === from) return
-        onMoveRef.current(from, target)
-        drag.current.index = target
+        const applied = onMoveRef.current(from, target)
+        // Track where the row actually landed — a constraining caller may have
+        // clamped the move (landing back at `from` means it was pinned).
+        const landed = typeof applied === 'number' ? applied : target
+        if (landed === from) return
+        drag.current.index = landed
         drag.current.moved = true
-        setDragIndex(target)
+        setDragIndex(landed)
     }, [readRects])
 
     // Auto-scroll loop: while the held pointer sits in the top/bottom edge band,

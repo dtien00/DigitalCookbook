@@ -18,7 +18,7 @@ import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
-import { groupIngredients, adoptSectionAt } from '../lib/ingredientSections'
+import { groupIngredients, clampMoveToSection } from '../lib/ingredientSections'
 import { scaleQuantity } from '../lib/scaleQuantity'
 import { formatMs } from '../lib/parseDuration'
 import DragHandleIcon from './DragHandleIcon'
@@ -367,11 +367,17 @@ export default function RecipeDetail({
     // marker and the "Step N" timer label), so renumber step_number to match so
     // those stay correct before the save round-trips.
     const moveIngredient = (from, to) => {
-        // Stage 21 — an ingredient dragged across a section boundary adopts
-        // the section it lands in, live per midpoint crossing, so headings
-        // reflow under the finger and the resting position decides the label.
-        setIngredients(prev => adoptSectionAt(arrayMove(prev, from, to), to))
-        setIngredientsDirty(true)
+        // Stage 21 — viewer drags are contained to the row's own section: the
+        // drop target clamps at the group's edges, so a one-ingredient section
+        // can't be dissolved by a stray drag. Restructuring across sections is
+        // the editor's job. The clamped index is returned so useDragSort keeps
+        // tracking the row where it actually landed.
+        const target = clampMoveToSection(ingredients, from, to)
+        if (target !== from) {
+            setIngredients(prev => arrayMove(prev, from, target))
+            setIngredientsDirty(true)
+        }
+        return target
     }
     const moveStep = (from, to) => {
         setSteps(prev => arrayMove(prev, from, to).map((s, i) => ({ ...s, step_number: i + 1 })))
@@ -413,9 +419,7 @@ export default function RecipeDetail({
             const writes = []
             if (ingredientsDirty) {
                 ingredients.forEach((ing, i) => {
-                    // Stage 21 — a cross-boundary drag also changed the row's
-                    // section, so persist it alongside the position.
-                    writes.push(supabase.from('ingredients').update({ order_index: i, section: ing.section ?? null }).eq('id', ing.id))
+                    writes.push(supabase.from('ingredients').update({ order_index: i }).eq('id', ing.id))
                 })
             }
             if (stepsDirty) {
