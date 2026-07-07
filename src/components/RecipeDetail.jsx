@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
@@ -18,8 +18,10 @@ import Lightbox from './Lightbox'
 import useRecipeRails from '../hooks/useRecipeRails'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
+import { groupIngredients, clampMoveToSection } from '../lib/ingredientSections'
 import { scaleQuantity } from '../lib/scaleQuantity'
 import { formatMs } from '../lib/parseDuration'
+import DragHandleIcon from './DragHandleIcon'
 
 // Code-split (FABLE.md §1.1): CookingMode is a full-screen surface used by
 // a fraction of recipe views, so its chunk loads on the first "Start
@@ -65,6 +67,10 @@ export default function RecipeDetail({
     const [stepsDirty, setStepsDirty] = useState(false)
     const [savingOrder, setSavingOrder] = useState(false)
     const [targetServings, setTargetServings] = useState(recipe.servings || 1)
+    // Stage 21 — per-section collapse, keyed by group position in the derived
+    // run list. Local state only; resets per recipe, and expands for drags and
+    // PDF capture (both need every row's real geometry/content).
+    const [collapsedSections, setCollapsedSections] = useState(() => new Set())
     const [checkedIngredients, setCheckedIngredients] = useState(() => new Set())
     const [checkedSteps, setCheckedSteps] = useState(() => new Set())
     const [pdfLoading, setPdfLoading] = useState(false)
@@ -142,6 +148,7 @@ export default function RecipeDetail({
         fetchRecipeDetails()
         setCheckedIngredients(new Set())
         setCheckedSteps(new Set())
+        setCollapsedSections(new Set())
         setIngredientsDirty(false)
         setStepsDirty(false)
         // Re-run only when the recipe changes; `fetchRecipeDetails` is recreated
@@ -261,6 +268,12 @@ export default function RecipeDetail({
         setPdfLoading(true)
         const toastId = toast.loading('Generating PDF…')
         try {
+            // Stage 21 — html2pdf renders screen media, so a collapsed
+            // ingredient section would vanish from the PDF; expand everything
+            // and let React paint before capture. (Browser print instead uses
+            // an @media print force-expand rule in index.css.)
+            setCollapsedSections(new Set())
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
             const { default: html2pdf } = await import('html2pdf.js')
             const element = document.querySelector('.recipe-detail-container')
             await html2pdf()
@@ -354,8 +367,17 @@ export default function RecipeDetail({
     // marker and the "Step N" timer label), so renumber step_number to match so
     // those stay correct before the save round-trips.
     const moveIngredient = (from, to) => {
-        setIngredients(prev => arrayMove(prev, from, to))
-        setIngredientsDirty(true)
+        // Stage 21 — viewer drags are contained to the row's own section: the
+        // drop target clamps at the group's edges, so a one-ingredient section
+        // can't be dissolved by a stray drag. Restructuring across sections is
+        // the editor's job. The clamped index is returned so useDragSort keeps
+        // tracking the row where it actually landed.
+        const target = clampMoveToSection(ingredients, from, to)
+        if (target !== from) {
+            setIngredients(prev => arrayMove(prev, from, target))
+            setIngredientsDirty(true)
+        }
+        return target
     }
     const moveStep = (from, to) => {
         setSteps(prev => arrayMove(prev, from, to).map((s, i) => ({ ...s, step_number: i + 1 })))
@@ -364,6 +386,29 @@ export default function RecipeDetail({
 
     const ingredientSort = useDragSort({ enabled: isAuthor, onMove: moveIngredient })
     const stepSort = useDragSort({ enabled: isAuthor, onMove: moveStep })
+
+    // Stage 21 — a drag must see every row's real geometry; rows hidden by a
+    // collapsed section report zero-rects and would corrupt the drop-target
+    // math, so any ingredient drag starts by expanding all sections.
+    const ingredientHandleProps = (idx) => {
+        const props = ingredientSort.handleProps(idx)
+        return {
+            ...props,
+            onPointerDown: (e) => {
+                setCollapsedSections(new Set())
+                props.onPointerDown(e)
+            },
+        }
+    }
+
+    const toggleSectionCollapsed = (groupIndex) => {
+        setCollapsedSections(prev => {
+            const next = new Set(prev)
+            if (next.has(groupIndex)) next.delete(groupIndex)
+            else next.add(groupIndex)
+            return next
+        })
+    }
 
     // Persist the current order. Plain INTEGER columns with no UNIQUE constraint
     // (see migration 001) and the "Authors can manage …" RLS policies mean we can
@@ -413,41 +458,82 @@ export default function RecipeDetail({
                 </ul>
             ) : (
                 <ul ref={ingredientSort.listRef} className="ingredient-list list-none pl-0">
-                    {ingredients.map((ing, idx) => {
-                        const checked = checkedIngredients.has(ing.id)
-                        const dragging = ingredientSort.dragIndex === idx
+                    {/* Stage 21 — groups derive from contiguous runs of the
+                        section label. Heading rows carry no data-sort-row, so
+                        the drag machinery's rect indexes keep matching the
+                        flat ingredients array; a recipe with no sections is
+                        one null-section run and renders exactly as before. */}
+                    {groupIngredients(ingredients).map((group, groupIndex) => {
+                        const collapsed = collapsedSections.has(groupIndex)
                         return (
-                            <li key={ing.id} data-sort-row className={dragging ? 'opacity-60' : ''}>
-                                <div className="flex items-start gap-2">
-                                    {isAuthor && (
+                            <Fragment key={`${group.startIndex}:${group.section ?? ''}`}>
+                                {group.section && (
+                                    <li className="mt-4 mb-2">
                                         <button
                                             type="button"
-                                            {...ingredientSort.handleProps(idx)}
-                                            aria-label={`Drag to reorder ${ing.name}`}
-                                            title="Drag to reorder"
-                                            className="no-print mt-0.5 shrink-0 cursor-grab active:cursor-grabbing text-ink/35 hover:text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust rounded"
+                                            onClick={() => toggleSectionCollapsed(groupIndex)}
+                                            aria-expanded={!collapsed}
+                                            className="w-full flex items-center gap-2 text-left font-display text-rust text-sm uppercase tracking-widest border-b border-tan/60 pb-1"
                                         >
-                                            <DragHandleIcon />
-                                        </button>
-                                    )}
-                                    <label className="flex-1 flex items-start gap-3 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
-                                            className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
-                                        />
-                                        <span className={checked ? 'line-through text-ink/50' : ''}>
-                                            {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
-                                            {ing.notes && (
-                                                <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
-                                                    {ing.notes}
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                className={`no-print w-3.5 h-3.5 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+                                                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                            {group.section}
+                                            {collapsed && (
+                                                <span className="normal-case tracking-normal font-serif italic text-ink/50 text-xs">
+                                                    ({group.items.length})
                                                 </span>
                                             )}
-                                        </span>
-                                    </label>
-                                </div>
-                            </li>
+                                        </button>
+                                    </li>
+                                )}
+                                {group.items.map((ing, offset) => {
+                                    const idx = group.startIndex + offset
+                                    const checked = checkedIngredients.has(ing.id)
+                                    const dragging = ingredientSort.dragIndex === idx
+                                    return (
+                                        <li
+                                            key={ing.id}
+                                            data-sort-row
+                                            className={`${dragging ? 'opacity-60' : ''} ${collapsed ? 'section-collapsed' : ''}`}
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                {isAuthor && (
+                                                    <button
+                                                        type="button"
+                                                        {...ingredientHandleProps(idx)}
+                                                        aria-label={`Drag to reorder ${ing.name}`}
+                                                        title="Drag to reorder"
+                                                        className="no-print mt-0.5 shrink-0 cursor-grab active:cursor-grabbing text-ink/35 hover:text-ink/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-rust rounded"
+                                                    >
+                                                        <DragHandleIcon />
+                                                    </button>
+                                                )}
+                                                <label className="flex-1 flex items-start gap-3 cursor-pointer select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
+                                                        className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
+                                                    />
+                                                    <span className={checked ? 'line-through text-ink/50' : ''}>
+                                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                                        {ing.notes && (
+                                                            <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
+                                                                {ing.notes}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </li>
+                                    )
+                                })}
+                            </Fragment>
                         )
                     })}
                 </ul>
@@ -897,20 +983,6 @@ export default function RecipeDetail({
             )}
             <Lightbox url={lightboxUrl} ariaLabel="Step photo" onClose={() => setLightboxUrl(null)} />
         </div>
-    )
-}
-
-// Six-dot grip used as the author-only drag handle on ingredient/step rows.
-function DragHandleIcon() {
-    return (
-        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
-            <circle cx="9" cy="6" r="1.6" />
-            <circle cx="15" cy="6" r="1.6" />
-            <circle cx="9" cy="12" r="1.6" />
-            <circle cx="15" cy="12" r="1.6" />
-            <circle cx="9" cy="18" r="1.6" />
-            <circle cx="15" cy="18" r="1.6" />
-        </svg>
     )
 }
 

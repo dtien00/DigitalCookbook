@@ -23,6 +23,7 @@ Maintained alongside the code — updated in the same change that ships work tou
 | [DATABASE_DECISIONS.md](./DATABASE_DECISIONS.md) | Schema, RLS policies, storage, and the reasoning behind each migration. |
 | [COSMETICS.md](./COSMETICS.md) | The "rustic-paper" design system — palette tokens, typography, component styling. |
 | [TESTING.md](./TESTING.md) | Test accounts, seed data, environments, and manual QA checklists. |
+| [LIVE.md](./LIVE.md) | Deployment reference — Vercel + Supabase hosting and the ongoing-maintenance runbook. |
 
 ## Infrastructure & future-work evaluations
 
@@ -36,9 +37,7 @@ remain evaluations of options not (yet) adopted.
 | [DOCKER.md](./DOCKER.md) | ✅ implemented | Multi-stage `Dockerfile` + nginx SPA serve, and how it fits the Vite + Supabase setup. |
 | [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) | ✅ implemented | The CI/CD pipeline (lint + test + build + docker) and how it coexists with Vercel's auto-deploy. |
 | [TERRAFORM.md](./TERRAFORM.md) | proposal | Infrastructure-as-Code for the Vercel/Supabase project, with the IaC-vs-SQL-migrations boundary. |
-
-> A companion evaluation, [INSTACART.md](../INSTACART.md), lives at the repo root (it predates this
-> index) and assesses a shoppable-recipes integration in the same research-doc format.
+| [INSTACART.md](./INSTACART.md) | research | Whether and how to make recipes "shoppable" via Instacart — feasibility, costs, data-model fit; nothing implemented. |
 
 ---
 

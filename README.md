@@ -4,7 +4,7 @@
 
 A Pinterest-style recipe hub that grew into a full **plan → shop → cook** loop: browse and bookmark recipes, group them into cookbooks, plan a week of meals, build the shopping list from the plan, then cook hands-free with step-by-step cooking mode and floating kitchen timers.
 
-**Live:** [digital-cookbook-ruddy.vercel.app](https://digital-cookbook-ruddy.vercel.app) — anonymous browsing works without an account. See [LIVE.md](./LIVE.md) for deployment details.
+**Live:** [digital-cookbook-ruddy.vercel.app](https://digital-cookbook-ruddy.vercel.app) — anonymous browsing works without an account. See [refs/LIVE.md](./refs/LIVE.md) for deployment details.
 
 ## Status
 
@@ -137,5 +137,5 @@ DigitalCookbook/
 - [refs/COSMETICS.md](./refs/COSMETICS.md) — the rustic-paper visual system
 - [refs/TESTING.md](./refs/TESTING.md) — test accounts, seeding, manual checklists
 - [refs/TECHNICAL_CONCEPTS.md](./refs/TECHNICAL_CONCEPTS.md) — architecture rationale
-- [LIVE.md](./LIVE.md) — deployment reference · [MAINTENANCE.md](./MAINTENANCE.md) — maintenance-mode runbook
+- [refs/LIVE.md](./refs/LIVE.md) — deployment reference · [MAINTENANCE.md](./MAINTENANCE.md) — maintenance-mode runbook
 - [FABLE.md](./FABLE.md) — 2026-07 whole-project improvement review

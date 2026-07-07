@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { scaleQuantity } from '../lib/scaleQuantity'
+import { groupIngredients } from '../lib/ingredientSections'
 import { formatMs } from '../lib/parseDuration'
 import { supabase } from '../lib/supabaseClient'
 
@@ -441,31 +442,45 @@ export default function CookingMode({
                             </button>
                         </div>
                         <ul className="flex-1 overflow-y-auto px-5 py-3 space-y-1 list-none">
+                            {/* Stage 21 — same contiguous-run grouping as
+                                RecipeDetail, headings only (no collapse: the
+                                drawer is already a compact overlay). */}
                             {ingredients.length === 0 ? (
                                 <li className="font-serif italic text-ink/60 py-2">No ingredients listed.</li>
-                            ) : ingredients.map(ing => {
-                                const checked = checkedIngredients.has(ing.id)
-                                return (
-                                    <li key={ing.id}>
-                                        <label className="flex items-start gap-3 cursor-pointer select-none py-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={checked}
-                                                onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
-                                                className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
-                                            />
-                                            <span className={`font-serif text-base ${checked ? 'line-through text-ink/40' : 'text-ink'}`}>
-                                                {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
-                                                {ing.notes && (
-                                                    <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
-                                                        {ing.notes}
-                                                    </span>
-                                                )}
+                            ) : groupIngredients(ingredients).map(group => (
+                                <Fragment key={`${group.startIndex}:${group.section ?? ''}`}>
+                                    {group.section && (
+                                        <li className="pt-3">
+                                            <span className="block font-display text-rust text-xs uppercase tracking-widest border-b border-tan/60 pb-1">
+                                                {group.section}
                                             </span>
-                                        </label>
-                                    </li>
-                                )
-                            })}
+                                        </li>
+                                    )}
+                                    {group.items.map(ing => {
+                                        const checked = checkedIngredients.has(ing.id)
+                                        return (
+                                            <li key={ing.id}>
+                                                <label className="flex items-start gap-3 cursor-pointer select-none py-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleChecked(setCheckedIngredients, ing.id)}
+                                                        className="accent-rust w-5 h-5 mt-1 shrink-0 cursor-pointer"
+                                                    />
+                                                    <span className={`font-serif text-base ${checked ? 'line-through text-ink/40' : 'text-ink'}`}>
+                                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                                        {ing.notes && (
+                                                            <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
+                                                                {ing.notes}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            </li>
+                                        )
+                                    })}
+                                </Fragment>
+                            ))}
                         </ul>
                     </div>
                 </div>

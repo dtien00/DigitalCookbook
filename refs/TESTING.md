@@ -639,6 +639,34 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Ingredient sections checklist (Stage 21)
+
+> Verifies "For the sauce" / "For the dough" grouping across the editor, RecipeDetail, CookingMode, and print/PDF. **Requires migration 024 applied** (`supabase_migration_024_ingredient_sections.sql` — Dashboard → SQL Editor); until then saves fail with a missing-column error. Use any test account; author a recipe with an unsectioned lead ingredient, then two sections of 2–3 ingredients each.
+
+**Editor ([CreateRecipe.jsx](../src/components/CreateRecipe.jsx))**
+- [ ] **Add Section appends a section row** — distinct look (bold text, paper tint, rust left bar), focus lands in it; `Enter` adds + focuses a fresh ingredient row beneath it
+- [ ] **Enter stays in the section** — with a later section existing, `Enter` on the last field of a section's last ingredient inserts a new ingredient row *in that section* and focuses it — it never moves focus into the next section's name input
+- [ ] **Drag any row** — every row (ingredient and section) has a ⠿ grip; dragging reorders live, including moving a section row above/below ingredient rows
+- [ ] **Remove a section row** — its `×` is always visible; removing it leaves the ingredients in place (they inherit the section above on save)
+- [ ] **Blank section dropped** — an empty-named section row silently disappears on save; ingredients under it inherit the previous named section (or none)
+- [ ] **Edit round-trip** — save a sectioned recipe, re-edit it → section rows reappear at the same positions with their names
+- [ ] **Unsectioned recipe unchanged** — a recipe authored with no section rows saves and edits exactly as before
+
+**Viewer ([RecipeDetail.jsx](../src/components/RecipeDetail.jsx))**
+- [ ] **Grouped rendering** — section names render as rust small-caps sub-headings over a tan rule; the unsectioned lead ingredients render heading-less above the first section
+- [ ] **Collapse toggle** — clicking a heading hides its rows and shows an italic `(n)` count; clicking again restores; state resets when navigating to another recipe
+- [ ] **Drag is contained to its section** — (as author) dragging an ingredient pins at its group's edges; it cannot cross a heading into another section, and a one-ingredient section cannot be dissolved by dragging its only row (move ingredients between sections in the editor instead)
+- [ ] **Drag expands collapsed groups** — collapse a section, then start any ingredient drag → all sections expand first
+- [ ] **Servings scaling + checklist unaffected** — quantities scale and checkboxes strike through within groups as before
+
+**Everything else**
+- [ ] **CookingMode drawer grouped** — the ingredients drawer shows the same sub-headings (no collapse)
+- [ ] **PDF includes collapsed rows** — collapse a section, tap PDF → the export shows every ingredient, grouped
+- [ ] **Browser print includes collapsed rows** — collapse a section, Ctrl+P → print preview shows every ingredient
+- [ ] **Exports ignore sections** — "Copy shopping list" and "Add to shopping list" output the same flat lines as an unsectioned recipe (no headings, no per-section anything)
+
+---
+
 ## Open Graph unfurl checklist
 
 > Verifies the Stage M item-1 Vercel Edge Middleware ([`middleware.js`](../middleware.js)) that injects per-recipe Open Graph / Twitter-card meta tags for link unfurls. **Cannot be tested under `vite dev`** — the Edge runtime only runs on Vercel, so verify against a deployed **Preview** URL (push the branch; Vercel auto-builds a Preview). Use `curl -A <crawler-ua>` to impersonate a scraper without a real social client. Needs a **public** recipe id (any `test-public@example.com` recipe) and a **private** id (any private recipe from accounts 1–4) to exercise the RLS-safe fallback.

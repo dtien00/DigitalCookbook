@@ -204,7 +204,7 @@ The anon key is public-safe by design, but rotation is cheap insurance:
 2. Vercel → Settings → Environment Variables → update `VITE_SUPABASE_ANON_KEY`
 3. Trigger a redeploy (push any commit, or Vercel → Deployments → "Redeploy")
 
-Service-role keys (if ever used by [scripts/seed-test-accounts.js](scripts/seed-test-accounts.js)) live only in local `credentials.env` and rotate the same way.
+Service-role keys (if ever used by [scripts/seed-test-accounts.js](../scripts/seed-test-accounts.js)) live only in local `credentials.env` and rotate the same way.
 
 ---
 
