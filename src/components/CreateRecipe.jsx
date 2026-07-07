@@ -3,7 +3,11 @@ import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import { parseQuantity, quantityToDisplay } from '../lib/parseQuantity'
 import { parseDurationToMs, formatMs } from '../lib/parseDuration'
+import { ingredientsToRows, rowsToIngredients } from '../lib/ingredientSections'
+import { useDragSort } from '../hooks/useDragSort'
+import { arrayMove } from '../lib/dragSortCore'
 import UnitCombobox from './UnitCombobox'
+import DragHandleIcon from './DragHandleIcon'
 
 // Column-order presets for an ingredient row. Purely a display concern — the
 // data keys never move, so the layout choice doesn't touch what gets saved.
@@ -15,6 +19,13 @@ const LAYOUT_PRESETS = [
 ]
 const FIELD_LABELS = { name: 'Name', quantity: 'Qty', unit: 'Unit' }
 
+// Stage 21 — the ingredient editor holds a heterogeneous row list: ingredient
+// rows plus section rows ({ type: 'section', name }). Section rows are never
+// stored as rows; on save each ingredient inherits the nearest section row
+// above it (src/lib/ingredientSections.js), and edit mode reconstructs them
+// from the contiguous runs.
+const emptyIngredientRow = () => ({ type: 'ingredient', name: '', quantity: '', unit: '', notes: '' })
+
 export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const isEditMode = !!recipeToEdit
 
@@ -24,7 +35,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [servings, setServings] = useState(recipeToEdit?.servings || 1)
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
-    const [ingredients, setIngredients] = useState([{ name: '', quantity: '', unit: '', notes: '' }])
+    const [rows, setRows] = useState([emptyIngredientRow()])
     // Active column order for the ingredient triplet (see LAYOUT_PRESETS).
     const [ingredientLayout, setIngredientLayout] = useState(LAYOUT_PRESETS[0])
     // Map of `${rowIndex}:${field}` -> input element, for keyboard focus moves.
@@ -83,7 +94,14 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             if (ingData?.length > 0) {
                 // Stored numbers prefill as friendly fractions ("0.5" -> "½")
                 // so the text field reads the way the author would type it.
-                setIngredients(ingData.map(i => ({ name: i.name, quantity: quantityToDisplay(i.quantity), unit: i.unit, notes: i.notes || '' })))
+                // Section rows are rebuilt from the contiguous runs (Stage 21).
+                setRows(ingredientsToRows(ingData.map(i => ({
+                    name: i.name,
+                    quantity: quantityToDisplay(i.quantity),
+                    unit: i.unit,
+                    notes: i.notes || '',
+                    section: i.section ?? null,
+                }))))
             }
 
             // Fetch steps
@@ -140,25 +158,43 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         return publicUrl
     }
 
+    // How many actual ingredient rows exist — section rows don't count toward
+    // the "always keep one row" invariant.
+    const ingredientCount = rows.filter(r => r.type === 'ingredient').length
+
+    // A row's first focusable field: the section-name input, or whatever
+    // column leads the active layout preset.
+    const rowStartField = (row) => row.type === 'section' ? 'section' : ingredientLayout[0]
+    const focusRowStart = (index) => focusField(index, rowStartField(rows[index]))
+
     const addIngredient = () => {
         // Focus the first visible field of the new row once it renders.
-        pendingFocusRef.current = `${ingredients.length}:${ingredientLayout[0]}`
-        setIngredients([...ingredients, { name: '', quantity: '', unit: '', notes: '' }])
+        pendingFocusRef.current = `${rows.length}:${ingredientLayout[0]}`
+        setRows([...rows, emptyIngredientRow()])
     }
 
-    // Drop an ingredient row. Always leaves at least one row (the button is
-    // hidden at length 1), so there's no empty-state to handle. Refs rebind
-    // positionally on re-render, so only the now-unused tail keys need pruning;
-    // focus then lands on whatever row slid into the freed slot.
-    const removeIngredient = (index) => {
-        if (ingredients.length === 1) return
-        const tail = ingredients.length - 1
-        for (const field of ['name', 'quantity', 'unit']) {
+    // Stage 21 — append a named section row; ingredient rows beneath it (until
+    // the next section row) inherit the label on save.
+    const addSection = () => {
+        pendingFocusRef.current = `${rows.length}:section`
+        setRows([...rows, { type: 'section', name: '' }])
+    }
+
+    // Drop a row. Ingredient rows keep the ≥1 invariant (the button is hidden
+    // at one remaining); section rows are always removable — their former
+    // ingredients just inherit the section above. Refs rebind positionally on
+    // re-render, so only the now-unused tail keys need pruning; focus then
+    // lands on whatever row slid into the freed slot.
+    const removeRow = (index) => {
+        if (rows[index].type === 'ingredient' && ingredientCount === 1) return
+        const tail = rows.length - 1
+        for (const field of ['name', 'quantity', 'unit', 'section']) {
             delete inputRefs.current[`${tail}:${field}`]
         }
-        const next = ingredients.filter((_, i) => i !== index)
-        pendingFocusRef.current = `${Math.min(index, next.length - 1)}:${ingredientLayout[0]}`
-        setIngredients(next)
+        const next = rows.filter((_, i) => i !== index)
+        const focusIndex = Math.min(index, next.length - 1)
+        pendingFocusRef.current = `${focusIndex}:${rowStartField(next[focusIndex])}`
+        setRows(next)
     }
 
     // Cycle to the next column-order preset (Name-first -> Amount-first ->
@@ -167,6 +203,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         const idx = LAYOUT_PRESETS.findIndex(p => p.join() === ingredientLayout.join())
         setIngredientLayout(LAYOUT_PRESETS[(idx + 1) % LAYOUT_PRESETS.length])
     }
+
+    // Stage 21 — drag-to-reorder for every editor row (ingredient and section
+    // alike), reusing the viewer's pointer-based hook. Moves are pure state;
+    // nothing persists until the recipe saves.
+    const rowSort = useDragSort({ onMove: (from, to) => setRows(prev => arrayMove(prev, from, to)) })
 
     // Enter was confirmed on `field` of row `index`. Advance within the row, or
     // — when it's the last visible field — add a new row (last row) or jump to
@@ -177,10 +218,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             focusField(index, ingredientLayout[pos + 1])
             return
         }
-        if (index === ingredients.length - 1) {
+        if (index === rows.length - 1) {
             addIngredient()
         } else {
-            focusField(index + 1, ingredientLayout[0])
+            focusRowStart(index + 1)
         }
     }
 
@@ -191,6 +232,16 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         if (e.key !== 'Enter') return
         e.preventDefault()
         commitIngredientField(index, field)
+    }
+
+    // Enter on a section-name input follows the same advance contract: last
+    // row adds a fresh ingredient row beneath the new heading, otherwise focus
+    // moves to the next row's first field.
+    const handleSectionKeyDown = (index, e) => {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        if (index === rows.length - 1) addIngredient()
+        else focusRowStart(index + 1)
     }
 
     const addStep = () => {
@@ -257,10 +308,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setSteps(newSteps)
     }
 
-    const handleIngredientChange = (index, field, value) => {
-        const newIngredients = [...ingredients]
-        newIngredients[index][field] = value
-        setIngredients(newIngredients)
+    // Field edit on any row — ingredient triplet/notes, or a section's name.
+    const handleRowFieldChange = (index, field, value) => {
+        setRows(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
     }
 
     const handleStepChange = (index, value) => {
@@ -327,8 +377,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 recipeId = recipe.id
             }
 
-            // Insert Ingredients
-            const ingredientsToInsert = ingredients
+            // Insert Ingredients. Section rows collapse into a `section` label
+            // on each ingredient (nearest section row above; null when
+            // unsectioned) — see src/lib/ingredientSections.js.
+            const ingredientsToInsert = rowsToIngredients(rows)
                 .filter(i => i.name.trim() !== '')
                 .map((ing, index) => ({
                     recipe_id: recipeId,
@@ -339,6 +391,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     quantity: parseQuantity(ing.quantity) ?? 0,
                     unit: ing.unit,
                     notes: ing.notes?.trim() || null,
+                    section: ing.section,
                     order_index: index
                 }))
 
@@ -494,60 +547,109 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 ⇄ {ingredientLayout.map(f => FIELD_LABELS[f]).join(' · ')}
                             </button>
                         </div>
-                        {ingredients.map((ing, index) => (
-                            <div key={index} className="mb-3">
-                                <div className="form-row">
-                                    {ingredientLayout.map(field => {
-                                        if (field === 'unit') {
-                                            return (
-                                                <UnitCombobox
-                                                    key="unit"
-                                                    value={ing.unit}
-                                                    placeholder="Unit (e.g. cups)"
-                                                    inputRef={el => { inputRefs.current[`${index}:unit`] = el }}
-                                                    onChange={v => handleIngredientChange(index, 'unit', v)}
-                                                    onCommit={() => commitIngredientField(index, 'unit')}
-                                                />
-                                            )
-                                        }
-                                        const isQty = field === 'quantity'
-                                        return (
+                        <div ref={rowSort.listRef}>
+                            {rows.map((row, index) => {
+                                const dragging = rowSort.dragIndex === index
+                                const grip = (
+                                    <button
+                                        type="button"
+                                        {...rowSort.handleProps(index)}
+                                        aria-label={row.type === 'section'
+                                            ? `Drag to reorder section ${row.name || index + 1}`
+                                            : `Drag to reorder ingredient ${index + 1}`}
+                                        title="Drag to reorder"
+                                        className="row-grip"
+                                    >
+                                        <DragHandleIcon />
+                                    </button>
+                                )
+                                // Stage 21 — a section row: single name input
+                                // reading as an authored sub-heading. Always
+                                // removable (its ingredients just fall to the
+                                // section above).
+                                if (row.type === 'section') {
+                                    return (
+                                        <div key={index} data-sort-row className={`form-row ${dragging ? 'opacity-60' : ''}`}>
+                                            {grip}
                                             <input
-                                                key={field}
-                                                className={isQty ? 'ingredient-qty' : undefined}
-                                                placeholder={isQty ? 'Qty (e.g. 1 1/2)' : 'Name'}
+                                                className="section-name"
+                                                placeholder='Section name (e.g. "For the sauce")'
                                                 type="text"
-                                                inputMode={isQty ? 'text' : undefined}
-                                                value={isQty ? ing.quantity : ing.name}
-                                                ref={el => { inputRefs.current[`${index}:${field}`] = el }}
-                                                onChange={e => handleIngredientChange(index, field, e.target.value)}
-                                                onKeyDown={e => handleIngredientKeyDown(index, field, e)}
+                                                value={row.name}
+                                                ref={el => { inputRefs.current[`${index}:section`] = el }}
+                                                onChange={e => handleRowFieldChange(index, 'name', e.target.value)}
+                                                onKeyDown={e => handleSectionKeyDown(index, e)}
                                             />
-                                        )
-                                    })}
-                                    {ingredients.length > 1 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => removeIngredient(index)}
-                                            className="ingredient-remove"
-                                            aria-label={`Remove ingredient ${index + 1}`}
-                                            title="Remove this ingredient"
-                                        >
-                                            ×
-                                        </button>
-                                    )}
-                                </div>
-                                <input
-                                    placeholder="Notes (optional — e.g. or any neutral oil)"
-                                    value={ing.notes || ''}
-                                    onChange={e => handleIngredientChange(index, 'notes', e.target.value)}
-                                    className="mt-1.5 w-full italic text-sm"
-                                />
-                            </div>
-                        ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRow(index)}
+                                                className="ingredient-remove"
+                                                aria-label={`Remove section ${row.name || index + 1}`}
+                                                title="Remove this section (its ingredients stay)"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    )
+                                }
+                                return (
+                                    <div key={index} data-sort-row className={`mb-3 ${dragging ? 'opacity-60' : ''}`}>
+                                        <div className="form-row">
+                                            {grip}
+                                            {ingredientLayout.map(field => {
+                                                if (field === 'unit') {
+                                                    return (
+                                                        <UnitCombobox
+                                                            key="unit"
+                                                            value={row.unit}
+                                                            placeholder="Unit (e.g. cups)"
+                                                            inputRef={el => { inputRefs.current[`${index}:unit`] = el }}
+                                                            onChange={v => handleRowFieldChange(index, 'unit', v)}
+                                                            onCommit={() => commitIngredientField(index, 'unit')}
+                                                        />
+                                                    )
+                                                }
+                                                const isQty = field === 'quantity'
+                                                return (
+                                                    <input
+                                                        key={field}
+                                                        className={isQty ? 'ingredient-qty' : undefined}
+                                                        placeholder={isQty ? 'Qty (e.g. 1 1/2)' : 'Name'}
+                                                        type="text"
+                                                        inputMode={isQty ? 'text' : undefined}
+                                                        value={isQty ? row.quantity : row.name}
+                                                        ref={el => { inputRefs.current[`${index}:${field}`] = el }}
+                                                        onChange={e => handleRowFieldChange(index, field, e.target.value)}
+                                                        onKeyDown={e => handleIngredientKeyDown(index, field, e)}
+                                                    />
+                                                )
+                                            })}
+                                            {ingredientCount > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeRow(index)}
+                                                    className="ingredient-remove"
+                                                    aria-label={`Remove ingredient ${index + 1}`}
+                                                    title="Remove this ingredient"
+                                                >
+                                                    ×
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input
+                                            placeholder="Notes (optional — e.g. or any neutral oil)"
+                                            value={row.notes || ''}
+                                            onChange={e => handleRowFieldChange(index, 'notes', e.target.value)}
+                                            className="mt-1.5 w-full italic text-sm"
+                                        />
+                                    </div>
+                                )
+                            })}
+                        </div>
                         <div className="ingredient-tools">
                             <button type="button" onClick={addIngredient} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Ingredient</button>
-                            <span className="ingredient-hint">Tip: press <kbd>Enter</kbd> on the last field to add a row, or <kbd>Tab</kbd> to step across.</span>
+                            <button type="button" onClick={addSection} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors">Add Section</button>
+                            <span className="ingredient-hint">Tip: press <kbd>Enter</kbd> on the last field to add a row, <kbd>Tab</kbd> to step across, or drag ⠿ to reorder.</span>
                         </div>
                     </section>
 

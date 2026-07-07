@@ -1153,6 +1153,41 @@ html[data-backdrop="digital"] .paper-grain {
   border-radius: 4px;
 }
 
+/* Stage 21 — drag grip on editor rows (mirrors the RecipeDetail handle).
+   Sits first in .form-row; muted until hovered, like .ingredient-remove. */
+.row-grip {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+  color: #c9b9ac;
+  background: none;
+  border: none;
+  cursor: grab;
+}
+
+.row-grip:active {
+  cursor: grabbing;
+}
+
+.row-grip:hover {
+  color: #6b5d52;
+}
+
+/* Stage 21 — section rows interleave with ingredient rows in the editor. The
+   name input reads as a sub-heading being authored: bolder text on a paper
+   tint with a rust accent bar, so it isn't mistaken for an ingredient Name
+   field. */
+.form-row input.section-name {
+  font-weight: 600;
+  color: #6b5d52;
+  background: #f7f1ec;
+  border-left: 3px solid #b06452;
+}
+
 .form-group-inline {
   display: flex;
   align-items: center;
@@ -1314,6 +1349,14 @@ textarea {
 .ingredient-list li,
 .step-list li {
   margin-bottom: 12px;
+}
+
+/* Stage 21 — rows inside a collapsed ingredient section. Screen-only hiding:
+   browser print force-expands below (a reader's collapse shouldn't lose rows
+   on paper), and the PDF path clears collapse state in JS before capture
+   because html2pdf renders screen media, not print. */
+.ingredient-list li.section-collapsed {
+  display: none;
 }
 
 .author-actions {
@@ -2210,6 +2253,11 @@ textarea {
   .ingredient-list label,
   .step-list label {
     cursor: default;
+  }
+
+  /* Stage 21 — collapsed ingredient sections still print in full. */
+  .ingredient-list li.section-collapsed {
+    display: list-item !important;
   }
 }
 
