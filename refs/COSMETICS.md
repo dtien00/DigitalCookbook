@@ -903,6 +903,16 @@ Section rows interleave with ingredient rows in the same list. A section row is 
 
 These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
 
+## Import modal (Stage 22)
+
+Create mode only: an **Import…** button (same gray utility treatment as Add Ingredient) sits opposite the "Create New Recipe" heading in a flex row; edit mode renders no import affordance at all — importing over a recipe whose comments/likes already reference it would be destructive, so the entry point simply doesn't exist there.
+
+The modal ([ImportRecipeModal.jsx](../src/components/ImportRecipeModal.jsx)) reuses the AddToPlanModal overlay posture — `fixed inset-0 z-50 bg-ink/40`, centered card, backdrop click + Escape + header `×` all close, autofocused textarea — but its surfaces keep the editor's legacy palette (white card, gray borders, indigo primary) so it blends with the form behind it; retint rides the same deferred CreateRecipe pass as everything else on this screen.
+
+**Flow is deliberately two-step.** *Preview* runs the parser ([src/lib/recipeImport.js](../src/lib/recipeImport.js)) and shows a one-line summary — `Detected from pasted text: "Pasta alla Norma" — 5 ingredients in 2 sections, 3 steps, serves 4` — plus an amber ⚠ list of warnings (skipped notes blocks, missing pieces). *Fill form* stays disabled until a parse succeeds, and editing the paste invalidates the previous result so a stale preview can never be applied. Errors (broken JSON, a web page with no embedded recipe data, oversized pastes) render as a red line under the textarea with the modal held open.
+
+**Filling is a plain state hand-off.** The parsed recipe routes through the same setters hand-typing uses (`ingredientsToRows()` turns section labels back into editable section rows), so the form itself is the preview/correction surface and Save runs the unchanged Stage 21 pipeline. A dirty form (anything already typed) gets a native confirm before being replaced — same posture as the delete confirms. On fill, **Make Public flips off** and the toast says why ("Recipe imported — draft set to private until you publish it."): republishing someone else's prose is the author's explicit call, not a default.
+
 ---
 
 ## First-run onboarding tour (Stage M item 2)
