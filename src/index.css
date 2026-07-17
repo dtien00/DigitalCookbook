@@ -1194,6 +1194,41 @@ html[data-backdrop="digital"] .paper-grain {
   gap: 10px;
 }
 
+/* Public/private visibility toggle on the recipe editor. Private is the
+   marked state — ink fill, paper text — matching the private badge that the
+   published card wears (RecipeCard), so the editor previews the outcome. */
+.visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b5d52;
+  background: #f7f1ec;
+  border: 1px solid var(--color-paper-shade);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.visibility-toggle:hover {
+  border-color: #c9b9ac;
+}
+
+.visibility-toggle svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.visibility-toggle.is-private {
+  color: var(--color-paper);
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
