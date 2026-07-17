@@ -353,8 +353,13 @@ function mapText(text, warnings) {
         // zone === 'ingredients'
         if (section) { currentSection = section; continue }
         // A long prose line with no quantity is almost certainly the first
-        // step of an unlabeled instructions block.
+        // step of an unlabeled instructions block. Flush first: the buffer can
+        // still hold an uncommitted step here (a steps -> `Ingredients`-header
+        // transition doesn't flush), and reassigning without flushing would
+        // drop it silently. Invariant: never overwrite stepBuffer un-flushed
+        // (mirrors the numbered-line branch above).
         if (line.length >= 90 && !peelQuantity(line.replace(BULLET_RE, ''))) {
+            flushStep()
             zone = 'steps'
             stepBuffer = [line.replace(STEP_PREFIX_RE, '')]
             continue

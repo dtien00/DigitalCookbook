@@ -99,6 +99,24 @@ describe('parseRecipeImport — plain text', () => {
         expect(recipe.steps).toHaveLength(1)
     })
 
+    it('does not drop an uncommitted step when steps precede an Ingredients header', () => {
+        // Regression: a steps -> `Ingredients`-header transition leaves the
+        // buffer un-flushed; a long quantity-less line in that block used to
+        // overwrite (and silently lose) the pending step. The flush before the
+        // long-prose reassignment keeps the first step alive.
+        const { recipe } = parseRecipeImport(
+            'Quick Sauce\n' +
+            'Instructions\n' +
+            'Warm the butter and whisk in the flour until it turns pale gold and smells nutty\n' +
+            'Ingredients\n' +
+            'You will want everything measured out and at room temperature before you even start cooking\n' +
+            '2 cups milk'
+        )
+        expect(recipe.steps[0].instruction).toBe(
+            'Warm the butter and whisk in the flour until it turns pale gold and smells nutty'
+        )
+    })
+
     it('skips notes/nutrition blocks with a warning', () => {
         const { recipe, warnings } = parseRecipeImport(
             'Toast\nIngredients\n1 slice bread\nSteps\n1. Toast it.\nNotes\nGood with butter.\nAlso jam.'
