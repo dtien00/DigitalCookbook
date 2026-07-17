@@ -490,7 +490,34 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     return (
         <div className="create-recipe-container">
             <div className="form-card">
-                <h2>{isEditMode ? 'Edit Recipe' : 'Create New Recipe'}</h2>
+                <div className="flex items-center justify-between gap-3">
+                    <h2>{isEditMode ? 'Edit Recipe' : 'Create New Recipe'}</h2>
+                    {/* Visibility toggle — shown in both create and edit mode (an
+                        author must always be able to flip a recipe public/private).
+                        Eye paths must stay in sync with the private badge on RecipeCard. */}
+                    <button
+                        type="button"
+                        onClick={() => setIsPublic(v => !v)}
+                        aria-pressed={isPublic}
+                        title={isPublic ? 'Anyone can view this recipe' : 'Only you can view this recipe'}
+                        className={`visibility-toggle${isPublic ? '' : ' is-private'}`}
+                    >
+                        {isPublic ? (
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        ) : (
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+                                <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+                                <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+                                <path d="m2 2 20 20" />
+                            </svg>
+                        )}
+                        {isPublic ? 'Public' : 'Private'}
+                    </button>
+                </div>
                 <form onSubmit={handleSubmit}>
                     <section className="form-section">
                         <h3>Basic Info</h3>
@@ -517,12 +544,6 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                             <div className="form-group">
                                 <label>Servings</label>
                                 <input type="number" value={servings} onChange={e => setServings(e.target.value)} min="1" />
-                            </div>
-                            <div className="form-group-inline">
-                                <label>
-                                    <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
-                                    Make Public
-                                </label>
                             </div>
                         </div>
                         <div className="form-group">

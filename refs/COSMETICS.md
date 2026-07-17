@@ -903,6 +903,10 @@ Section rows interleave with ingredient rows in the same list. A section row is 
 
 These controls still carry the pre-retint gray/indigo utility buttons that the rest of CreateRecipe uses; retint piggybacks on the existing CreateRecipe-on-retint-list item.
 
+## Public/private visibility toggle
+
+The editor's visibility control is a single pill button (`.visibility-toggle`), not a checkbox, sitting in a flex row opposite the "Create New Recipe" / "Edit Recipe" heading. Resting (public) state pairs an open-eye glyph with "Public" on the paper treatment — `#f7f1ec` fill, `--color-paper-shade` hairline, muted-brown text. Clicking flips it to a crossed-eye + "Private" in the marked state: ink fill, paper text — the same treatment as the private badge a published card wears on the grid (RecipeCard), so the editor previews the outcome. The eye SVG paths are copied verbatim from that badge; a comment in each file marks the pairing so they stay in sync. `aria-pressed` carries the state for assistive tech, and the button's own label text ("Public"/"Private") doubles as the state name — no separate caption. It renders in **both** create and edit mode — an author must always be able to flip a recipe's visibility. Unlike the rest of this pre-retint screen, the toggle uses rustic tokens directly (same precedent as the Stage 21 `.section-name` input).
+
 ---
 
 ## First-run onboarding tour (Stage M item 2)
