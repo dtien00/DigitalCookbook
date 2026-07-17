@@ -5,6 +5,7 @@ import {
     rowsToIngredients,
     ingredientsToRows,
     clampMoveToSection,
+    stripLeadingEmptySection,
 } from './ingredientSections'
 
 // Pins the Stage 21 grouping + editor row-mapping logic. All plain data —
@@ -160,5 +161,37 @@ describe('clampMoveToSection', () => {
     it('treats undefined section as null when matching the run', () => {
         const mixed = [{ name: 'oil' }, ing('salt', null), ing('flour', 'dough')]
         expect(clampMoveToSection(mixed, 0, 1)).toBe(1)
+    })
+})
+
+describe('stripLeadingEmptySection', () => {
+    const sec = (name = '') => ({ type: 'section', name })
+    const row = (name) => ({ type: 'ingredient', name })
+
+    it('drops a blank-named leading section row', () => {
+        expect(stripLeadingEmptySection([sec(''), row('flour')])).toEqual([row('flour')])
+    })
+
+    it('drops a whitespace-only leading section row', () => {
+        expect(stripLeadingEmptySection([sec('   '), row('flour')])).toEqual([row('flour')])
+    })
+
+    it('keeps a named leading section', () => {
+        const rows = [sec('For the dough'), row('flour')]
+        expect(stripLeadingEmptySection(rows)).toBe(rows)
+    })
+
+    it('leaves a blank section that is not the first row', () => {
+        const rows = [row('flour'), sec(''), row('sugar')]
+        expect(stripLeadingEmptySection(rows)).toBe(rows)
+    })
+
+    it('leaves an ingredient-led list untouched', () => {
+        const rows = [row('flour'), row('sugar')]
+        expect(stripLeadingEmptySection(rows)).toBe(rows)
+    })
+
+    it('handles an empty list', () => {
+        expect(stripLeadingEmptySection([])).toEqual([])
     })
 })
