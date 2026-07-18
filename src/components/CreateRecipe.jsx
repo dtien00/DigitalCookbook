@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import { parseQuantity, quantityToDisplay } from '../lib/parseQuantity'
 import { parseDurationToMs, formatMs } from '../lib/parseDuration'
-import { ingredientsToRows, rowsToIngredients } from '../lib/ingredientSections'
+import { ingredientsToRows, rowsToIngredients, stripLeadingEmptySection } from '../lib/ingredientSections'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import UnitCombobox from './UnitCombobox'
@@ -26,6 +26,11 @@ const FIELD_LABELS = { name: 'Name', quantity: 'Qty', unit: 'Unit' }
 // above it (src/lib/ingredientSections.js), and edit mode reconstructs them
 // from the contiguous runs.
 const emptyIngredientRow = () => ({ type: 'ingredient', name: '', quantity: '', unit: '', notes: '' })
+// New recipes open with a blank section row above the first ingredient — a
+// nudge toward "For the …" grouping. Dropped on save if left unnamed
+// (stripLeadingEmptySection); edit mode replaces these rows with the loaded
+// recipe, so the seed only affects a fresh create.
+const emptySectionRow = () => ({ type: 'section', name: '' })
 
 export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const isEditMode = !!recipeToEdit
@@ -36,7 +41,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [servings, setServings] = useState(recipeToEdit?.servings || 1)
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
-    const [rows, setRows] = useState([emptyIngredientRow()])
+    const [rows, setRows] = useState([emptySectionRow(), emptyIngredientRow()])
     // Active column order for the ingredient triplet (see LAYOUT_PRESETS).
     const [ingredientLayout, setIngredientLayout] = useState(LAYOUT_PRESETS[0])
     // Map of `${rowIndex}:${field}` -> input element, for keyboard focus moves.
@@ -435,7 +440,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             // Insert Ingredients. Section rows collapse into a `section` label
             // on each ingredient (nearest section row above; null when
             // unsectioned) — see src/lib/ingredientSections.js.
-            const ingredientsToInsert = rowsToIngredients(rows)
+            const ingredientsToInsert = rowsToIngredients(stripLeadingEmptySection(rows))
                 .filter(i => i.name.trim() !== '')
                 .map((ing, index) => ({
                     recipe_id: recipeId,

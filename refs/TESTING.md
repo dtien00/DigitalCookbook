@@ -644,6 +644,9 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 > Verifies "For the sauce" / "For the dough" grouping across the editor, RecipeDetail, CookingMode, and print/PDF. **Requires migration 024 applied** (`supabase_migration_024_ingredient_sections.sql` — Dashboard → SQL Editor); until then saves fail with a missing-column error. Use any test account; author a recipe with an unsectioned lead ingredient, then two sections of 2–3 ingredients each.
 
 **Editor ([CreateRecipe.jsx](../src/components/CreateRecipe.jsx))**
+- [ ] **New recipe seeds a leading section** — opening `/new` shows a blank section row above the first ingredient row (the grouping nudge); edit mode (`/recipe/:id/edit`) does NOT show a seeded blank section — it loads the recipe's real rows
+- [ ] **Unnamed leading section is dropped on save** — create a recipe leaving that seeded section blank; save, then re-open → no phantom section, ingredients render unsectioned (only the *leading* blank one auto-removes; a blank section you add further down still behaves per "Blank section dropped" below)
+- [ ] **Named leading section is kept** — name the seeded section "For the …", add ingredients, save → it persists and renders grouped
 - [ ] **Add Section appends a section row** — distinct look (bold text, paper tint, rust left bar), focus lands in it; `Enter` adds + focuses a fresh ingredient row beneath it
 - [ ] **Enter stays in the section** — with a later section existing, `Enter` on the last field of a section's last ingredient inserts a new ingredient row *in that section* and focuses it — it never moves focus into the next section's name input
 - [ ] **Drag any row** — every row (ingredient and section) has a ⠿ grip; dragging reorders live, including moving a section row above/below ingredient rows

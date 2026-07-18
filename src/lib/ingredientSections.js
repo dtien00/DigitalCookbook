@@ -97,3 +97,21 @@ export function clampMoveToSection(ingredients, from, to) {
     while (end < ingredients.length - 1 && (ingredients[end + 1].section ?? null) === section) end++
     return Math.max(start, Math.min(end, to))
 }
+
+// ---- Editor default-section cleanup (CreateRecipe) --------------------------
+//
+// The editor seeds every NEW recipe with a blank section row at the top — a
+// gentle nudge toward "For the …" grouping. If the author never names it, we
+// don't want a phantom leading section riding along on save. Drop the FIRST
+// row when (and only when) it's a section with a blank name; a named leading
+// section, or any non-leading blank section, is the author's own and is left
+// alone. Data-equivalent today (rowsToIngredients already ignores blank-named
+// sections), so this is a structural tidy that keeps the saved row list honest
+// and makes the default-section behavior self-documenting.
+export function stripLeadingEmptySection(rows) {
+    const first = rows[0]
+    if (first && first.type === 'section' && !(first.name || '').trim()) {
+        return rows.slice(1)
+    }
+    return rows
+}
