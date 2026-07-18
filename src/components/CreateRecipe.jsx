@@ -8,6 +8,7 @@ import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import UnitCombobox from './UnitCombobox'
 import DragHandleIcon from './DragHandleIcon'
+import ImportRecipeModal from './ImportRecipeModal'
 
 // Column-order presets for an ingredient row. Purely a display concern — the
 // data keys never move, so the layout choice doesn't touch what gets saved.
@@ -51,6 +52,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [steps, setSteps] = useState([{ instruction: '', step_number: 1, photoFile: null, photoPreview: null, photoPath: null, durationInput: '' }])
     const [imageFile, setImageFile] = useState(null)
     const [imagePreview, setImagePreview] = useState(recipeToEdit?.image_url || null)
+    // Stage 22 — paste-to-prefill import modal; create mode only.
+    const [showImport, setShowImport] = useState(false)
 
     // Parse the comma-separated tag input into a clean, deduped, lowercase array.
     // Lowercase keeps "Vegan", "vegan", "VEGAN" from creating three buckets.
@@ -98,7 +101,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 setRows(ingredientsToRows(ingData.map(i => ({
                     name: i.name,
                     quantity: quantityToDisplay(i.quantity),
-                    unit: i.unit,
+                    // NULL units from the DB must land as '' — a null value
+                    // prop flips the combobox input to uncontrolled and React
+                    // warns on every keystroke.
+                    unit: i.unit || '',
                     notes: i.notes || '',
                     section: i.section ?? null,
                 }))))
@@ -336,6 +342,45 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setSteps(newSteps)
     }
 
+    // Stage 22 — anything already typed anywhere in the form. Gates the
+    // import-overwrite confirm so a blank form fills silently but real work
+    // never vanishes without a yes.
+    const formIsDirty = () =>
+        title.trim() !== '' || description.trim() !== '' || tagsInput.trim() !== '' ||
+        imageFile !== null ||
+        rows.some(r => r.type === 'section'
+            ? (r.name || '').trim() !== ''
+            : ((r.name || '').trim() !== '' || String(r.quantity ?? '').trim() !== '' ||
+                (r.unit || '').trim() !== '' || (r.notes || '').trim() !== '')) ||
+        steps.some(s => s.instruction.trim() !== '' || s.photoFile || (s.durationInput || '').trim() !== '')
+
+    // Replace the whole form with a parsed import. Routes through the same
+    // state the author would type into — the form is the preview/correction
+    // surface, and Save runs the unchanged Stage 21 pipeline. Imported drafts
+    // flip to private: republishing someone else's prose should be an
+    // explicit choice, not a default.
+    const applyImport = (recipe) => {
+        if (formIsDirty() && !window.confirm('Replace the current form contents with the imported recipe?')) return
+        setTitle(recipe.title)
+        setDescription(recipe.description)
+        setServings(recipe.servings || 1)
+        setTagsInput(recipe.tags.join(', '))
+        const importedRows = ingredientsToRows(recipe.ingredients.map(i => ({
+            name: i.name,
+            quantity: i.quantity,
+            unit: i.unit,
+            notes: i.notes || '',
+            section: i.section ?? null,
+        })))
+        setRows(importedRows.length > 0 ? importedRows : [emptyIngredientRow()])
+        setSteps(recipe.steps.length > 0
+            ? recipe.steps.map((s, i) => ({ instruction: s.instruction, step_number: i + 1, photoFile: null, photoPreview: null, photoPath: null, durationInput: '' }))
+            : [{ instruction: '', step_number: 1, photoFile: null, photoPreview: null, photoPath: null, durationInput: '' }])
+        setIsPublic(false)
+        setShowImport(false)
+        toast.success('Recipe imported — draft set to private until you publish it.')
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
@@ -490,7 +535,19 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     return (
         <div className="create-recipe-container">
             <div className="form-card">
-                <h2>{isEditMode ? 'Edit Recipe' : 'Create New Recipe'}</h2>
+                <div className="flex items-center justify-between gap-3">
+                    <h2>{isEditMode ? 'Edit Recipe' : 'Create New Recipe'}</h2>
+                    {!isEditMode && (
+                        <button
+                            type="button"
+                            onClick={() => setShowImport(true)}
+                            title="Prefill the form by pasting a recipe"
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-md transition-colors"
+                        >
+                            Import…
+                        </button>
+                    )}
+                </div>
                 <form onSubmit={handleSubmit}>
                     <section className="form-section">
                         <h3>Basic Info</h3>
@@ -756,6 +813,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     </div>
                 </form>
             </div>
+            {showImport && (
+                <ImportRecipeModal onClose={() => setShowImport(false)} onApply={applyImport} />
+            )}
         </div>
     )
 }
