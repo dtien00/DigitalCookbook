@@ -24,6 +24,7 @@ Maintained alongside the code — updated in the same change that ships work tou
 | [COSMETICS.md](./COSMETICS.md) | The "rustic-paper" design system — palette tokens, typography, component styling. |
 | [TESTING.md](./TESTING.md) | Test accounts, seed data, environments, and manual QA checklists. |
 | [LIVE.md](./LIVE.md) | Deployment reference — Vercel + Supabase hosting and the ongoing-maintenance runbook. |
+| [teachings/](./teachings/) | Lessons distilled from shipped features — implementation walkthroughs, dependency costs, and the general patterns underneath. |
 
 ## Infrastructure & future-work evaluations
 

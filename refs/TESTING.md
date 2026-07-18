@@ -706,6 +706,30 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Recipe import checklist (Stage 22)
+
+> Verifies paste-to-prefill import on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) via [ImportRecipeModal.jsx](../src/components/ImportRecipeModal.jsx) + [recipeImport.js](../src/lib/recipeImport.js). **No migration required** — import is a pure form-filler; saving runs the normal Stage 21 pipeline. Use any test account on `/new`. For a text fixture, paste a recipe shaped like: title line, `Serves 4`, two `For the …:` section lines with `- 2 tbsp olive oil`-style rows under each, an `Instructions` line, then `1.`-numbered steps.
+
+**Entry point**
+- [ ] **Create mode only** — `/new` shows **Import…** beside the heading; editing an existing recipe (`/recipe/:id/edit`) shows no import affordance
+- [ ] **Open/close paths** — Escape, backdrop click, header `×`, and Cancel all close the modal without touching the form
+
+**Parsing (Preview)**
+- [ ] **Sectioned text** — the fixture above previews as `Detected from pasted text: "<title>" — N ingredients in 2 sections, K steps, serves 4`; Fill form is enabled
+- [ ] **JSON-LD** — paste a recipe site's `<script type="application/ld+json">` block (view-source, copy the block — or the whole page source; both work) → `Detected from structured recipe data`, with tags picked up from keywords/category/cuisine
+- [ ] **Own export** — paste one recipe object (or the whole blob) from Profile → Download my data → `Detected from a Digital Cookbook export`; a multi-recipe blob imports the first with a warning
+- [ ] **Failure modes stay in the modal** — empty paste keeps Preview disabled; truncated JSON → "couldn't be read"; a web page with no recipe data → "copy the recipe text itself"; Fill form stays disabled after any error
+- [ ] **Warnings surface** — a paste with a `Notes` block reports `Skipped N lines…`; a paste with no steps warns instead of failing
+
+**Filling the form**
+- [ ] **Everything lands** — title, description, servings, tags input, section rows with their ingredients (qty strings like `½` intact, units canonicalized, trailing parentheticals in the notes line), steps in order
+- [ ] **Private by default** — Make Public is unchecked after fill, and the toast explains it; flipping it back on before Save works
+- [ ] **Dirty-form confirm** — type anything first, then import → native confirm appears; declining keeps both the form and the open modal untouched
+- [ ] **Save round-trip** — Save the filled form → RecipeDetail renders the sections grouped exactly like a hand-authored Stage 21 recipe
+- [ ] **Mobile width** — at phone width (375px) the modal fits, the textarea is usable, and Cancel / Preview / Fill form stay tappable
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:
