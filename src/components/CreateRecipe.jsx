@@ -67,6 +67,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [batchTotal, setBatchTotal] = useState(0)
     const [batchSaved, setBatchSaved] = useState(0)
     const [currentBatchName, setCurrentBatchName] = useState(null)
+    // Stage 22 v1.3 — structured import warnings carried into an "Import notes"
+    // banner; the no-* ones live-hide once their field fills (hybrid staleness).
+    const [importWarnings, setImportWarnings] = useState([])
+    const [skippedOpen, setSkippedOpen] = useState(false)
 
     // Parse the comma-separated tag input into a clean, deduped, lowercase array.
     // Lowercase keeps "Vegan", "vegan", "VEGAN" from creating three buckets.
@@ -374,7 +378,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // Clears the cover image too — imports carry none, and in a batch a prior
     // item's pick must not bleed into the next. Flips to private: republishing
     // someone else's prose should be an explicit choice, not a default.
-    const applyRecipe = (recipe) => {
+    const applyRecipe = (recipe, warnings = []) => {
         setTitle(recipe.title)
         setDescription(recipe.description)
         setServings(recipe.servings || 1)
@@ -393,12 +397,15 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setImageFile(null)
         setImagePreview(null)
         setIsPublic(false)
+        // multi-recipe is informational and already acted on — don't nag in the form.
+        setImportWarnings(warnings.filter(w => w.code !== 'multi-recipe'))
+        setSkippedOpen(false)
     }
 
     // Single import (paste or one file): confirm over a dirty form, fill, close.
-    const applyImport = (recipe) => {
+    const applyImport = (recipe, warnings) => {
         if (formIsDirty() && !window.confirm('Replace the current form contents with the imported recipe?')) return
-        applyRecipe(recipe)
+        applyRecipe(recipe, warnings)
         setShowImport(false)
         toast.success('Recipe imported — draft set to private until you publish it.')
     }
@@ -410,7 +417,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const startBatch = (items) => {
         if (!items || items.length === 0) return
         if (formIsDirty() && !window.confirm('Replace the current form contents with the imported recipes?')) return
-        applyRecipe(items[0].recipe)
+        applyRecipe(items[0].recipe, items[0].warnings)
         setCurrentBatchName(items[0].fileName || null)
         setShowImport(false)
         if (items.length === 1) {
@@ -427,7 +434,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const advanceBatch = () => {
         if (importQueue.length === 0) return false
         const [next, ...rest] = importQueue
-        applyRecipe(next.recipe)
+        applyRecipe(next.recipe, next.warnings)
         setCurrentBatchName(next.fileName || null)
         setImportQueue(rest)
         return true
@@ -622,6 +629,26 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         }
     }
 
+    // Import-notes banner: the no-* structural warnings live-hide once their
+    // field is filled (hybrid staleness); placement/recovery ones stay until
+    // dismissed or actioned.
+    const visibleWarnings = importWarnings.filter(w => {
+        if (w.code === 'no-title') return title.trim() === ''
+        if (w.code === 'no-ingredients') return !rows.some(r => r.type === 'ingredient' && (r.name || '').trim() !== '')
+        if (w.code === 'no-steps') return !steps.some(s => s.instruction.trim() !== '')
+        return true
+    })
+
+    const dismissWarning = (target) => setImportWarnings(ws => ws.filter(w => w !== target))
+
+    // Recover skipped Notes/Nutrition text into the description (append, never
+    // overwrite), then drop the warning.
+    const recoverToDescription = (w) => {
+        setDescription(d => (d.trim() ? `${d.trim()}\n\n${w.text}` : w.text))
+        dismissWarning(w)
+        toast.success('Skipped text added to the description.')
+    }
+
     return (
         <div className="create-recipe-container">
             <div className="form-card">
@@ -647,6 +674,32 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                 Exit batch
                             </button>
                         </div>
+                    </div>
+                )}
+                {visibleWarnings.length > 0 && (
+                    <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm" role="region" aria-label="Import notes">
+                        <div className="flex items-center justify-between gap-3 mb-1.5">
+                            <span className="font-medium text-amber-900">Import notes</span>
+                            <button type="button" onClick={() => setImportWarnings([])} className="text-xs text-amber-700 hover:text-amber-900">Dismiss all ✕</button>
+                        </div>
+                        <ul className="space-y-1.5">
+                            {visibleWarnings.map((w, i) => (
+                                <li key={i} className="text-amber-800">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <span>⚠ {w.message}</span>
+                                        {w.code === 'skipped-notes' && (
+                                            <span className="flex-shrink-0 flex gap-3 whitespace-nowrap">
+                                                <button type="button" onClick={() => setSkippedOpen(o => !o)} className="text-amber-700 hover:text-amber-900 underline decoration-dotted">{skippedOpen ? 'Hide' : 'View'}</button>
+                                                <button type="button" onClick={() => recoverToDescription(w)} className="text-amber-700 hover:text-amber-900 underline decoration-dotted">Add to description</button>
+                                            </span>
+                                        )}
+                                    </div>
+                                    {w.code === 'skipped-notes' && skippedOpen && (
+                                        <pre className="mt-1 whitespace-pre-wrap break-words rounded border border-amber-200 bg-white/60 px-2 py-1.5 text-xs text-amber-900">{w.text}</pre>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 )}
                 <div className="flex items-center justify-between gap-3">

@@ -122,15 +122,19 @@ describe('parseRecipeImport — plain text', () => {
             'Toast\nIngredients\n1 slice bread\nSteps\n1. Toast it.\nNotes\nGood with butter.\nAlso jam.'
         )
         expect(recipe.steps).toHaveLength(1)
-        expect(warnings.some(w => w.includes('Skipped 2 lines'))).toBe(true)
+        const skipWarning = warnings.find(w => w.code === 'skipped-notes')
+        expect(skipWarning.message).toContain('Skipped 2 lines')
+        // the skipped text is retained (not just counted) so the form can recover it
+        expect(skipWarning.text).toContain('Good with butter.')
+        expect(skipWarning.text).toContain('Also jam.')
     })
 
     it('degrades a bare line to a title-only recipe with warnings', () => {
         const { recipe, warnings, error } = parseRecipeImport('just a lonely line')
         expect(error).toBeNull()
         expect(recipe.title).toBe('just a lonely line')
-        expect(warnings.some(w => w.includes('No ingredients'))).toBe(true)
-        expect(warnings.some(w => w.includes('No steps'))).toBe(true)
+        expect(warnings.some(w => w.code === 'no-ingredients')).toBe(true)
+        expect(warnings.some(w => w.code === 'no-steps')).toBe(true)
     })
 })
 
@@ -247,7 +251,7 @@ describe('parseRecipeImport — own export', () => {
         const blob = { export_version: 1, recipes: [exportRecipe, { ...exportRecipe, title: 'Second' }] }
         const { recipe, warnings } = parseRecipeImport(JSON.stringify(blob))
         expect(recipe.title).toBe('Exported Soup')
-        expect(warnings.some(w => w.includes('2 recipes'))).toBe(true)
+        expect(warnings.some(w => w.code === 'multi-recipe')).toBe(true)
     })
 })
 

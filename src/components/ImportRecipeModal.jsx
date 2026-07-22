@@ -41,6 +41,8 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
     // before the batch starts (INPUT.md §2.2). The actual review happens one
     // recipe at a time in the form, not here.
     const [batch, setBatch] = useState(null)
+    // Which triage rows have their warnings expanded (by index).
+    const [expandedFiles, setExpandedFiles] = useState(() => new Set())
     const textareaRef = useRef(null)
 
     useEffect(() => { textareaRef.current?.focus() }, [])
@@ -113,6 +115,12 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
         importFiles(e.dataTransfer.files)
     }
 
+    const toggleExpanded = (i) => setExpandedFiles(prev => {
+        const next = new Set(prev)
+        next.has(i) ? next.delete(i) : next.add(i)
+        return next
+    })
+
     return (
         <div
             className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4"
@@ -147,13 +155,27 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
                                 {batch.map((b, i) => (
                                     <li key={i} className="text-sm flex gap-2">
                                         <span className={b.recipe ? 'text-green-700' : 'text-red-600'} aria-hidden="true">{b.recipe ? '✓' : '✗'}</span>
-                                        <span className="min-w-0">
+                                        <div className="min-w-0">
                                             <span className="font-medium text-gray-800 break-words">{b.fileName}</span>
                                             <span className="text-gray-600"> — {b.recipe ? summarize(b.recipe) : b.error}</span>
                                             {b.warnings.length > 0 && (
-                                                <span className="text-amber-700"> · ⚠ {plural(b.warnings.length, 'warning')}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleExpanded(i)}
+                                                    aria-expanded={expandedFiles.has(i)}
+                                                    className="text-amber-700 hover:text-amber-800 whitespace-nowrap"
+                                                >
+                                                    {' · '}⚠ {plural(b.warnings.length, 'warning')} {expandedFiles.has(i) ? '▴' : '▾'}
+                                                </button>
                                             )}
-                                        </span>
+                                            {expandedFiles.has(i) && (
+                                                <ul className="mt-1 space-y-0.5">
+                                                    {b.warnings.map((w, j) => (
+                                                        <li key={j} className="text-xs text-amber-700">⚠ {w.message}</li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -213,7 +235,7 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
                                     {result.warnings.length > 0 && (
                                         <ul className="mt-2 space-y-1">
                                             {result.warnings.map((w, i) => (
-                                                <li key={i} className="text-xs text-amber-700">⚠ {w}</li>
+                                                <li key={i} className="text-xs text-amber-700">⚠ {w.message}</li>
                                             ))}
                                         </ul>
                                     )}
@@ -242,7 +264,7 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => onApplyBatch(batch.filter(b => b.recipe).map(b => ({ fileName: b.fileName, recipe: b.recipe })))}
+                                onClick={() => onApplyBatch(batch.filter(b => b.recipe).map(b => ({ fileName: b.fileName, recipe: b.recipe, warnings: b.warnings })))}
                                 disabled={!batch.some(b => b.recipe)}
                                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -261,7 +283,7 @@ export default function ImportRecipeModal({ onClose, onApply, onApplyBatch }) {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => onApply(result.recipe)}
+                                onClick={() => onApply(result.recipe, result.warnings)}
                                 disabled={!result?.recipe}
                                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >

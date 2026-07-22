@@ -1,6 +1,6 @@
 # Import transports (file drop · batch queue · bookmarklet · modal-copy hints) — how they'd work
 
-*Taught: 2026-07-19 · Second encounter: 2026-07-22 (file drop + batch queue shipped on `import-file-drop`) · Source: design sketch, [INPUT.md](../INPUT.md) §2.0–§2.3; builds on Stage 22 / PR #80, taught in [recipe-import.md](./recipe-import.md) · Patterns: transport/parse separation · in-page extraction · batch with per-item review*
+*Taught: 2026-07-19 · Later encounters: 2026-07-22 (file drop + batch queue, then actionable warnings, on `import-file-drop`) · Source: design sketch, [INPUT.md](../INPUT.md) §2.0–§2.3; builds on Stage 22 / PR #80, taught in [recipe-import.md](./recipe-import.md) · Patterns: transport/parse separation · in-page extraction · batch with per-item review*
 
 > **Status note:** unlike the companion lesson, this teaches a *proposal*. Every `file:line`
 > citation below points at real, shipped code — the seams these transports would attach to —
@@ -97,6 +97,14 @@ The batch queue landed on `import-file-drop` (2026-07-22). What the sketch left 
 **The triage/review split in practice.** The modal owns triage only ([ImportRecipeModal.jsx](../../src/components/ImportRecipeModal.jsx) `batch` state → per-file ✓/✗ list); the form owns review (one item at a time, behind a banner). A failed save throws before the advance code, so the current item naturally stays put for a retry — the "per-item skip/fail never aborts the batch" recipe step falls out of putting the advance *after* the save in the same `try`.
 
 **What stayed identical:** the parser, the normalized shape, the private-by-default flip, and the Stage 21 save pipeline. The batch is a transport over the existing per-item flow — the clearest confirmation of *transport/parse separation* holding up under a second, bigger feature.
+
+## Third encounter — actionable warnings (2026-07-22)
+
+The v1.3 warnings-UX pass deepens the *human-in-the-loop prefill* pattern (taught in [recipe-import.md](./recipe-import.md#pattern-human-in-the-loop-prefill)): if the form is the correction surface, then **the parser's uncertainty belongs on that surface too**, not stranded in a modal the user already dismissed. Three moves worth transferring:
+
+- **Structured over stringly-typed.** Warnings went from `string[]` to `{ code, message, field?, text? }[]` ([recipeImport.js](../../src/lib/recipeImport.js)). The `code` lets the UI *route* a warning (which field it concerns, whether it's recoverable); the string alone couldn't. General lesson: **the moment a message needs to drive behavior, it needs structure** — a `code` is cheaper than parsing your own prose later.
+- **Don't discard what you flag.** The old `skipped++` counted lost lines but threw the text away, so "3 lines skipped" had no fix. Retaining the text (`warning.text`) turned a dead-end warning into a one-tap **recover**. Lesson: **a warning about discarded data should carry the data** — the cost is a variable you were already computing.
+- **Derived staleness beats stored staleness.** The `no-*` warnings live-hide by *re-deriving* visibility from current form state at render (`title.trim() === ''`, etc.) rather than storing a "resolved" flag and syncing it. No sync bug is possible because there's no second copy of the truth — the same reason [recipe-import.md](./recipe-import.md)'s parser keeps quantities as display strings instead of a parsed shadow.
 
 ## Do it yourself next time
 
