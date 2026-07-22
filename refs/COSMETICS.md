@@ -919,6 +919,10 @@ The modal ([ImportRecipeModal.jsx](../src/components/ImportRecipeModal.jsx)) reu
 
 **Filling is a plain state hand-off.** The parsed recipe routes through the same setters hand-typing uses (`ingredientsToRows()` turns section labels back into editable section rows), so the form itself is the preview/correction surface and Save runs the unchanged Stage 21 pipeline. A dirty form (anything already typed) gets a native confirm before being replaced — same posture as the delete confirms. On fill, **the visibility toggle flips to Private** and the toast says why ("Recipe imported — draft set to private until you publish it."): republishing someone else's prose is the author's explicit call, not a default.
 
+### File drop + picker (Stage 22 v1.1)
+
+The textarea doubles as a drop zone: dragging a `.txt` / `.md` / `.json` file over it tints the box (`border-indigo-400 bg-indigo-50` — the intensified sibling of the textarea's `focus:ring-indigo-200`, staying in the legacy indigo family since this modal defers its retint) and the helper line below swaps to "Release to import…". A thin gray affordance row under the box — *"Or drag a .txt, .md, or .json file here — choose a file"* — pairs the drop hint with a hidden `<input type="file">` picker for the non-drag path (and for mobile, where file drag isn't available). **Drop auto-previews:** unlike typing (which waits for an explicit *Preview*), a dropped file is a complete document, so it fills the textarea *and* runs the parser in one gesture — the summary/warnings card appears immediately. Multiple files dropped → the first imports, with a prepended warning naming the file and telling the author to add the rest one at a time (the true multi-file answer is the deferred batch queue, [refs/INPUT.md](./INPUT.md) §2.2). Wrong file types are rejected with a red line before any read. The intro copy also now names keyboard **dictation** (the phone mic types straight into the textarea — a free voice-input path, [refs/INPUT.md](./INPUT.md) §2.0) and the own-export round-trip.
+
 ---
 
 ## First-run onboarding tour (Stage M item 2)

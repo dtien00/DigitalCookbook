@@ -728,6 +728,15 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Save round-trip** — Save the filled form → RecipeDetail renders the sections grouped exactly like a hand-authored Stage 21 recipe
 - [ ] **Mobile width** — at phone width (375px) the modal fits, the textarea is usable, and Cancel / Preview / Fill form stay tappable
 
+**File drop + picker (Stage 22 v1.1)** — save the fixtures above as real files first (a sectioned `.txt`, a recipe-site JSON-LD `.json`, an own-export `.json`)
+- [ ] **Drag-active state** — dragging a file over the textarea tints it indigo and the helper line reads "Release to import…"; dragging away without dropping clears it
+- [ ] **Drop auto-previews** — dropping the `.txt` fixture fills the textarea *and* shows the detected-summary card in one action (no separate Preview click); Fill form is enabled
+- [ ] **Picker path** — "choose a file" opens the OS dialog filtered to `.txt`/`.md`/`.json`; selecting the same fixture behaves identically to the drop; re-choosing the same file re-fires
+- [ ] **Wrong type** — dropping an image/PDF shows the red "Drop a .txt, .md, or .json file." line and leaves the textarea untouched
+- [ ] **Multiple files** — selecting/dropping two+ files imports the first and prepends a warning naming it ("2 files dropped — imported the first …")
+- [ ] **Edit-after-drop invariant** — after a drop, editing the textarea clears the summary so Fill form can't apply a stale parse (same as after a manual Preview)
+- [ ] **Dictation hint (copy)** — the intro copy names the phone-keyboard mic and the Digital Cookbook export; no behavior to test beyond the words being present
+
 ---
 
 ## Future testing notes
