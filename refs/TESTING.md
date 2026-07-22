@@ -737,6 +737,18 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Edit-after-drop invariant** — after a drop, editing the textarea clears the summary so Fill form can't apply a stale parse (same as after a manual Preview)
 - [ ] **Dictation hint (copy)** — the intro copy names the phone-keyboard mic and the Digital Cookbook export; no behavior to test beyond the words being present
 
+**Batch import (Stage 22 v1.2)** — prepare 3+ recipe files (mix a good sectioned `.txt`, a good export `.json`, and one garbage `.txt`)
+- [ ] **Triage list** — dropping/picking 3 files shows the modal triage: two green `✓` rows with summaries, one red `✗` with a skip reason; header reads "3 files — 2 ready to import, 1 skipped"; footer shows Cancel · Back · **Import 2 recipes**
+- [ ] **Back** — returns to the paste/textarea view without losing the modal
+- [ ] **Start** — Import 2 recipes closes the modal, loads the first, and shows the banner "Batch import — reviewing 1 of 2 · <filename>"; Save button reads **Save & next**
+- [ ] **Save & advance** — saving the first recipe loads the second into a clean form (no dirty-form confirm fires), banner advances to "2 of 2", Save button now reads **Save Recipe**; no navigation home between items
+- [ ] **Completion** — saving the last recipe navigates home and toasts "Batch import complete — 2 recipes saved."; both appear in the grid, both **private**
+- [ ] **Skip** — Skip on an item advances without saving it (not counted); skipping the last finishes the batch with the saved count
+- [ ] **Exit batch** — drops the queue but leaves the current recipe on the form (savable by hand as a normal single create)
+- [ ] **Failed save mid-batch** — a save error (e.g. offline) keeps the current item loaded and the batch intact for a retry, rather than advancing
+- [ ] **Image isolation** — a cover image picked before a batch item does not carry into the next item (applyRecipe clears it)
+- [ ] **All-failed guard** — dropping only garbage files disables the **Import** button (nothing to start)
+
 ---
 
 ## Future testing notes

@@ -1,6 +1,6 @@
 # Import transports (file drop · batch queue · bookmarklet · modal-copy hints) — how they'd work
 
-*Taught: 2026-07-19 · Source: design sketch, [INPUT.md](../INPUT.md) §2.0–§2.3 (research — unshipped); builds on Stage 22 / PR #80, taught in [recipe-import.md](./recipe-import.md) · Patterns: transport/parse separation · in-page extraction · batch with per-item review*
+*Taught: 2026-07-19 · Second encounter: 2026-07-22 (file drop + batch queue shipped on `import-file-drop`) · Source: design sketch, [INPUT.md](../INPUT.md) §2.0–§2.3; builds on Stage 22 / PR #80, taught in [recipe-import.md](./recipe-import.md) · Patterns: transport/parse separation · in-page extraction · batch with per-item review*
 
 > **Status note:** unlike the companion lesson, this teaches a *proposal*. Every `file:line`
 > citation below points at real, shipped code — the seams these transports would attach to —
@@ -83,8 +83,20 @@ Nothing on the app side changes at all: the bookmarklet's output *is* a paste. T
 4. Per-item skip/fail never aborts the batch; always show remaining-count progress.
 5. Commit remains an explicit per-item human act.
 
-**Here (proposed):** step 1 loops `parseRecipeImport` over dropped files; step 2 reads the `warnings`/`error` fields every result already carries ([recipeImport.js:388](../../src/lib/recipeImport.js)); step 3 reuses `applyImport` ([CreateRecipe.jsx:367](../../src/components/CreateRecipe.jsx)) and the form — modulo the dirty-check collision documented above, the one open design point; step 5 is the untouched Save button.
+**Here (shipped 2026-07-22 — see Second encounter below):** step 1 loops `parseRecipeImport` over dropped files; step 2 reads the `warnings`/`error` fields every result already carries ([recipeImport.js:388](../../src/lib/recipeImport.js)); step 3 routes each item through the form; step 5 is the untouched Save button. The one open design point at sketch time — the dirty-check collision on advance — was resolved as described below.
 **Reach for it again when:** any migration/bulk-ingest feature where extraction is imperfect and items are independent. **Not when:** items are trusted and structured (your own export re-imported) — there, per-item review becomes ceremony, and a lighter confirm-all is honest.
+
+## Second encounter — batch queue, shipped
+
+The batch queue landed on `import-file-drop` (2026-07-22). What the sketch left open, and how the real code closed it:
+
+**The dirty-check collision (the flagged design point).** `applyImport` guards a *dirty* form with a native confirm ([CreateRecipe.jsx:389](../../src/components/CreateRecipe.jsx)). After saving item *k*, the form still holds item *k*, so a naïve advance would fire that confirm on every item. Resolution: split the fill into two functions — a **confirm-free full-overwrite** `applyRecipe(recipe)` ([CreateRecipe.jsx:368](../../src/components/CreateRecipe.jsx)) that replaces *every* field (title, description, servings, tags, rows, steps, **and clears the cover image** so a prior item's pick can't bleed through), and the public `applyImport` that layers the dirty-confirm + toast on top for the single-paste path. The batch advance calls `applyRecipe` directly — no reset-then-fill dance, no confirm, because a full overwrite *is* the reset. This is the general lesson: **when a "reset then apply" sequence is awkward, an idempotent full-apply that subsumes the reset is usually cleaner.**
+
+**Where queue state lives (the second design point).** In [CreateRecipe.jsx](../../src/components/CreateRecipe.jsx), not App.jsx — because the save path (`handleSubmit`) is the *only* thing that navigates away (via `onComplete()`), so batch mode simply **withholds `onComplete()` until the queue drains** ([CreateRecipe.jsx handleSubmit success branch](../../src/components/CreateRecipe.jsx)). The component stays mounted on `/new` for the whole batch, so plain `useState` (`importQueue`, `batchTotal`, `batchSaved`, `currentBatchName`) survives every per-item save — no router juggling, no context, no localStorage. The current position is *derived*, not stored: `batchTotal - importQueue.length`.
+
+**The triage/review split in practice.** The modal owns triage only ([ImportRecipeModal.jsx](../../src/components/ImportRecipeModal.jsx) `batch` state → per-file ✓/✗ list); the form owns review (one item at a time, behind a banner). A failed save throws before the advance code, so the current item naturally stays put for a retry — the "per-item skip/fail never aborts the batch" recipe step falls out of putting the advance *after* the save in the same `try`.
+
+**What stayed identical:** the parser, the normalized shape, the private-by-default flip, and the Stage 21 save pipeline. The batch is a transport over the existing per-item flow — the clearest confirmation of *transport/parse separation* holding up under a second, bigger feature.
 
 ## Do it yourself next time
 
