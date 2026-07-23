@@ -45,6 +45,7 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
     const [dialSeed, setDialSeed] = useState(0)           // ms the dial mounts from
     const [dialNonce, setDialNonce] = useState(0)         // bump to remount + re-seed
     const inputRef = useRef(null)
+    const sheetRef = useRef(null)
     const restoreFocusRef = useRef(null)
 
     useEffect(() => {
@@ -66,6 +67,19 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
     useEffect(() => {
         if (!open || !showCustom || customMode !== 'type') return
         const raf = requestAnimationFrame(() => inputRef.current?.focus())
+        return () => cancelAnimationFrame(raf)
+    }, [open, showCustom, customMode])
+
+    // Once the custom area is revealed — or the tab switches to the taller Dial —
+    // scroll the sheet so the Start button stays in view on short screens. Runs in
+    // an effect (after React commits the taller DOM) + rAF (after layout settles),
+    // so scrollHeight already includes the newly-rendered content.
+    useEffect(() => {
+        if (!open || !showCustom) return
+        const raf = requestAnimationFrame(() => {
+            const el = sheetRef.current
+            el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        })
         return () => cancelAnimationFrame(raf)
     }, [open, showCustom, customMode])
 
@@ -110,6 +124,10 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
         start(ms)
     }
 
+    function openCustom() {
+        setShowCustom(true)
+    }
+
     // Dial <-> Type carry the same value across. Type -> Dial seeds the dial from
     // whatever's typed (remounting via a fresh nonce so it re-seeds); Dial -> Type
     // renders the dialled ms back to a clock string so nothing is lost.
@@ -140,7 +158,7 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
                 className="absolute inset-0 bg-ink/40 cursor-default"
                 onClick={close}
             />
-            <div className="relative w-full sm:max-w-sm max-h-[92vh] overflow-y-auto bg-paper paper-grain rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col">
+            <div ref={sheetRef} className="relative w-full sm:max-w-sm max-h-[92vh] overflow-y-auto bg-paper paper-grain rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-paper-shade">
                     <h2 className="font-display text-lg text-ink m-0">Set a timer</h2>
                     <button
@@ -238,7 +256,7 @@ export default function TimerSetSheet({ open, onClose, onStart }) {
                     ) : (
                         <button
                             type="button"
-                            onClick={() => setShowCustom(true)}
+                            onClick={openCustom}
                             className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-lg border border-dashed border-paper-shade text-ink/70 hover:text-ink hover:bg-paper-shade/60 font-medium transition-colors"
                         >
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
