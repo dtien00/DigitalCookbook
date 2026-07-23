@@ -697,15 +697,38 @@ Two design decisions worth keeping:
 - **Always include the next-step CTA when one exists.** The home grid's "no recipes match search" empty state offers Clear search; "signed in, no recipes" offers + New Recipe; "anonymous, no recipes" offers Sign In. Empty states without a path forward feel like dead ends.
 - **One empty-state component does not fit all.** App.jsx's `<EmptyGridState>` is local to that file because the messages and CTAs are coupled to grid context. Other views (Profile My Recipes, MyBookmarks, Comments) inline their own small empty blocks following the same visual recipe. If a fourth view duplicates the structure substantially, *then* promote it to a shared component — not before.
 
-## Floating affordances (density toggle, scroll-to-top)
+## Floating affordances (left-edge FAB stack, scroll-to-top)
 
-Both floating controls in the home view share one visual treatment so they read as a pair: 48×48 circular buttons (`w-12 h-12 rounded-full`), `bg-paper-shade/90 backdrop-blur-sm shadow-md`, ink-stroked icons. Together they pin to the top corners of the viewport — density toggle top-left, scroll-to-top top-right — and fade in/out together once the user scrolls past the action row (`scrollY > 80`).
+All the home-view floating controls share one visual treatment so they read as a family: 48×48 circular buttons (`w-12 h-12 rounded-full`), `bg-paper-shade/90 backdrop-blur-sm shadow-md`, ink-stroked icons. They fade in/out together once the user scrolls past the action row (`scrollY > 80`).
 
-**Why fade rather than mount/unmount:** the controls live in the DOM at all times with `aria-hidden={!scrolled}` + `tabIndex={scrolled ? 0 : -1}` + `opacity-0 pointer-events-none` when hidden. Keeping them mounted means CSS handles the entrance smoothly (same pattern as the Auth slide-in overlay) and screen readers / keyboard focus skip them cleanly when invisible.
+**Left-edge stack**, top to bottom, each `left-4 z-40` and spaced 56px apart:
+
+| Slot | Control | Badge |
+|---|---|---|
+| `top-4` | Density toggle | — |
+| `top-18` | Fridge basket | ingredient count |
+| `top-32` | Shopping list | item count |
+| `top-46` | **Recipe history** (recently-viewed drawer) | recipe count |
+
+Scroll-to-top sits alone at `top-4 right-4`. Count badges are the same `bg-rust text-paper` pill (`-top-1 -right-1`, `min-w-[20px] h-5`) reused across Fridge / Shopping / History, shown only when the count is > 0.
+
+**Why fade rather than mount/unmount:** the controls live in the DOM at all times with `aria-hidden={!scrolled}` + `opacity-0 pointer-events-none` when hidden (density toggle and scroll-to-top also carry `tabIndex={scrolled ? 0 : -1}`). Keeping them mounted means CSS handles the entrance smoothly (same pattern as the Auth slide-in overlay) and screen readers / keyboard focus skip them cleanly when invisible.
 
 **Density toggle has an inline twin** in the action row, left of the search input. The twin is always visible at the top of the page; the floating copy takes over once the twin scrolls off. Both buttons share an extracted `densityIcon` JSX const and `densityAriaLabel` string so there's a single source of truth for icon and label — no drift between the two copies. The icon previews the destination state: a 2×2 grid means "tap to densify", two wide bars means "tap to return to default".
 
-Scroll-to-top has no inline twin — there's nothing to do at the top of the page if you're already there. Single floating instance only.
+Scroll-to-top has no inline twin — there's nothing to do at the top of the page if you're already there. Single floating instance only. Fridge / Shopping / History likewise have no inline twin: at the very top of the page they're hidden with the rest of the stack, appearing on first scroll.
+
+## Recipe History drawer
+
+The recipe-history FAB (`top-46`, rewind-clock icon — a clock face with a counterclockwise arrow, deliberately distinct from the plain clock the Date sort chip uses) opens [RecipeHistory.jsx](../src/components/RecipeHistory.jsx): a **left slide-in drawer** listing recently-viewed recipes, most-recent first.
+
+- **Motion:** mirrors the Auth slide-in but reversed — the panel emerges from the **left** edge (`-translate-x-full` → `translate-x-0`), the same side as its trigger, over a fading `bg-ink/40 backdrop-blur-sm` scrim. The container stays mounted so CSS drives the transition; `motion-reduce:transition-none` honors `prefers-reduced-motion`. `z-50` band (below the cooking-mode 100+ family), `no-print`.
+- **Contract:** reuses the FridgeBasket modal contract — `role="dialog"` + `aria-modal`, Escape and backdrop-click close, body-scroll lock while open, focus moves to the first row (or the close button when empty) on open and returns to the FAB via `openerRef` on close.
+- **Rows:** thumbnail (`image_url`, or a `bg-tan/40` ✦ placeholder when image-less) + `font-display` title + up-to-two tags in `font-serif italic text-ink/60`. Whole row is a button → routes to `/recipe/:id` and closes the drawer. `hover:bg-tan-soft`.
+- **Empty state:** the shared Fridge recipe — centered `✦`, `font-display` "No recipes viewed yet", `font-serif italic` nudge "Open a recipe and it'll show up here."
+- **Footer:** a single `Clear history` link (rose, disabled when empty), mirroring Fridge's "Clear all".
+
+Data lives in `sessionStorage` (`cookbook.recipeHistory`, cap 15, dedupe-to-top) via [useRecipeHistory](../src/hooks/useRecipeHistory.js); entries are `{ id, title, image_url, tags }` snapshots recorded by the same `RecipeDetailRoute` view effect that writes `lastViewedRecipeId`, so the drawer renders with no fetch even for recipes paged out of the loaded grid.
 
 ## Infinity-scroll markers
 

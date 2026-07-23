@@ -426,6 +426,30 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Recipe history checklist
+
+> Verifies the Recipe History feature — the 4th left-edge FAB (`top-46`, rewind-clock icon) and its left slide-in drawer of recently-viewed recipes. **Client-only, no migration**; state is sessionStorage (`cookbook.recipeHistory`, cap 15). Anonymous works — no auth gate. History resets when the tab/browser closes (session scope, by design).
+
+- [ ] **FAB visible on scroll** — on the home view, scroll past ~80px → the rewind-clock button fades in below the shopping-list button, aligned in the left-edge stack; hidden again at the very top
+- [ ] **Record a view** — open a recipe, go back home → the history badge shows `1`; open the drawer → that recipe is the top (and only) row
+- [ ] **Most-recent first** — view recipe A, then B, then C → drawer lists C, B, A top-to-bottom
+- [ ] **Dedupe / move-to-top** — re-view an earlier recipe → it moves to the top, not duplicated; badge count unchanged
+- [ ] **Row content** — each row shows thumbnail (or a `✦` placeholder when the recipe has no image), title, and up to two tags
+- [ ] **Row navigates + closes** — tap a row → drawer closes and routes to that recipe
+- [ ] **Cap at 15** — view 16+ distinct recipes → drawer holds only the 15 most recent (oldest drops off)
+- [ ] **Deep-link snapshot** — paste a `/recipe/<id>` URL into a fresh tab (recipe not in the loaded grid), then open history → the row still renders title/image with no extra fetch
+- [ ] **Empty state** — fresh tab, never opened a recipe → drawer shows "No recipes viewed yet" nudge; Clear history disabled
+- [ ] **Clear history** — with entries present, tap Clear history → list empties, badge disappears
+- [ ] **Slide-in from left** — drawer animates in from the left edge (mirror of the right-side Auth slide-in), over a dimmed backdrop
+- [ ] **Escape closes** — Escape closes the drawer and restores focus to the FAB
+- [ ] **Backdrop closes** — clicking the dimmed area outside the panel closes it
+- [ ] **Session scope** — reload the page → history survives; close the tab and reopen the app → history is empty
+- [ ] **Reduced motion** — with `prefers-reduced-motion` set, the drawer appears without the slide transition
+- [ ] **Anonymous works** — logged out, view recipes → history records and the drawer functions
+- [ ] **Mobile (≤ 640px)** — drawer is full-height on the left; rows and Clear history are ≥ 44px tap targets
+
+---
+
 ## Meal plan checklist
 
 > Verifies Stage M+1 item 1 — the `/plan` week grid. **Requires migration 021 applied** (`supabase_migration_021_meal_plans.sql` — run via Dashboard → SQL Editor); until then the grid renders but adds fail with an error toast. Signed-in only. Use any private account (e.g. `test-medium`) and **bookmark a couple of recipes first** — the cell picker reads from your bookmarks, and the seed script doesn't seed favorites.
