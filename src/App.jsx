@@ -12,6 +12,7 @@ import { useNotifications } from './hooks/useNotifications'
 import { useReports } from './hooks/useReports'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
 import { useShoppingList } from './hooks/useShoppingList'
+import { useRecipeHistory } from './hooks/useRecipeHistory'
 import { useBackdrop } from './hooks/useBackdrop'
 import { useCookbooks } from './hooks/useCookbooks'
 import { useTimers } from './hooks/useTimers'
@@ -27,6 +28,7 @@ import AddToPlanModal from './components/AddToPlanModal'
 import OnboardingTour from './components/OnboardingTour'
 import TimerWidget from './components/TimerWidget'
 import TimerSetSheet from './components/TimerSetSheet'
+import RecipeHistory from './components/RecipeHistory'
 import { addRecipeToPlan } from './hooks/useMealPlan'
 
 // Route-only views are code-split (FABLE.md §1.1): each becomes its own
@@ -239,6 +241,15 @@ function App() {
         clearList: clearShoppingList,
     } = useShoppingList()
 
+    // Recipe history (Recipe History) — recently-viewed breadcrumbs, App-level
+    // so the count badge on the home FAB stays live and the drawer can overlay
+    // any route. sessionStorage-backed (browsing-session lifetime), fed by the
+    // RecipeDetailRoute view effect below. See useRecipeHistory for why entries
+    // are snapshots, not ids.
+    const { history: recipeHistory, pushRecipe: pushRecipeHistory, clearHistory: clearRecipeHistory } = useRecipeHistory()
+    const [historyOpen, setHistoryOpen] = useState(false)
+    const historyTriggerRef = useRef(null)
+
     // Cooking-mode timer (Stage 19) — App-level so a running timer survives the
     // CookingMode <-> RecipeDetail boundary and route changes, and the floating
     // <TimerWidget> overlays any surface. The set sheet is opened from the
@@ -436,6 +447,17 @@ function App() {
         navigate(`/recipe/${recipe.id}`)
     }
 
+    // Pick a recipe from the history drawer → close it and navigate.
+    const handleHistorySelect = (recipeId) => {
+        setHistoryOpen(false)
+        navigate(`/recipe/${recipeId}`)
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+
+    }
+
     // Bookmark click handler — anonymous users get the sign-in CTA, signed-in users toggle.
     const handleBookmarkClick = (recipeId) => {
         if (!session) {
@@ -486,6 +508,9 @@ function App() {
         basketTriggerRef,
         notifications, unreadCount, markRead, markAllRead,
         shoppingCount: shoppingItems.length,
+        historyCount: recipeHistory.length,
+        historyTriggerRef,
+        onOpenHistory: () => setHistoryOpen(true),
         onOpenBasket: () => setBasketOpen(true),
         onRecipeClick: handleRecipeClick,
         onBookmarkClick: handleBookmarkClick,
@@ -515,6 +540,7 @@ function App() {
         onOpenTimerSheet: () => setTimerSheetOpen(true),
         onAddToPlan: session ? handleAddToPlanRequest : undefined,
         onStartTimer: startTimer,
+        pushRecipeHistory,
     }
 
     const handleCreateComplete = () => {
@@ -722,6 +748,14 @@ function App() {
                     : recipes.filter(r => recipeMatchesBasket(r, basket)).length}
                 loadedCount={recipes.length}
             />
+            <RecipeHistory
+                isOpen={historyOpen}
+                onClose={() => setHistoryOpen(false)}
+                history={recipeHistory}
+                onClear={clearRecipeHistory}
+                onSelect={handleHistorySelect}
+                openerRef={historyTriggerRef}
+            />
             {addToPlanRecipe && (
                 <AddToPlanModal
                     recipe={addToPlanRecipe}
@@ -773,6 +807,7 @@ function HomeView({
     isFavorited, likeCount, userLiked,
     basket, basketTriggerRef, onOpenBasket,
     shoppingCount,
+    historyCount, historyTriggerRef, onOpenHistory,
     notifications, unreadCount, markRead, markAllRead,
     onRecipeClick, onBookmarkClick, onLikeClick,
     onLogout, onSignIn,
@@ -1055,6 +1090,37 @@ function HomeView({
                     className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
                 >
                     {shoppingCount}
+                </span>
+            )}
+        </button>
+
+        {/* Recipe history button. Fourth in the left-edge FAB stack, below
+            the shopping list. Same scroll-trigger + treatment so the stack
+            appears and disappears together. Opens the recently-viewed drawer. */}
+        <button
+            ref={historyTriggerRef}
+            type="button"
+            onClick={onOpenHistory}
+            aria-label={historyCount > 0
+                ? `Open recently viewed (${historyCount} recipe${historyCount === 1 ? '' : 's'})`
+                : 'Open recently viewed'}
+            aria-haspopup="dialog"
+            aria-hidden={!scrolled}
+            className={`fixed top-46 left-4 z-40 w-12 h-12 rounded-full bg-paper-shade/90 backdrop-blur-sm shadow-md flex items-center justify-center transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+            {/* Rewind clock — a clock face with a counterclockwise arrow —
+                distinct from the plain clock used by the Date sort chip. */}
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v5h5" />
+                <path d="M3.05 13a9 9 0 1 0 2.6-6.36L3 8" />
+                <polyline points="12 8 12 12 15 14" />
+            </svg>
+            {historyCount > 0 && (
+                <span
+                    aria-hidden="true"
+                    className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                >
+                    {historyCount}
                 </span>
             )}
         </button>
@@ -1485,6 +1551,7 @@ function RecipeDetailRoute({
     addToShoppingList,
     mfa, submitReport,
     onOpenTimerSheet, onStartTimer, onAddToPlan,
+    pushRecipeHistory,
 }) {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -1499,7 +1566,17 @@ function RecipeDetailRoute({
     // matches the kitchen-session lifetime — survives back-button hops,
     // resets when the tab closes.
     useEffect(() => {
-        if (recipe?.id) sessionStorage.setItem('lastViewedRecipeId', recipe.id)
+        if (recipe?.id) {
+            sessionStorage.setItem('lastViewedRecipeId', recipe.id)
+            // Also record the view in the Recipe History breadcrumb list. We
+            // pass the whole recipe so the hook can snapshot title/image/tags
+            // for the drawer — the object is in hand here whether it came from
+            // the grid cache or the deep-link fetch.
+            pushRecipeHistory(recipe)
+        }
+        // recipe.id is the meaningful change signal; pushRecipeHistory is a
+        // stable useCallback so it doesn't need to be a dep.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recipe?.id])
 
     useEffect(() => {
