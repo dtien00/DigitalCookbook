@@ -278,7 +278,7 @@ function mapText(text, warnings) {
     const steps = []
     let servings = null
     let currentSection = null
-    let skipped = 0
+    const skippedLines = []
     let stepBuffer = []
     // 'start' -> 'description' -> 'ingredients' -> 'steps' (headers or
     // line-shape flips move the zone forward; 'skip' swallows notes/nutrition).
@@ -308,7 +308,7 @@ function mapText(text, warnings) {
         if (ING_HEADER_RE.test(line)) { zone = 'ingredients'; currentSection = null; continue }
         if (STEP_HEADER_RE.test(line)) { flushStep(); zone = 'steps'; continue }
         if (SKIP_HEADER_RE.test(line)) { flushStep(); zone = 'skip'; continue }
-        if (zone === 'skip') { skipped++; continue }
+        if (zone === 'skip') { skippedLines.push(line); continue }
 
         // "1. Preheat the oven" — a numbered line is a step wherever it
         // appears (the punctuation after the number is what separates it
@@ -329,7 +329,7 @@ function mapText(text, warnings) {
         if (zone === 'start') {
             zone = 'description'
             if (line.length <= 120) { title = line; continue }
-            warnings.push('First line was too long to be a title — it landed in Description.')
+            warnings.push({ code: 'title-in-desc', message: 'First line was too long to be a title — it landed in Description.', field: 'title' })
             descLines.push(line)
             continue
         }
@@ -368,9 +368,13 @@ function mapText(text, warnings) {
     }
     flushStep()
 
-    if (skipped > 0) warnings.push(`Skipped ${skipped} line${skipped === 1 ? '' : 's'} under a notes/nutrition heading.`)
+    if (skippedLines.length > 0) warnings.push({
+        code: 'skipped-notes',
+        message: `Skipped ${skippedLines.length} line${skippedLines.length === 1 ? '' : 's'} under a notes/nutrition heading.`,
+        text: skippedLines.join('\n'),
+    })
     const description = descLines.join('\n').trim()
-    if (description.length > 600) warnings.push('Long intro text landed in Description — trim as needed.')
+    if (description.length > 600) warnings.push({ code: 'long-desc', message: 'Long intro text landed in Description — trim as needed.', field: 'description' })
 
     return { title: title ?? '', description, servings, tags: [], ingredients, steps }
 }
@@ -397,9 +401,9 @@ function finalize(recipe, source, warnings) {
     if (!cleaned.title && cleaned.ingredients.length === 0 && cleaned.steps.length === 0) {
         return { recipe: null, source, warnings, error: "Couldn't find a recipe in that paste." }
     }
-    if (!cleaned.title) warnings.push('No title detected.')
-    if (cleaned.ingredients.length === 0) warnings.push('No ingredients detected — add them by hand or adjust the paste.')
-    if (cleaned.steps.length === 0) warnings.push('No steps detected — add them by hand or adjust the paste.')
+    if (!cleaned.title) warnings.push({ code: 'no-title', message: 'No title detected.', field: 'title' })
+    if (cleaned.ingredients.length === 0) warnings.push({ code: 'no-ingredients', message: 'No ingredients detected — add them by hand or adjust the paste.', field: 'ingredients' })
+    if (cleaned.steps.length === 0) warnings.push({ code: 'no-steps', message: 'No steps detected — add them by hand or adjust the paste.', field: 'steps' })
     return { recipe: cleaned, source, warnings, error: null }
 }
 
@@ -424,7 +428,7 @@ export function parseRecipeImport(raw) {
         if (node) return finalize(mapJsonLd(node), 'json-ld', warnings)
         if (json && Array.isArray(json.recipes)) {
             if (json.recipes.length === 0) return fail('That export contains no recipes.')
-            if (json.recipes.length > 1) warnings.push(`Export contains ${json.recipes.length} recipes — imported the first ("${json.recipes[0].title}").`)
+            if (json.recipes.length > 1) warnings.push({ code: 'multi-recipe', message: `Export contains ${json.recipes.length} recipes — imported the first ("${json.recipes[0].title}").` })
             return finalize(mapExportRecipe(json.recipes[0]), 'export', warnings)
         }
         if (looksLikeExportRecipe(json)) return finalize(mapExportRecipe(json), 'export', warnings)

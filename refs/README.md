@@ -25,6 +25,7 @@ Maintained alongside the code — updated in the same change that ships work tou
 | [TESTING.md](./TESTING.md) | Test accounts, seed data, environments, and manual QA checklists. |
 | [LIVE.md](./LIVE.md) | Deployment reference — Vercel + Supabase hosting and the ongoing-maintenance runbook. |
 | [teachings/](./teachings/) | Lessons distilled from shipped features — implementation walkthroughs, dependency costs, and the general patterns underneath. |
+| [GLOSSARY.md](./GLOSSARY.md) | Terms from planning/proposals/diffs, explained in the sense used here and grounded in the codebase — a learning record, added on request. |
 
 ## Infrastructure & future-work evaluations
 
@@ -39,6 +40,8 @@ remain evaluations of options not (yet) adopted.
 | [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) | ✅ implemented | The CI/CD pipeline (lint + test + build + docker) and how it coexists with Vercel's auto-deploy. |
 | [TERRAFORM.md](./TERRAFORM.md) | proposal | Infrastructure-as-Code for the Vercel/Supabase project, with the IaC-vs-SQL-migrations boundary. |
 | [INSTACART.md](./INSTACART.md) | research | Whether and how to make recipes "shoppable" via Instacart — feasibility, costs, data-model fit; nothing implemented. |
+| [MONETIZATION.md](./MONETIZATION.md) | research | Every plausible monetization domain (affiliate commerce, ads, premium, print-on-demand, …) with ethics guardrails, prerequisites, and milestone-based revenue speculation; nothing implemented. |
+| [INPUT.md](./INPUT.md) | research | Alternative recipe-input methods beyond typing and paste-import (file drop, batch queue, bookmarklet, OCR, voice, URL/LLM/email), each mapped onto the Stage 22 import funnel with the general pattern named; nothing implemented. |
 
 ---
 

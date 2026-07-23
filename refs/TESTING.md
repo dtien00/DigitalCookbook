@@ -728,6 +728,38 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Save round-trip** — Save the filled form → RecipeDetail renders the sections grouped exactly like a hand-authored Stage 21 recipe
 - [ ] **Mobile width** — at phone width (375px) the modal fits, the textarea is usable, and Cancel / Preview / Fill form stay tappable
 
+**File drop + picker (Stage 22 v1.1)** — save the fixtures above as real files first (a sectioned `.txt`, a recipe-site JSON-LD `.json`, an own-export `.json`)
+- [ ] **Drag-active state** — dragging a file over the textarea tints it indigo and the helper line reads "Release to import…"; dragging away without dropping clears it
+- [ ] **Drop auto-previews** — dropping the `.txt` fixture fills the textarea *and* shows the detected-summary card in one action (no separate Preview click); Fill form is enabled
+- [ ] **Picker path (single)** — "choose files" opens the OS dialog filtered to `.txt`/`.md`/`.json`; selecting one fixture behaves identically to the drop (auto-preview); re-choosing the same file re-fires
+- [ ] **Picker multi-select** — Ctrl/Cmd- or Shift-clicking 2+ files in the "choose files" dialog routes to batch triage, identical to dropping 2+ (shared `importFiles` dispatch — see *Batch import* below)
+- [ ] **Wrong type** — dropping an image/PDF shows the red "Drop a .txt, .md, or .json file." line and leaves the textarea untouched
+- [ ] **Multiple files → batch** — selecting/dropping 2+ files opens batch triage (see *Batch import* below), *not* the old take-first-with-warning behavior (removed in v1.2)
+- [ ] **Edit-after-drop invariant** — after a drop, editing the textarea clears the summary so Fill form can't apply a stale parse (same as after a manual Preview)
+- [ ] **Dictation hint (copy)** — the intro copy names the phone-keyboard mic and the Digital Cookbook export; no behavior to test beyond the words being present
+
+**Batch import (Stage 22 v1.2)** — prepare 3+ recipe files (mix a good sectioned `.txt`, a good export `.json`, and one garbage `.txt`)
+- [ ] **Triage list** — dropping/picking 3 files shows the modal triage: two green `✓` rows with summaries, one red `✗` with a skip reason; header reads "3 files — 2 ready to import, 1 skipped"; footer shows Cancel · Back · **Import 2 recipes**
+- [ ] **Back** — returns to the paste/textarea view without losing the modal
+- [ ] **Start** — Import 2 recipes closes the modal, loads the first, and shows the banner "Batch import — reviewing 1 of 2 · <filename>"; Save button reads **Save & next**
+- [ ] **Save & advance** — saving the first recipe loads the second into a clean form (no dirty-form confirm fires), banner advances to "2 of 2", Save button now reads **Save Recipe**; no navigation home between items
+- [ ] **Completion** — saving the last recipe navigates home and toasts "Batch import complete — 2 recipes saved."; both appear in the grid, both **private**
+- [ ] **Skip** — Skip on an item advances without saving it (not counted); skipping the last finishes the batch with the saved count
+- [ ] **Exit batch** — drops the queue but leaves the current recipe on the form (savable by hand as a normal single create)
+- [ ] **Failed save mid-batch** — a save error (e.g. offline) keeps the current item loaded and the batch intact for a retry, rather than advancing
+- [ ] **Image isolation** — a cover image picked before a batch item does not carry into the next item (applyRecipe clears it)
+- [ ] **All-failed guard** — dropping only garbage files disables the **Import** button (nothing to start)
+
+**Import warnings UX (Stage 22 v1.3)** — paste a recipe that triggers warnings (e.g. a title line, `Ingredients`, one ingredient, `Steps`, one `1.` step, then a `Notes` block with 2+ lines; and separately a paste with no steps)
+- [ ] **Banner appears** — after Fill form, an amber **"Import notes"** banner shows at the top of the form listing the warnings (⚠ per row); a clean import shows no banner
+- [ ] **Hybrid staleness** — with a "No steps detected" note showing, add a step → the note disappears; same for no-title (type a title) and no-ingredients (add an ingredient); placement/skipped notes do **not** vanish on unrelated edits
+- [ ] **Recover skipped text** — the "Skipped N lines under a notes/nutrition heading" row has **View** (expands the exact skipped text) and **Add to description** (appends it after existing description text, then the row disappears with a toast)
+- [ ] **Add-to-description append** — if the description already had content, recovery appends after a blank line rather than overwriting
+- [ ] **Dismiss all** — the banner's "Dismiss all ✕" clears it; re-importing brings a fresh banner (no stale dismissal)
+- [ ] **Batch stacking** — in a batch with a warned item, the indigo batch banner and amber notes banner both show, stacked and distinct; advancing swaps the notes to the next item's
+- [ ] **Batch triage expand** — in the modal triage, clicking a file's `⚠ N warnings` expands the messages inline (`▾`/`▴`)
+- [ ] **multi-recipe suppressed** — importing one recipe from a multi-recipe export shows the "N recipes — imported the first" note in the modal preview but **not** in the form banner
+
 ---
 
 ## Future testing notes
