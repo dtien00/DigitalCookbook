@@ -29,6 +29,17 @@ const C = 100
 const HAND_ORDER = ['hours', 'minutes', 'seconds']
 const HAND_LABELS = { hours: 'Hours', minutes: 'Minutes', seconds: 'Seconds' }
 
+// Per-hand geometry + paint styling; `On`/`Off` are the active vs faint variants.
+// Hours/minutes keep one width; only seconds thins when inactive.
+const HAND_STYLE = {
+    hours:   { units: 12, length: 40, widthOn: 5,   widthOff: 5, colorOn: 'stroke-ink',  colorOff: 'stroke-ink/35' },
+    minutes: { units: 60, length: 62, widthOn: 4,   widthOff: 4, colorOn: 'stroke-ink',  colorOff: 'stroke-ink/35' },
+    seconds: { units: 60, length: 70, widthOn: 2.5, widthOff: 2, colorOn: 'stroke-rust', colorOff: 'stroke-rust/40' },
+}
+// Paint longest hand first so the shortest ends up on top — that keeps each hand's
+// knob (drawn at its tip) clear of shorter hands, which never reach that radius.
+const HAND_PAINT_ORDER = ['seconds', 'minutes', 'hours']
+
 // 60 tick marks; every 5th (the numeral positions) is a longer/darker "major".
 const TICKS = Array.from({ length: 60 }, (_, i) => {
     const major = i % 5 === 0
@@ -47,11 +58,11 @@ const NUMERALS = Array.from({ length: 12 }, (_, i) => {
     return { n, ...clockAngleToXY((n / 12) * 360, 68, C, C) }
 })
 
-function Hand({ hand, length, width, colorClass, active, animate }) {
+function Hand({ hand, length, width, colorClass, active, animate, slow }) {
     return (
         <g
             style={{ transform: `rotate(${valueToClockAngle(hand.value, hand.units)}deg)`, transformOrigin: `${C}px ${C}px` }}
-            className={animate ? 'transition-transform duration-200 ease-out motion-reduce:transition-none' : undefined}
+            className={animate ? `transition-transform ${slow ? 'duration-1000' : 'duration-200'} ease-out motion-reduce:transition-none` : undefined}
         >
             <line
                 x1={C}
@@ -79,6 +90,15 @@ export default function TimerDial({ initialMs = 0, onChange }) {
     const [hands, setHands] = useState(() => msToHands(initialMs))
     const [activeHand, setActiveHand] = useState('hours')
     const [dragging, setDragging] = useState(false)
+    // `dragging` = pointer is down; `tracking` = pointer has actually moved while
+    // down. Animation is gated on `tracking`, not `dragging`, so a plain tap glides
+    // the hand to the tapped spot (nothing moved yet) while a real drag tracks the
+    // finger 1:1 with no transition (first move flips `tracking`, killing the glide).
+    const [tracking, setTracking] = useState(false)
+    // Which speed the current glide uses: a tap-to-place sweeps slowly and
+    // deliberately, the ± steppers stay snappy. Set true on pointer-down (a tap),
+    // false in step(), so each non-drag path animates at its own pace.
+    const [slowGlide, setSlowGlide] = useState(false)
     const svgRef = useRef(null)
 
     // Sync the seed value up on mount so the sheet's Start button + readout match
@@ -109,13 +129,17 @@ export default function TimerDial({ initialMs = 0, onChange }) {
     function onPointerDown(e) {
         e.currentTarget.setPointerCapture?.(e.pointerId)
         setDragging(true)
+        setSlowGlide(true) // a tap-place glides slowly; a real drag kills the glide on first move
         setFromPointer(e)
     }
     function onPointerMove(e) {
-        if (dragging) setFromPointer(e)
+        if (!dragging) return
+        setTracking(true) // first real movement — switch from glide to 1:1 tracking
+        setFromPointer(e)
     }
     function endDrag(e) {
         setDragging(false)
+        setTracking(false)
         e.currentTarget.releasePointerCapture?.(e.pointerId)
         // Advance to the next hand on release (wrapping seconds -> hours) so a duration
         // is set in reading order without reaching for the selector. Functional-updater
@@ -124,6 +148,7 @@ export default function TimerDial({ initialMs = 0, onChange }) {
     }
 
     function step(direction) {
+        setSlowGlide(false) // steppers feel snappy, not a slow sweep
         const spec = HANDS[activeHand]
         applyHands({ ...hands, [activeHand]: stepHandValue(hands[activeHand], spec, direction) })
     }
@@ -174,27 +199,34 @@ export default function TimerDial({ initialMs = 0, onChange }) {
                     </text>
                 ))}
 
-                {/* Inactive hands sit faint; the active one is full-strength with a knob.
-                    Render order keeps the active hand + hub on top. */}
-                {activeHand !== 'hours' && (
-                    <Hand hand={{ value: hands.hours, units: 12 }} length={40} width={5} colorClass="stroke-ink/35" />
-                )}
-                {activeHand !== 'minutes' && (
-                    <Hand hand={{ value: hands.minutes, units: 60 }} length={62} width={4} colorClass="stroke-ink/35" />
-                )}
-                {showSeconds && activeHand !== 'seconds' && (
-                    <Hand hand={{ value: hands.seconds, units: 60 }} length={70} width={2} colorClass="stroke-rust/40" />
-                )}
-
-                {activeHand === 'hours' && (
-                    <Hand hand={{ value: hands.hours, units: 12 }} length={40} width={5} colorClass="stroke-ink" active animate={!dragging} />
-                )}
-                {activeHand === 'minutes' && (
-                    <Hand hand={{ value: hands.minutes, units: 60 }} length={62} width={4} colorClass="stroke-ink" active animate={!dragging} />
-                )}
-                {activeHand === 'seconds' && (
-                    <Hand hand={{ value: hands.seconds, units: 60 }} length={70} width={2.5} colorClass="stroke-rust" active animate={!dragging} />
-                )}
+                {/* All three hands render persistently with stable keys and never
+                    unmount on active-change, so a tap-glide begun while a hand is active
+                    keeps animating to completion even after endDrag cycles the active
+                    hand away. The <g> that carries the transform transition keeps an
+                    identical className across the active<->inactive swap (only its
+                    children change), so the browser never tears down the in-flight glide.
+                    Inactive hands are faint; the active one is full-strength with a knob.
+                    Hub is rendered after, so it stays on top. */}
+                {HAND_PAINT_ORDER.map(h => {
+                    if (h === 'seconds' && !showSeconds) return null
+                    const isActive = activeHand === h
+                    const s = HAND_STYLE[h]
+                    return (
+                        <Hand
+                            key={h}
+                            hand={{ value: hands[h], units: s.units }}
+                            length={s.length}
+                            width={isActive ? s.widthOn : s.widthOff}
+                            colorClass={isActive ? s.colorOn : s.colorOff}
+                            active={isActive}
+                            // Every hand keeps its transition EXCEPT the one being dragged
+                            // (1:1 finger tracking). That's what lets a just-deactivated
+                            // hand finish its glide instead of snapping.
+                            animate={!(isActive && tracking)}
+                            slow={slowGlide}
+                        />
+                    )
+                })}
 
                 {/* Center hub */}
                 <circle cx={C} cy={C} r="5" className="fill-ink" />
