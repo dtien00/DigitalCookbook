@@ -521,7 +521,7 @@ export default function RecipeDetail({
                                                         className="accent-rust w-5 h-5 mt-0.5 shrink-0 cursor-pointer"
                                                     />
                                                     <span className={checked ? 'line-through text-ink/50' : ''}>
-                                                        {scaleQuantity(ing.quantity, multiplier)} {ing.unit} {ing.name}
+                                                        {scaleQuantity(ing.quantity, multiplier) || ""} {ing.unit} {ing.name}
                                                         {ing.notes && (
                                                             <span className="block italic text-ink/60 text-sm mt-0.5 font-serif">
                                                                 {ing.notes}
