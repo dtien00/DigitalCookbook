@@ -13,10 +13,11 @@ import {
 
 // Stage 19 Phase 3 (Clock-dial time picker) — an analog clock-face alternative to
 // the custom-time text field in <TimerSetSheet>. You drag a hand (or tap the
-// face, or use the ± steppers) to set a duration, alarm-clock style. Minutes is
-// the default hand because ~90% of kitchen timers are "N minutes"; Hours and
-// Seconds are opt-in via the hand selector. All the angle<->value math lives in
-// the React-free, unit-tested ../lib/dialGeometry.js.
+// face, or use the ± steppers) to set a duration, alarm-clock style. Hours is
+// the default hand and releasing one advances the active hand in reading order
+// (hours -> minutes -> seconds, wrapping), so a full duration is set as a
+// sequence; the hand selector still lets you jump to any hand directly. All the
+// angle<->value math lives in the React-free, unit-tested ../lib/dialGeometry.js.
 //
 // The whole control is layered *beside* the accessible Type field (its keyboard/
 // screen-reader fallback) — the ± steppers additionally give a non-drag path and
@@ -76,7 +77,7 @@ function Hand({ hand, length, width, colorClass, active, animate }) {
 
 export default function TimerDial({ initialMs = 0, onChange }) {
     const [hands, setHands] = useState(() => msToHands(initialMs))
-    const [activeHand, setActiveHand] = useState('minutes')
+    const [activeHand, setActiveHand] = useState('hours')
     const [dragging, setDragging] = useState(false)
     const svgRef = useRef(null)
 
@@ -116,6 +117,10 @@ export default function TimerDial({ initialMs = 0, onChange }) {
     function endDrag(e) {
         setDragging(false)
         e.currentTarget.releasePointerCapture?.(e.pointerId)
+        // Advance to the next hand on release (wrapping seconds -> hours) so a duration
+        // is set in reading order without reaching for the selector. Functional-updater
+        // form reads the current hand safely rather than the render's stale `activeHand`.
+        setActiveHand(cur => HAND_ORDER[(HAND_ORDER.indexOf(cur) + 1) % HAND_ORDER.length])
     }
 
     function step(direction) {
@@ -227,7 +232,7 @@ export default function TimerDial({ initialMs = 0, onChange }) {
                 </button>
             </div>
 
-            {/* Hand selector — which hand drag / ± acts on. Minutes pre-selected. */}
+            {/* Hand selector — which hand drag / ± acts on. Hours pre-selected. */}
             <div role="group" aria-label="Which hand to set" className="flex gap-1.5 mt-3">
                 {HAND_ORDER.map(h => {
                     const on = activeHand === h
