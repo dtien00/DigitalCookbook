@@ -562,9 +562,20 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 - [ ] **Entry points** — a "Timer" button shows next to "Start cooking" on RecipeDetail; a clock icon shows in the CookingMode header (beside the ingredients `≡`); both open the set sheet
 - [ ] **Set sheet** — opens to the preset chips (1:00 / 3:00 / 5:00 / 10:00 / 15:00 / 30:00) plus an **"Add a custom time"** button; the custom input is NOT shown yet (ui-addons)
-- [ ] **Reveal custom field** — tap "Add a custom time" → the button is replaced by the labelled custom input + Start, and the input takes focus; re-opening the sheet (or closing and reopening) hides it again
+- [ ] **Reveal custom area** — tap "Add a custom time" → a **Dial / Type** toggle appears (Dial selected) with the clock dial below; re-opening the sheet (or closing and reopening) hides it again and resets to Dial
+
+**Phase 3 — clock-dial time picker (client-only, no migration):**
+
+- [ ] **Dial default** — the dial opens with the **Minutes** hand active, readout `0:00`, Start **disabled**; two hands draw (the `rust` second hand appears only once seconds > 0 or Seconds is active)
+- [ ] **Set by drag / tap** — drag or tap the face → the active hand snaps (minutes → 1, hours → 1, seconds → 5) and the readout + Start update; Start enables once > `0:00`
+- [ ] **± steppers** — the − / + buttons flanking the readout nudge the active hand (min ±1, hour ±1, sec ±5), clamped at 0 and the per-hand max (no wrap)
+- [ ] **Hand selector** — Hours / Minutes / Seconds switch which hand drag and ± act on; the stepper aria-labels and the readout sublabel follow the choice
+- [ ] **Under-12h note + ceiling** — the *"Covers up to 11:59:55 — switch to Type for longer"* note always shows; at 11 hours it emphasises to upright rose-dark *"Dial maxes out under 12 h…"*
+- [ ] **Dial ↔ Type carry** — set a value on the dial, switch to Type → the field shows it (e.g. `1:00`); type `11:30:00`, switch to Dial → the dial seeds to `11:30:00` (hours pin at 11 for anything ≥ 12h)
+- [ ] **Dial start** — with a non-zero dial value tap Start → sheet closes and a floating pill counts down from that duration
+- [ ] **Reduced motion** — with `prefers-reduced-motion`, the active hand jumps to the snapped position instead of sweeping
 - [ ] **Preset start** — tap a preset → sheet closes, a floating pill appears bottom-left counting down from that duration
-- [ ] **Custom parse** — after revealing the field, type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
+- [ ] **Custom parse (Type tab)** — switch to the **Type** tab, type `10` → 10:00; `5:30` → 5:30; `0:05` → 5s; an invalid entry (e.g. `abc`) shows the inline "Enter a time like 10 or 5:30" error and does NOT start
 - [ ] **Live countdown** — the pill ticks down smoothly (~4×/sec); only the widget repaints, not the whole page
 - [ ] **Pause / Resume** — pause freezes the remaining time and shows a rust play disc; resume continues from the frozen value
 - [ ] **Reset** — restores the full original duration (running stays running from full; paused stays paused at full)
