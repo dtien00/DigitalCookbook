@@ -80,3 +80,68 @@ résumé story regardless of revenue, so it shouldn't hang on a payout metric.
 
 **Docs.** Annie Duke, *Quit* (coined the current usage) and *Thinking in Bets* (the
 decision-quality foundation) · [Farnam Street — "Kill Criteria"](https://fs.blog/kill-criteria/).
+
+---
+
+## Project memory
+
+**One-liner:** A persistent folder of small Markdown files, stored outside the repo in the
+Claude Code profile, loaded into context at the start of every session so facts survive
+across conversations that otherwise start from zero.
+
+**What it is.** Every Claude session starts amnesiac — when it ends, its context is gone.
+Project memory defeats that for *one* project. It's a plain folder on the machine, keyed to
+the repo path so each project is isolated:
+`C:\Users\dtien\.claude\projects\E--Professional-Industry-Portfolio-Materials-DigitalCookbook\memory\`.
+Inside are two kinds of file. **`MEMORY.md`** is the *index* — one line per memory, a link
+plus a hook — and it's the only file loaded *in full* at session start (it appears in the
+opening `<system-reminder>`). Kept tiny on purpose, so it's cheap to always carry. The
+**per-fact files** (e.g. `feedback_no_claude_coauthor.md`) are *not* all loaded up front;
+they surface on demand when the conversation looks relevant, sometimes appearing mid-session
+inside a `<system-reminder>` block — that's a recalled file, not the index.
+
+Each fact-file has YAML frontmatter (`name`, `description`, `metadata.type`) and a body. The
+`type` sorts it: `user` (who you are), `feedback` (how to work), `project` (ongoing
+work/constraints), `reference` (external pointers). The `description` is what the recall step
+matches against to decide relevance, so it's written to be *found*, not to read well. Bodies
+cross-link with wiki-style `[[name]]` so recall pulls related facts together into a small
+graph. The concept exists to stop you re-teaching the same conventions every session.
+
+**Where it came up here.** From the assistant's own closing offer, after opening PR #86:
+> "Want me to save a quick **project memory** noting PR #86 / the `history` branch, or is
+> this good to leave here?"
+
+Grounded in ten real files in the memory dir above (repo-external, so no `refs/` link):
+- `MEMORY.md` — the index seen in this session's opening reminder.
+- `feedback_pr_body_format.md` — why PR #86 used `## Summary` + `## Test plan` unprompted.
+- `feedback_no_claude_coauthor.md` — why the commit and PR omit the Claude trailer/footer.
+- `project_digital_cookbook.md` — why the stack and living-docs set were known before reading
+  any code.
+
+Distinct from the *in-repo* living docs (`refs/ROADMAP.md`, `refs/COSMETICS.md`, this
+glossary): those are versioned, shared with anyone who clones, and describe the **product**.
+The `memory/` folder is private, unversioned, and describes **how you and I work together**.
+`feedback_keep_living_docs_current` is a memory whose whole job is to point *at* the in-repo
+docs — memory about docs.
+
+**When to reach for it / when not.** Save a fact when it's durable and cross-session — a
+standing preference, a non-obvious constraint (`supabase_migration/` is gitignored, needs
+`git add -f`), or who you are. The test: *would I otherwise re-learn this next week?* Skip it
+when the fact already lives in the repo — git and `refs/` already record the Recipe History
+branch, diff, and commit, so a memory restating "it uses sessionStorage" would only rot. Skip
+it when the fact matters only to the current conversation — that's working context, not
+memory. This is why the assistant's save-offer was genuinely optional: most of the session is
+self-documenting.
+
+**Related terms.**
+- **`CLAUDE.md`** — the other persistent channel, but *always* loaded in full and usually
+  checked into the repo (or `~/.claude/`); best for stable instructions vs. memory's
+  accumulating facts.
+- **Context window** — the finite text visible at once; memory exists because the window
+  resets each session and can't hold everything.
+- **Retrieval / recall** — the on-demand step that surfaces relevant memory files by their
+  `description`; the same idea as RAG, scoped to these notes.
+- **Living docs** — the in-repo `refs/*.md`; the versioned, shareable cousin of memory,
+  describing the product rather than the working relationship.
+
+**Docs.** [Claude Code — Memory](https://docs.claude.com/en/docs/claude-code/memory).
