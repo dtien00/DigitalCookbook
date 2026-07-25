@@ -820,6 +820,48 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Dietary filter modal checklist (Stage N)
+
+> Verifies Stage N item 2 — the home-grid allergen/dietary filter modal ([DietaryFilterModal.jsx](../src/components/DietaryFilterModal.jsx)) over [useDietaryFilter.js](../src/hooks/useDietaryFilter.js). **No migration or auth required** — selection is localStorage-only (`cookbook.dietaryFilter`) in this item; the grid isn't filtered yet and signed-in profile sync is deferred to the Filter-behavior item. Works anonymously on `/`.
+
+**Trigger + modal**
+- [ ] **Trigger placement** — a **Filters** button (funnel icon) sits in the action row between Fridge and List
+- [ ] **Opens** — clicking it opens a modal with a `✦ Dietary filters` heading and two groups: **Exclude allergens** (12 chips) and **Require dietary** (Vegetarian / Vegan)
+- [ ] **Toggle** — clicking an allergen chip turns it **rose-dark**; a dietary chip turns it **rust**; clicking again deselects to the paper-shade outline; `aria-pressed` reflects each
+- [ ] **Footer CTA** — reads **Done** with nothing selected, **Apply N filters** once any chip is on; **Clear all** is disabled at zero and deselects everything when clicked
+- [ ] **Trigger badge** — a rust count badge appears on the Filters button showing the number of active exclusions + requirements; gone when zero
+
+**Persistence + a11y**
+- [ ] **Persists** — select a couple chips, reload the page → the selections and the badge count survive (localStorage)
+- [ ] **Close paths** — Escape, backdrop click, and the header `×` all close the modal; focus returns to the Filters trigger on close
+- [ ] **Mobile width (375px)** — the modal fits, chip rows wrap, chips and footer controls stay tappable
+
+> Note: with chips selected, the home grid does **not** filter yet — that's the next item. This checklist only covers selection + persistence + the modal shell.
+
+---
+
+## Dietary filter behavior checklist (Stage N)
+
+> Verifies Stage N item 3 — the filter actually narrowing the grid, profile sync, and the view refresh. **Requires migrations 025 AND 026 applied** (`_025_allergen_dietary` + `_026_recipes_with_counts_allergens`). 026 matters only for the likes-sort path — without it, sorting by likes with an allergen exclusion active can under-filter. The default (date) sort reads the base table and is safe either way. Seed recipes have empty `allergens`/`dietary` until you author some, which is what makes the require-Vegan check below empty the grid.
+
+**Grid filtering (anon, `/`)**
+- [ ] **Require empties correctly** — open Filters → **Require dietary: Vegan** → close: the grid empties to a **"No recipes match your dietary filters"** state with an **Open filters** button (assuming no seed recipe declares `vegan` dietary)
+- [ ] **Exclude doesn't over-filter** — clear Vegan, **Exclude allergens: Dairy** → close: all recipes remain (no seed recipe declares the dairy *allergen*, so none are excluded) — confirms exclusion keys on declared allergens, not tags/ingredients
+- [ ] **Real data** — author (or edit) a recipe as **Vegan** + **contains Peanuts** (item-1 chips), then: requiring Vegan shows it; excluding Peanuts hides it
+- [ ] **AND-composition** — with a tag search or fridge basket active, adding a dietary filter narrows further (a recipe must pass all active filters); clearing one widens back
+- [ ] **Pagination pauses** — with a dietary filter active the infinity-scroll sentinel doesn't fire (same as an active basket/search); clearing it resumes loading
+
+**Profile sync (signed-in)**
+- [ ] **Write-through** — signed in, select a couple of chips → they persist to `profiles.allergen_exclusions` / `dietary_requirements` (survives a hard reload without relying on localStorage)
+- [ ] **Pre-population** — sign in on a second browser / cleared-localStorage session → the modal opens with your saved prefs already selected (profile is the cross-device source of truth)
+- [ ] **No clobber on load** — a fresh signed-in load does NOT reset saved prefs to empty (the hydration gate holds the write-through until the profile read resolves)
+- [ ] **Anon stays local** — signed out, selections persist via localStorage only; no profile write is attempted
+
+**Likes-sort safety (needs migration 026)**
+- [ ] **View exposes the columns** — switch Sort to **Most liked** with an allergen exclusion active on a recipe that declares that allergen → it stays hidden (before 026 it would leak through because the view returned no `allergens`)
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:

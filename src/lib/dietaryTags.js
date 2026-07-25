@@ -40,3 +40,24 @@ const DIETARY_LABELS = Object.fromEntries(DIETARY.map(d => [d.value, d.label]))
 // fall back to the raw slug so nothing renders blank.
 export const allergenLabel = (value) => ALLERGEN_LABELS[value] ?? value
 export const dietaryLabel = (value) => DIETARY_LABELS[value] ?? value
+
+// Stage N grid-filter predicate. A recipe PASSES when it contains NONE of the
+// excluded allergens (exclude-any) AND satisfies EVERY required dietary
+// attribute (require-all) — the two opposite directions the schema separates.
+// Both selections empty → always passes (the filter is a no-op).
+//
+// Missing/undefined arrays are treated as empty. Note the safety asymmetry:
+// a recipe with no declared allergens is NOT excluded (we can't exclude on
+// data an author never provided — the author-declared contract from
+// DATABASE_DECISIONS). This is also why the recipes_with_counts view MUST
+// expose `allergens` (migration 026): a recipe arriving with `allergens`
+// undefined because of a stale view reads as "no allergens" and slips a real
+// allergen past an exclusion.
+export function recipeMatchesDietaryFilter(recipe, excludedAllergens = [], requiredDietary = []) {
+    if (excludedAllergens.length === 0 && requiredDietary.length === 0) return true
+    const allergens = Array.isArray(recipe?.allergens) ? recipe.allergens : []
+    const dietary = Array.isArray(recipe?.dietary) ? recipe.dietary : []
+    if (excludedAllergens.some(a => allergens.includes(a))) return false
+    if (!requiredDietary.every(d => dietary.includes(d))) return false
+    return true
+}
