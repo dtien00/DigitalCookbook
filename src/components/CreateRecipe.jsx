@@ -6,6 +6,7 @@ import { parseDurationToMs, formatMs } from '../lib/parseDuration'
 import { ingredientsToRows, rowsToIngredients, stripLeadingEmptySection } from '../lib/ingredientSections'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
+import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
 import UnitCombobox from './UnitCombobox'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
@@ -32,6 +33,14 @@ const emptyIngredientRow = () => ({ type: 'ingredient', name: '', quantity: '', 
 // recipe, so the seed only affects a fresh create.
 const emptySectionRow = () => ({ type: 'section', name: '' })
 
+// Stage N — allergen/dietary chip state colors (inline; see the render note).
+// Allergen ON = danger red so "contains" reads as a caution, not a neutral tag;
+// dietary ON = affirmative green; OFF = quiet paper outline for both.
+const CHIP_ON_ALLERGEN = { backgroundColor: '#b91c1c', color: '#fff', borderColor: '#b91c1c' }
+const CHIP_ON_DIETARY = { backgroundColor: '#047857', color: '#fff', borderColor: '#047857' }
+const CHIP_OFF = { backgroundColor: '#fff', color: '#4b5563', borderColor: '#d1d5db' }
+const CHIP_HINT = { color: '#6b7280', fontWeight: 400 }
+
 export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const isEditMode = !!recipeToEdit
 
@@ -41,6 +50,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [servings, setServings] = useState(recipeToEdit?.servings || 1)
     const [isPublic, setIsPublic] = useState(recipeToEdit?.is_public ?? true)
     const [tagsInput, setTagsInput] = useState((recipeToEdit?.tags || []).join(', '))
+    // Stage N — author-declared allergen / dietary slugs, from a fixed
+    // canonical list (src/lib/dietaryTags.js). Hydrate from the recipe prop in
+    // edit mode; NOT inferred from ingredients — the author declares them.
+    const [allergens, setAllergens] = useState(recipeToEdit?.allergens || [])
+    const [dietary, setDietary] = useState(recipeToEdit?.dietary || [])
     const [rows, setRows] = useState([emptySectionRow(), emptyIngredientRow()])
     // Active column order for the ingredient triplet (see LAYOUT_PRESETS).
     const [ingredientLayout, setIngredientLayout] = useState(LAYOUT_PRESETS[0])
@@ -77,6 +91,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const parsedTags = [...new Set(
         tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
     )]
+
+    // Stage N — toggle a slug in a fixed-list selection (allergens/dietary).
+    // Functional setState so rapid taps don't drop against a stale array.
+    const toggleSlug = (setter, value) =>
+        setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])
 
     useEffect(() => {
         if (isEditMode) {
@@ -364,6 +383,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // never vanishes without a yes.
     const formIsDirty = () =>
         title.trim() !== '' || description.trim() !== '' || tagsInput.trim() !== '' ||
+        allergens.length > 0 || dietary.length > 0 ||
         imageFile !== null ||
         rows.some(r => r.type === 'section'
             ? (r.name || '').trim() !== ''
@@ -383,6 +403,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setDescription(recipe.description)
         setServings(recipe.servings || 1)
         setTagsInput(recipe.tags.join(', '))
+        // Imports never carry allergens/dietary — the author must declare them
+        // deliberately (inferring safety data from prose is the antipattern this
+        // stage exists to avoid). Reset so a prior batch item can't bleed in.
+        setAllergens([])
+        setDietary([])
         const importedRows = ingredientsToRows(recipe.ingredients.map(i => ({
             name: i.name,
             quantity: i.quantity,
@@ -485,7 +510,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                         servings,
                         is_public: isPublic,
                         image_url: imageUrl,
-                        tags: parsedTags
+                        tags: parsedTags,
+                        allergens,
+                        dietary
                     })
                     .eq('id', recipeId)
 
@@ -505,7 +532,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                         servings,
                         is_public: isPublic,
                         image_url: imageUrl,
-                        tags: parsedTags
+                        tags: parsedTags,
+                        allergens,
+                        dietary
                     }])
                     .select()
                     .single()
@@ -787,6 +816,56 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                        {/* Stage N — author-declared allergens (safety-critical,
+                            never inferred). Fixed canonical list; toggle chips.
+                            State colors are inline: this component's buttons are
+                            zeroed by Tailwind Preflight and the palette utilities
+                            aren't reliably JIT-emitted here, so a safety toggle
+                            can't depend on a utility class resolving. Selected =
+                            danger red (contains), unselected = quiet outline. */}
+                        <div className="form-group">
+                            <label>Allergens <span className="text-sm" style={CHIP_HINT}>(this recipe contains)</span></label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {ALLERGENS.map(a => {
+                                    const on = allergens.includes(a.value)
+                                    return (
+                                        <button
+                                            key={a.value}
+                                            type="button"
+                                            aria-pressed={on}
+                                            onClick={() => toggleSlug(setAllergens, a.value)}
+                                            className="px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"
+                                            style={on ? CHIP_ON_ALLERGEN : CHIP_OFF}
+                                        >
+                                            {a.label}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                            <p className="text-xs mt-1.5 italic" style={CHIP_HINT}>
+                                You declare these — they are never guessed from your ingredients. Cooks filter on what you flag here.
+                            </p>
+                        </div>
+                        <div className="form-group">
+                            <label>Dietary <span className="text-sm" style={CHIP_HINT}>(this recipe is)</span></label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {DIETARY.map(d => {
+                                    const on = dietary.includes(d.value)
+                                    return (
+                                        <button
+                                            key={d.value}
+                                            type="button"
+                                            aria-pressed={on}
+                                            onClick={() => toggleSlug(setDietary, d.value)}
+                                            className="px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"
+                                            style={on ? CHIP_ON_DIETARY : CHIP_OFF}
+                                        >
+                                            {d.label}
+                                        </button>
+                                    )
+                                })}
+                            </div>
                         </div>
                     </section>
 

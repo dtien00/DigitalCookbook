@@ -797,6 +797,29 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Allergen / dietary authoring checklist (Stage N)
+
+> Verifies Stage N item 1 — author-declared allergen/dietary chips on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx), backed by [src/lib/dietaryTags.js](../src/lib/dietaryTags.js). **Requires migration 025 applied** (`supabase_migration_025_allergen_dietary.sql` — Dashboard → SQL Editor); `allergens`/`dietary` are in the write path, so until it's applied saving a recipe fails with a missing-column error (read path is safe — existing recipes just show no chips selected). Signed-in only; use any test account on `/new`. The filter/consumer side (modal, indicator, safety banner) is separate later items and not covered here yet.
+
+**Authoring (create mode)**
+- [ ] **Groups render** — below Tags, an **Allergens** group shows all 12 canonical chips (Dairy … Alcohol) with the "never guessed from your ingredients" hint, and a **Dietary** group shows Vegetarian / Vegan
+- [ ] **Toggle on/off** — clicking an allergen chip turns it **danger-red** (white text); clicking a dietary chip turns it **green**; clicking again deselects back to the paper outline; multiple selections coexist
+- [ ] **Save persists** — select a few allergens + one dietary, fill the rest of the form, Save → no error (confirms migration 025 applied); the values write to `recipes.allergens` / `recipes.dietary`
+- [ ] **Keyboard / a11y** — chips are reachable by Tab and toggle on Enter/Space; each carries `aria-pressed` reflecting its state
+
+**Edit mode**
+- [ ] **Hydration** — open an existing recipe's `/recipe/:id/edit` → the previously-saved allergen/dietary chips come back pre-selected (from the `recipeToEdit` prop)
+- [ ] **Round-trip** — change a selection, Save, re-open the editor → the change stuck
+
+**Import interaction**
+- [ ] **Imports declare nothing** — Import a recipe (paste or file); the allergen/dietary groups stay empty (imports never carry allergens — the author must declare), even if the imported prose mentions nuts/dairy
+- [ ] **Batch reset** — in a batch import, advancing from an item where you selected chips to the next item clears them (no bleed-through from `applyRecipe`)
+
+**Mobile**
+- [ ] **Phone width (375px)** — the chip rows wrap cleanly, each chip is a comfortable tap target, and the selected-state colors are unmistakable
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:

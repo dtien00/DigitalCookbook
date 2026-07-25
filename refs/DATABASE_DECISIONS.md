@@ -107,7 +107,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - `supabase_migration_022_onboarding.sql` — adds nullable `onboarding_dismissed_at TIMESTAMPTZ` to `profiles` (Stage M item 2) backing the first-run onboarding tour. No RLS changes — `profiles` already has an owner-only UPDATE policy, and the migration-010 trigger only reverts `is_admin` tampering, so the dismissal write passes. No index (read only as part of fetching the caller's own profile row by PK). See "Onboarding dismissal flag (migration 022, Stage M item 2)" below. Idempotent (`ADD COLUMN IF NOT EXISTS`).
 - `supabase_migration_023_step_duration.sql` — adds nullable `duration_seconds INTEGER` to `steps` (Stage 19 Phase 2, Cooking Mode Timer per-step presets). No RLS changes — same parent-gated steps policies as migration 018's `photo_path`. See "Per-step timer duration (migration 023, Stage 19 Phase 2)" below. Idempotent (`ADD COLUMN IF NOT EXISTS`).
 - `supabase_migration_024_ingredient_sections.sql` — adds nullable `section TEXT` to `ingredients` (Stage 21, "For the sauce" / "For the dough" grouping). No RLS changes — same parent-gated ingredients policies as migration 007's `notes`. Renderers derive groups from contiguous runs of the label (src/lib/ingredientSections.js), so grouping is data-driven, legacy NULL rows render exactly as before, and the shopping-list/clipboard exporters deliberately never read the column. Idempotent (`ADD COLUMN IF NOT EXISTS`).
-- Future migrations: `supabase_migration_025_*.sql`, etc. *(020 = `comment_photos`, not separately written up in this list.)*
+- `supabase_migration_025_allergen_dietary.sql` — adds four `TEXT[] NOT NULL DEFAULT '{}'` columns + four GIN indexes (Stage N, allergen/dietary filter): `recipes.allergens` + `recipes.dietary` (author-declared), `profiles.allergen_exclusions` + `profiles.dietary_requirements` (per-user filter prefs). Mirrors migration 002's tags column shape exactly — GIN because the filter uses array overlap/containment (`&&`, `@>`, `<@`), which a B-tree can't serve. No RLS changes: recipes columns ride the existing `is_public OR auth.uid() = author_id` policy; profiles already has owner-only UPDATE (the migration-010 trigger only reverts `is_admin` tampering). Allergens are declared, never inferred from ingredients — see "Author-declared allergens (migration 025, Stage N)" below. **Note:** the `recipes_with_counts` view (014) snapshots its columns and won't expose the new fields until recreated — a carry-forward for the Stage N filter item. Idempotent (`ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`).
+- Future migrations: `supabase_migration_026_*.sql`, etc. *(020 = `comment_photos`, not separately written up in this list.)*
 
 **Why manual / no Supabase CLI yet:**
 - Solo side project — the migration cadence is slow enough that the Dashboard's SQL editor is faster than wiring up the CLI.
@@ -131,6 +132,22 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - No referential integrity on tags. A typo creates a new "tag." This is fine for a personal cookbook; a tag-cloud UI later can surface canonical tags via aggregation. If the project ever wants strict tag governance, migrate to a join table at that point.
 - Tag-renaming or merging is harder than with a tags table (need to `UPDATE recipes SET tags = array_replace(tags, 'old', 'new')`). Acceptable for current scale.
 - No RLS policy changes needed: the existing recipes-read policy (`is_public OR auth.uid() = author_id`) covers tag visibility automatically since tags live on the recipe row.
+
+## Author-declared allergens (migration 025, Stage N)
+
+**Decision:** Store allergen and dietary information as **author-declared** `TEXT[]` on the recipe (`recipes.allergens`, `recipes.dietary`), never inferred from ingredient names. Canonical slugs live in `src/lib/dietaryTags.js`; per-user filter preferences persist on `profiles` (`allergen_exclusions`, `dietary_requirements`). All four columns are `TEXT[] NOT NULL DEFAULT '{}'` + GIN, cloning the migration-002 tags shape.
+
+**Why author-declared, not ingredient-inferred:**
+- The Fridge Basket (migration 011 / Stage 10) token-matches ingredient names for "what can I cook" — a fine use of fuzzy matching because a false positive just hides a cookable recipe. Allergens invert the stakes: a **false negative is a health harm**. "Almond extract" in a recipe the author never flagged `tree_nuts` would sail through an ingredient scan and land in front of someone with a nut allergy. So the recipe author takes explicit responsibility via the chip-multiselect; the app never guesses.
+- Keeping `allergens` (things present) separate from `dietary` (attributes satisfied) is deliberate — they filter in **opposite directions**: `allergens && excluded` hides on overlap, `dietary @> required` keeps only when all required attrs are present. One combined column couldn't express both.
+
+**Why the prefs live on `profiles`, not localStorage:**
+- Filter preferences are safety-critical state. localStorage is per-device and silently cleared by cache resets / private mode — an exclusion vanishing without the user noticing is exactly the failure this feature exists to prevent. A profile column follows the user across devices. (Anon users still get a localStorage-scoped session filter — they have no profile row — but signed-in prefs are durable.)
+
+**Tradeoffs / carry-forwards:**
+- No referential integrity on the slugs (same as tags) — but unlike free-text tags, the authoring UI only ever writes from the fixed `dietaryTags.js` list, so a typo can't enter through the normal path. A crafted API client could; acceptable at this scale.
+- **`recipes_with_counts` view (014) does not expose the new columns** until recreated — it snapshots its column list at creation. The likes-sort read path uses that view, so the client-side filter (Stage N "Filter behavior") must recreate the view or guard the read. Flagged, not yet done.
+- No admin override needed — allergen data is public recipe metadata, covered by the recipe's own read policy.
 
 ## Favorites RLS + created_at (migration 003)
 
