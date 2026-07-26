@@ -10,6 +10,7 @@ import AddToCookbookButton from './AddToCookbookButton'
 import ExportIngredientsButton from './ExportIngredientsButton'
 import SendToShoppingListButton from './SendToShoppingListButton'
 import ReportButton from './ReportButton'
+import RecipeAllergenWarning from './RecipeAllergenWarning'
 import Comments from './Comments'
 import RecipeRail from './RecipeRail'
 import Skeleton from './Skeleton'
@@ -33,6 +34,7 @@ export default function RecipeDetail({
     recipe,
     userId,
     isAdmin = false,
+    excludedAllergens = [],
     onBack,
     onEdit,
     onDelete,
@@ -675,6 +677,16 @@ export default function RecipeDetail({
                 </div>
 
                 <div className="recipe-detail-header">
+                    {/* Stage N item 5 — allergen safety banner. A direct link
+                        bypasses the home-grid filter, so a recipe the viewer
+                        excluded can land here; warn before the recipe itself.
+                        Keyed by recipe.id so dismissal re-evaluates per recipe. */}
+                    <RecipeAllergenWarning
+                        key={recipe.id}
+                        recipeId={recipe.id}
+                        recipeAllergens={recipe.allergens}
+                        excludedAllergens={excludedAllergens}
+                    />
                     {recipe.image_url && (
                         <img src={recipe.image_url} alt={`${recipe.title} cover image`} loading="lazy" className="detail-image" />
                     )}

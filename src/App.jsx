@@ -26,6 +26,7 @@ import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
 import DietaryFilterModal from './components/DietaryFilterModal'
+import DietaryFilterIndicator from './components/DietaryFilterIndicator'
 import NotificationsBell from './components/NotificationsBell'
 import AddToPlanModal from './components/AddToPlanModal'
 import OnboardingTour from './components/OnboardingTour'
@@ -530,6 +531,9 @@ function App() {
         dietaryFilterCount: excludedAllergens.length + requiredDietary.length,
         filterTriggerRef,
         onOpenFilter: () => setFilterOpen(true),
+        onToggleAllergen: toggleAllergen,
+        onToggleDietary: toggleDietary,
+        onClearDietaryFilter: clearDietaryFilter,
         notifications, unreadCount, markRead, markAllRead,
         shoppingCount: shoppingItems.length,
         historyCount: recipeHistory.length,
@@ -546,6 +550,7 @@ function App() {
 
     const recipeDetailProps = {
         session, recipes, isAdmin,
+        excludedAllergens,
         isFavorited, likeCount, userLiked,
         refetchLikes, refetchFavorites,
         onEditRecipe: handleEditRecipe,
@@ -842,6 +847,7 @@ function HomeView({
     basket, basketTriggerRef, onOpenBasket,
     excludedAllergens, requiredDietary, dietaryFilterActive,
     dietaryFilterCount, filterTriggerRef, onOpenFilter,
+    onToggleAllergen, onToggleDietary, onClearDietaryFilter,
     shoppingCount,
     historyCount, historyTriggerRef, onOpenHistory,
     notifications, unreadCount, markRead, markAllRead,
@@ -1544,6 +1550,18 @@ function HomeView({
                 </button>
             </div>
 
+            {/* Stage N item 4 — persistent, non-silent active-filter indicator.
+                Renders only when a dietary filter is active; each named chip
+                is individually dismissible. Above the grid AND the empty state
+                so a filter that hides everything still explains itself. */}
+            <DietaryFilterIndicator
+                excludedAllergens={excludedAllergens}
+                requiredDietary={requiredDietary}
+                onToggleAllergen={onToggleAllergen}
+                onToggleDietary={onToggleDietary}
+                onClearDietaryFilter={onClearDietaryFilter}
+            />
+
             {loading ? (
                 <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
                     {Array.from({ length: 8 }).map((_, i) => (
@@ -1621,6 +1639,7 @@ function HomeView({
 // users return no row, which we surface as a "not found" empty state.
 function RecipeDetailRoute({
     session, recipes, isAdmin,
+    excludedAllergens,
     isFavorited, likeCount, userLiked,
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
@@ -1717,6 +1736,7 @@ function RecipeDetailRoute({
             recipe={recipe}
             userId={session?.user.id}
             isAdmin={isAdmin}
+            excludedAllergens={excludedAllergens}
             onBack={() => navigate('/')}
             onEdit={onEditRecipe}
             onDelete={onRecipeDeleted}

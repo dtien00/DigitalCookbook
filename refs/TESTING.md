@@ -862,6 +862,33 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Active-filter indicator checklist (Stage N item 4)
+
+> Verifies the persistent, non-silent active-filter banner ([DietaryFilterIndicator.jsx](../src/components/DietaryFilterIndicator.jsx)). No migration/auth needed — reads the same `useDietaryFilter` state as the modal. Works anonymously on `/`.
+
+- [ ] **Appears on activation** — with no filter, no banner shows; select any allergen/dietary chip → a rose-tinted banner appears in the grid header below the action row
+- [ ] **Named chips** — the banner reads **⚠ Excluding** + your allergen chips (rose-dark) and/or **Requiring** + your dietary chips (rust); it names them, not just a count
+- [ ] **Shows even when the grid is empty** — require Vegan (empties the grid): the banner AND the empty state are both visible (a filter that hides everything still explains itself)
+- [ ] **Per-chip dismiss** — clicking a chip's `×` removes just that filter (banner updates, grid re-filters, localStorage syncs); the others stay
+- [ ] **Clear all** — the banner's Clear all removes every filter, hides the banner, restores the grid, and clears the trigger badge
+- [ ] **Screen reader** — the banner is `role="status"` `aria-live="polite"`; changing the filter announces the new exclusion/requirement set (silent filtering is the antipattern)
+- [ ] **Mobile width (375px)** — the chip runs wrap cleanly and each `×` stays a comfortable tap target
+
+---
+
+## Recipe-detail safety banner checklist (Stage N item 5)
+
+> Verifies the direct-link allergen warning ([RecipeAllergenWarning.jsx](../src/components/RecipeAllergenWarning.jsx)) on RecipeDetail. **Needs a recipe that declares an allergen** (author one via item-1 chips), and that same allergen excluded in your filter. No migration beyond 025.
+
+- [ ] **Warns on conflict** — exclude Peanuts in the filter, then open (by direct URL or card) a recipe the author flagged as containing peanuts → a rose-dark banner shows *above the title*: "⚠ This recipe contains Peanuts. You've excluded peanuts in your filters."
+- [ ] **No false positive** — with Peanuts excluded, open a recipe that does NOT declare peanuts → no banner (the exclusion being active isn't enough; the recipe must actually declare it)
+- [ ] **Dismiss persists per recipe** — dismiss the banner (`×`) → it's gone; reload that recipe → still gone (sessionStorage). Open a *different* conflicting recipe → it warns again (dismissal is per-recipe, not global)
+- [ ] **Fresh session re-warns** — close the tab / clear sessionStorage, reopen the dismissed recipe → the banner returns
+- [ ] **Screen reader** — the banner is `role="alert"` and is announced on load without focusing it
+- [ ] **Not in print/PDF** — Print or Download PDF from a warned recipe → the banner does not appear in the output (`.no-print`)
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:
