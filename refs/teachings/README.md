@@ -15,3 +15,4 @@ sections) when a pattern shows up again rather than duplicated.
 | [DOM event flow for interactivity](./dom-event-flow-interactivity.md) | capture→target→bubble propagation · pointer capture · lift-handler-to-the-owning-layer | `ui-timer` — TimerDial.jsx | 2026-07-23 |
 | [Tailwind utilities & flexbox (icon + label row)](./tailwind-utilities-and-flexbox.md) | utility-first CSS · flex formatting context · design tokens → utilities | New Recipe button — App.jsx:1367 | 2026-07-24 |
 | [Favicon & Vite static assets (tab logo)](./favicon-and-vite-static-assets.md) | build-tool static assets (`public/`) · declarative document-head resources | `src/img/Kitchi Logo v1.svg` + index.html:5 | 2026-07-24 |
+| [SVG paths & fill-rule (reading the logo)](./svg-paths-fill-rule-evenodd.md) | subpaths + even-odd holes · cubic-Bézier-as-line · painter's model | `public/img/kitchi-logo-v4.svg` | 2026-07-25 |
