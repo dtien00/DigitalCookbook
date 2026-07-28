@@ -797,6 +797,98 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Allergen / dietary authoring checklist (Stage N)
+
+> Verifies Stage N item 1 — author-declared allergen/dietary chips on [CreateRecipe.jsx](../src/components/CreateRecipe.jsx), backed by [src/lib/dietaryTags.js](../src/lib/dietaryTags.js). **Requires migration 025 applied** (`supabase_migration_025_allergen_dietary.sql` — Dashboard → SQL Editor); `allergens`/`dietary` are in the write path, so until it's applied saving a recipe fails with a missing-column error (read path is safe — existing recipes just show no chips selected). Signed-in only; use any test account on `/new`. The filter/consumer side (modal, indicator, safety banner) is separate later items and not covered here yet.
+
+**Authoring (create mode)**
+- [ ] **Groups render** — below Tags, an **Allergens** group shows all 12 canonical chips (Dairy … Alcohol) with the "never guessed from your ingredients" hint, and a **Dietary** group shows Vegetarian / Vegan
+- [ ] **Toggle on/off** — clicking an allergen chip turns it **danger-red** (white text); clicking a dietary chip turns it **green**; clicking again deselects back to the paper outline; multiple selections coexist
+- [ ] **Save persists** — select a few allergens + one dietary, fill the rest of the form, Save → no error (confirms migration 025 applied); the values write to `recipes.allergens` / `recipes.dietary`
+- [ ] **Keyboard / a11y** — chips are reachable by Tab and toggle on Enter/Space; each carries `aria-pressed` reflecting its state
+
+**Edit mode**
+- [ ] **Hydration** — open an existing recipe's `/recipe/:id/edit` → the previously-saved allergen/dietary chips come back pre-selected (from the `recipeToEdit` prop)
+- [ ] **Round-trip** — change a selection, Save, re-open the editor → the change stuck
+
+**Import interaction**
+- [ ] **Imports declare nothing** — Import a recipe (paste or file); the allergen/dietary groups stay empty (imports never carry allergens — the author must declare), even if the imported prose mentions nuts/dairy
+- [ ] **Batch reset** — in a batch import, advancing from an item where you selected chips to the next item clears them (no bleed-through from `applyRecipe`)
+
+**Mobile**
+- [ ] **Phone width (375px)** — the chip rows wrap cleanly, each chip is a comfortable tap target, and the selected-state colors are unmistakable
+
+---
+
+## Dietary filter modal checklist (Stage N)
+
+> Verifies Stage N item 2 — the home-grid allergen/dietary filter modal ([DietaryFilterModal.jsx](../src/components/DietaryFilterModal.jsx)) over [useDietaryFilter.js](../src/hooks/useDietaryFilter.js). **No migration or auth required** — selection is localStorage-only (`cookbook.dietaryFilter`) in this item; the grid isn't filtered yet and signed-in profile sync is deferred to the Filter-behavior item. Works anonymously on `/`.
+
+**Trigger + modal**
+- [ ] **Trigger placement** — a **Filters** button (funnel icon) sits in the action row between Fridge and List
+- [ ] **Opens** — clicking it opens a modal with a `✦ Dietary filters` heading and two groups: **Exclude allergens** (12 chips) and **Require dietary** (Vegetarian / Vegan)
+- [ ] **Toggle** — clicking an allergen chip turns it **rose-dark**; a dietary chip turns it **rust**; clicking again deselects to the paper-shade outline; `aria-pressed` reflects each
+- [ ] **Footer CTA** — reads **Done** with nothing selected, **Apply N filters** once any chip is on; **Clear all** is disabled at zero and deselects everything when clicked
+- [ ] **Trigger badge** — a rust count badge appears on the Filters button showing the number of active exclusions + requirements; gone when zero
+
+**Persistence + a11y**
+- [ ] **Persists** — select a couple chips, reload the page → the selections and the badge count survive (localStorage)
+- [ ] **Close paths** — Escape, backdrop click, and the header `×` all close the modal; focus returns to the Filters trigger on close
+- [ ] **Mobile width (375px)** — the modal fits, chip rows wrap, chips and footer controls stay tappable
+
+> Note: with chips selected, the home grid does **not** filter yet — that's the next item. This checklist only covers selection + persistence + the modal shell.
+
+---
+
+## Dietary filter behavior checklist (Stage N)
+
+> Verifies Stage N item 3 — the filter actually narrowing the grid, profile sync, and the view refresh. **Requires migrations 025 AND 026 applied** (`_025_allergen_dietary` + `_026_recipes_with_counts_allergens`). 026 matters only for the likes-sort path — without it, sorting by likes with an allergen exclusion active can under-filter. The default (date) sort reads the base table and is safe either way. Seed recipes have empty `allergens`/`dietary` until you author some, which is what makes the require-Vegan check below empty the grid.
+
+**Grid filtering (anon, `/`)**
+- [ ] **Require empties correctly** — open Filters → **Require dietary: Vegan** → close: the grid empties to a **"No recipes match your dietary filters"** state with an **Open filters** button (assuming no seed recipe declares `vegan` dietary)
+- [ ] **Exclude doesn't over-filter** — clear Vegan, **Exclude allergens: Dairy** → close: all recipes remain (no seed recipe declares the dairy *allergen*, so none are excluded) — confirms exclusion keys on declared allergens, not tags/ingredients
+- [ ] **Real data** — author (or edit) a recipe as **Vegan** + **contains Peanuts** (item-1 chips), then: requiring Vegan shows it; excluding Peanuts hides it
+- [ ] **AND-composition** — with a tag search or fridge basket active, adding a dietary filter narrows further (a recipe must pass all active filters); clearing one widens back
+- [ ] **Pagination pauses** — with a dietary filter active the infinity-scroll sentinel doesn't fire (same as an active basket/search); clearing it resumes loading
+
+**Profile sync (signed-in)**
+- [ ] **Write-through** — signed in, select a couple of chips → they persist to `profiles.allergen_exclusions` / `dietary_requirements` (survives a hard reload without relying on localStorage)
+- [ ] **Pre-population** — sign in on a second browser / cleared-localStorage session → the modal opens with your saved prefs already selected (profile is the cross-device source of truth)
+- [ ] **No clobber on load** — a fresh signed-in load does NOT reset saved prefs to empty (the hydration gate holds the write-through until the profile read resolves)
+- [ ] **Anon stays local** — signed out, selections persist via localStorage only; no profile write is attempted
+
+**Likes-sort safety (needs migration 026)**
+- [ ] **View exposes the columns** — switch Sort to **Most liked** with an allergen exclusion active on a recipe that declares that allergen → it stays hidden (before 026 it would leak through because the view returned no `allergens`)
+
+---
+
+## Active-filter indicator checklist (Stage N item 4)
+
+> Verifies the persistent, non-silent active-filter banner ([DietaryFilterIndicator.jsx](../src/components/DietaryFilterIndicator.jsx)). No migration/auth needed — reads the same `useDietaryFilter` state as the modal. Works anonymously on `/`.
+
+- [ ] **Appears on activation** — with no filter, no banner shows; select any allergen/dietary chip → a rose-tinted banner appears in the grid header below the action row
+- [ ] **Named chips** — the banner reads **⚠ Excluding** + your allergen chips (rose-dark) and/or **Requiring** + your dietary chips (rust); it names them, not just a count
+- [ ] **Shows even when the grid is empty** — require Vegan (empties the grid): the banner AND the empty state are both visible (a filter that hides everything still explains itself)
+- [ ] **Per-chip dismiss** — clicking a chip's `×` removes just that filter (banner updates, grid re-filters, localStorage syncs); the others stay
+- [ ] **Clear all** — the banner's Clear all removes every filter, hides the banner, restores the grid, and clears the trigger badge
+- [ ] **Screen reader** — the banner is `role="status"` `aria-live="polite"`; changing the filter announces the new exclusion/requirement set (silent filtering is the antipattern)
+- [ ] **Mobile width (375px)** — the chip runs wrap cleanly and each `×` stays a comfortable tap target
+
+---
+
+## Recipe-detail safety banner checklist (Stage N item 5)
+
+> Verifies the direct-link allergen warning ([RecipeAllergenWarning.jsx](../src/components/RecipeAllergenWarning.jsx)) on RecipeDetail. **Needs a recipe that declares an allergen** (author one via item-1 chips), and that same allergen excluded in your filter. No migration beyond 025.
+
+- [ ] **Warns on conflict** — exclude Peanuts in the filter, then open (by direct URL or card) a recipe the author flagged as containing peanuts → a rose-dark banner shows *above the title*: "⚠ This recipe contains Peanuts. You've excluded peanuts in your filters."
+- [ ] **No false positive** — with Peanuts excluded, open a recipe that does NOT declare peanuts → no banner (the exclusion being active isn't enough; the recipe must actually declare it)
+- [ ] **Dismiss persists per recipe** — dismiss the banner (`×`) → it's gone; reload that recipe → still gone (sessionStorage). Open a *different* conflicting recipe → it warns again (dismissal is per-recipe, not global)
+- [ ] **Fresh session re-warns** — close the tab / clear sessionStorage, reopen the dismissed recipe → the banner returns
+- [ ] **Screen reader** — the banner is `role="alert"` and is announced on load without focusing it
+- [ ] **Not in print/PDF** — Print or Download PDF from a warned recipe → the banner does not appear in the output (`.no-print`)
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:

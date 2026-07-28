@@ -11,6 +11,8 @@ import { useFollowing } from './hooks/useFollowing'
 import { useNotifications } from './hooks/useNotifications'
 import { useReports } from './hooks/useReports'
 import { useFridgeBasket } from './hooks/useFridgeBasket'
+import { useDietaryFilter } from './hooks/useDietaryFilter'
+import { recipeMatchesDietaryFilter } from './lib/dietaryTags'
 import { useShoppingList } from './hooks/useShoppingList'
 import { useRecipeHistory } from './hooks/useRecipeHistory'
 import { useBackdrop } from './hooks/useBackdrop'
@@ -23,6 +25,8 @@ import RecipeCard from './components/RecipeCard'
 import { SkeletonCard } from './components/Skeleton'
 import EnvBanner from './components/EnvBanner'
 import FridgeBasket from './components/FridgeBasket'
+import DietaryFilterModal from './components/DietaryFilterModal'
+import DietaryFilterIndicator from './components/DietaryFilterIndicator'
 import NotificationsBell from './components/NotificationsBell'
 import AddToPlanModal from './components/AddToPlanModal'
 import OnboardingTour from './components/OnboardingTour'
@@ -226,6 +230,19 @@ function App() {
     // item; for now the basket is purely additive.
     const { basket, addIngredient, removeIngredient, clearBasket } = useFridgeBasket()
 
+    // Dietary filter (Stage N) — allergen-exclusion / dietary-requirement
+    // selection, localStorage-backed. App-level like the basket so the modal
+    // mounts above any route and the trigger badge stays live. Grid filtering
+    // + signed-in profile sync land in the next Stage N item.
+    const {
+        excludedAllergens,
+        requiredDietary,
+        toggleAllergen,
+        toggleDietary,
+        clearDietaryFilter,
+        dietaryFilterActive,
+    } = useDietaryFilter(session?.user?.id)
+
     // Shopping list (Stage N+2a) — cumulative cross-recipe "what to buy" list,
     // also localStorage-backed. App-level for the same reasons as the basket:
     // the count badge in the header stays live as recipes are sent to it, and
@@ -279,6 +296,10 @@ function App() {
 
     const [basketOpen, setBasketOpen] = useState(false)
     const basketTriggerRef = useRef(null)
+
+    // Dietary filter modal open-state + trigger ref (focus returns here on close).
+    const [filterOpen, setFilterOpen] = useState(false)
+    const filterTriggerRef = useRef(null)
 
     // Recipe pending an "Add to plan" cell choice (home-card affordance), or
     // null when the modal is closed.
@@ -506,6 +527,13 @@ function App() {
         isFavorited, likeCount, userLiked,
         basket,
         basketTriggerRef,
+        excludedAllergens, requiredDietary, dietaryFilterActive,
+        dietaryFilterCount: excludedAllergens.length + requiredDietary.length,
+        filterTriggerRef,
+        onOpenFilter: () => setFilterOpen(true),
+        onToggleAllergen: toggleAllergen,
+        onToggleDietary: toggleDietary,
+        onClearDietaryFilter: clearDietaryFilter,
         notifications, unreadCount, markRead, markAllRead,
         shoppingCount: shoppingItems.length,
         historyCount: recipeHistory.length,
@@ -522,6 +550,7 @@ function App() {
 
     const recipeDetailProps = {
         session, recipes, isAdmin,
+        excludedAllergens,
         isFavorited, likeCount, userLiked,
         refetchLikes, refetchFavorites,
         onEditRecipe: handleEditRecipe,
@@ -748,6 +777,16 @@ function App() {
                     : recipes.filter(r => recipeMatchesBasket(r, basket)).length}
                 loadedCount={recipes.length}
             />
+            <DietaryFilterModal
+                isOpen={filterOpen}
+                onClose={() => setFilterOpen(false)}
+                excludedAllergens={excludedAllergens}
+                requiredDietary={requiredDietary}
+                onToggleAllergen={toggleAllergen}
+                onToggleDietary={toggleDietary}
+                onClear={clearDietaryFilter}
+                openerRef={filterTriggerRef}
+            />
             <RecipeHistory
                 isOpen={historyOpen}
                 onClose={() => setHistoryOpen(false)}
@@ -806,6 +845,9 @@ function HomeView({
     sentinelRef,
     isFavorited, likeCount, userLiked,
     basket, basketTriggerRef, onOpenBasket,
+    excludedAllergens, requiredDietary, dietaryFilterActive,
+    dietaryFilterCount, filterTriggerRef, onOpenFilter,
+    onToggleAllergen, onToggleDietary, onClearDietaryFilter,
     shoppingCount,
     historyCount, historyTriggerRef, onOpenHistory,
     notifications, unreadCount, markRead, markAllRead,
@@ -881,12 +923,13 @@ function HomeView({
     // behaves identically to "italian,pasta".
     const { mode: searchMode, tokens: searchTokens } = parseSearch(searchTerm)
 
-    // Two filters compose with AND semantics (recipe must pass BOTH):
+    // Three filters compose with AND semantics (recipe must pass ALL):
     //   - search filter (parseSearch result over tags/title/description)
     //   - fridge-basket filter (token-match basket against ingredients)
-    // Either is a no-op when its input is empty. Putting them in one
-    // .filter() pass means a single iteration over the recipe array
-    // regardless of how many filters are active.
+    //   - dietary filter (exclude allergens / require dietary, Stage N)
+    // Each is a no-op when its input is empty. Putting them in one .filter()
+    // pass means a single iteration over the recipe array regardless of how
+    // many filters are active.
     const basketActive = basket.length > 0
     const filteredRecipes = recipes.filter(recipe => {
         // Search side.
@@ -910,6 +953,8 @@ function HomeView({
         }
         // Basket side.
         if (basketActive && !recipeMatchesBasket(recipe, basket)) return false
+        // Dietary side (Stage N). No-op when both selections are empty.
+        if (!recipeMatchesDietaryFilter(recipe, excludedAllergens, requiredDietary)) return false
         return true
     })
 
@@ -1451,6 +1496,32 @@ function HomeView({
                         </span>
                     )}
                 </button>
+                {/* Dietary filter trigger (Stage N). Sits beside Fridge — both
+                    narrow the grid. Funnel icon + rust count badge for the
+                    number of active exclusions/requirements. */}
+                <button
+                    ref={filterTriggerRef}
+                    type="button"
+                    onClick={onOpenFilter}
+                    aria-label={dietaryFilterCount === 0
+                        ? 'Open dietary filters'
+                        : `Open dietary filters (${dietaryFilterCount} active)`}
+                    aria-haspopup="dialog"
+                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                    </svg>
+                    <span>Filters</span>
+                    {dietaryFilterCount > 0 && (
+                        <span
+                            aria-hidden="true"
+                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                        >
+                            {dietaryFilterCount}
+                        </span>
+                    )}
+                </button>
                 {/* Shopping list trigger — mirrors the Fridge button. Navigates
                     to the cumulative /shopping-list page; rust count badge when
                     the list has items. Visible to everyone (no-auth feature). */}
@@ -1479,6 +1550,18 @@ function HomeView({
                 </button>
             </div>
 
+            {/* Stage N item 4 — persistent, non-silent active-filter indicator.
+                Renders only when a dietary filter is active; each named chip
+                is individually dismissible. Above the grid AND the empty state
+                so a filter that hides everything still explains itself. */}
+            <DietaryFilterIndicator
+                excludedAllergens={excludedAllergens}
+                requiredDietary={requiredDietary}
+                onToggleAllergen={onToggleAllergen}
+                onToggleDietary={onToggleDietary}
+                onClearDietaryFilter={onClearDietaryFilter}
+            />
+
             {loading ? (
                 <div className={`${gridColumnsClass} gap-4 mt-6`} role="status" aria-label="Loading recipes">
                     {Array.from({ length: 8 }).map((_, i) => (
@@ -1489,10 +1572,12 @@ function HomeView({
                 <EmptyGridState
                     searchTerm={searchTerm}
                     basketActive={basketActive}
+                    dietaryFilterActive={dietaryFilterActive}
                     hasAnyRecipes={totalCount > 0}
                     session={session}
                     onClearSearch={() => setSearchTerm('')}
                     onOpenBasket={onOpenBasket}
+                    onOpenFilter={onOpenFilter}
                     onSignIn={onSignIn}
                     onCreate={() => navigate('/new')}
                 />
@@ -1523,7 +1608,7 @@ function HomeView({
                         match the filter and the apparent infinite scroll
                         would look broken if the next page returned zero
                         new visible cards. */}
-                    {!searchTerm && !basketActive && hasMore && (
+                    {!searchTerm && !basketActive && !dietaryFilterActive && hasMore && (
                         <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
                     )}
                     {loadingMore && (
@@ -1531,7 +1616,7 @@ function HomeView({
                             Loading more recipes…
                         </p>
                     )}
-                    {!searchTerm && !basketActive && !hasMore && recipes.length > PAGE_SIZE && (
+                    {!searchTerm && !basketActive && !dietaryFilterActive && !hasMore && recipes.length > PAGE_SIZE && (
                         <p aria-hidden="true" className="text-center text-tan text-xl py-6">✦</p>
                     )}
                 </>
@@ -1554,6 +1639,7 @@ function HomeView({
 // users return no row, which we surface as a "not found" empty state.
 function RecipeDetailRoute({
     session, recipes, isAdmin,
+    excludedAllergens,
     isFavorited, likeCount, userLiked,
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
@@ -1650,6 +1736,7 @@ function RecipeDetailRoute({
             recipe={recipe}
             userId={session?.user.id}
             isAdmin={isAdmin}
+            excludedAllergens={excludedAllergens}
             onBack={() => navigate('/')}
             onEdit={onEditRecipe}
             onDelete={onRecipeDeleted}
@@ -1735,7 +1822,23 @@ function EditRecipeRoute({ recipes, session, onComplete }) {
 // as intentional rather than broken. Basket branch wins over search when
 // both are active and yield nothing — opening the fridge is the cheaper
 // fix (one click) vs retyping the search.
-function EmptyGridState({ searchTerm, basketActive, hasAnyRecipes, session, onClearSearch, onOpenBasket, onSignIn, onCreate }) {
+function EmptyGridState({ searchTerm, basketActive, dietaryFilterActive, hasAnyRecipes, session, onClearSearch, onOpenBasket, onOpenFilter, onSignIn, onCreate }) {
+    if (dietaryFilterActive && hasAnyRecipes) {
+        return (
+            <div className="text-center py-16">
+                <p className="text-2xl text-tan mb-4">✦</p>
+                <p className="font-display text-xl text-ink mb-2">No recipes match your dietary filters.</p>
+                <p className="font-display italic text-rose mb-6">Loosen your allergen exclusions or dietary requirements.</p>
+                <button
+                    onClick={onOpenFilter}
+                    className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink font-medium rounded-md transition-colors"
+                >
+                    Open filters
+                </button>
+            </div>
+        )
+    }
+
     if (basketActive && hasAnyRecipes) {
         return (
             <div className="text-center py-16">
