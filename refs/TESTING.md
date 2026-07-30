@@ -889,11 +889,25 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Automated tests (Vitest)
+
+Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase, no mocks. Run the suite with:
+
+```bash
+npm test
+```
+
+**178 specs across 11 files** as of Stage 20 §3.1, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+
+These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
+
+---
+
 ## Future testing notes
 
 Areas to flesh out as the app matures:
 
-- **E2E coverage** — Playwright/Vitest browser tests for the auth flow (login, signup, password reset), recipe CRUD, and social actions once those exist.
+- **E2E coverage** — Playwright/Vitest browser tests for the auth flow (login, signup, password reset), recipe CRUD, and social actions once those exist. *(Pure-lib unit coverage now exists — see "Automated tests" above; this is the still-missing browser/E2E layer.)*
 - **RLS verification** — a small script that hits the Supabase REST API as an anonymous client and confirms private recipes are not leaked.
 - **Storage privacy** — once the `recipe-images` bucket privacy gap from [DATABASE_DECISIONS.md](./DATABASE_DECISIONS.md) is addressed, add a check that confirms private recipes' covers aren't fetchable without auth.
 - **Mobile snapshot tests** — once enough UI is settled, screenshot the grid at common breakpoints to catch unintended layout regressions.
