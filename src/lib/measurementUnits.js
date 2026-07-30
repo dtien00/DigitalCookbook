@@ -47,7 +47,7 @@ export const MEASUREMENT_UNITS = [
     { label: 'to taste', aliases: [] },
 ]
 
-const MAX_SUGGESTIONS = 8
+export const MAX_SUGGESTIONS = 8
 
 // Return up to MAX_SUGGESTIONS unit labels whose label OR an alias contains the
 // (case-insensitive) query as a substring. An empty/whitespace query returns
