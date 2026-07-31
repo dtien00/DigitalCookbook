@@ -77,6 +77,8 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 **Tradeoff:**
 - Anyone with the URL can fetch the image, even if the parent recipe is private. **This is a real privacy gap for `is_public = false` recipes** — the recipe data is hidden by RLS but the image is not. Acceptable today (the cover image alone leaks little); revisit before launching to non-friends.
 
+**Client-side resize before upload (Stage 20 §1.3):** cover images are downscaled to ≤1200px on the long edge via [resizeImage.js](../src/lib/resizeImage.js) before upload — the same client-side cap already applied to comment photos (Stage 15 item 3) and step photos (below). A phone-camera cover (several MB) lands as a small JPEG instead. `resizeImage` returns a JPEG Blob when it shrinks, or the original `File` untouched when the image is already within `maxEdge` / can't be decoded, so the stored object's extension and `contentType` are derived from the **result's `.type`**, not the picked filename (a resized Blob carries no name). The cover filename also moved from `Math.random()` to `crypto.randomUUID()` to match the comment-photos path.
+
 ---
 
 ## Migration convention
@@ -374,7 +376,7 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - **No `UPDATE` trigger.** Changing a recipe from private → public after creation does NOT retroactively notify followers. Deliberate: the user might toggle visibility multiple times during editing, and re-triggering on every public flip would spam. A separate "publish" action could be the trigger source later if visibility-toggle becomes a common publish workflow.
 - **Cascade interaction.** `notifications` FKs to `profiles(id)` (actor) and `recipes(id)` both with `ON DELETE CASCADE`. So when an admin deletes a user via `admin_delete_user()` (migration 008), every notification mentioning them as the actor disappears too. That's the right behaviour — the link is dead. The downside is the recipient loses the notification's read/unread state for those rows; for a moderation action this is fine.
 - **`actor_id NOT NULL`.** Could be relaxed later if system-generated notifications need to exist. Tightening NOT NULL now keeps the immediate kind (`'new_recipe'`) honest; loosening is one migration line away.
-- **No realtime channel.** The bell badge doesn't update live — the user sees new notifications when they refresh or remount the App. Realtime via Supabase channels (`postgres_changes` on `notifications` filtered by `user_id`) is a clean upgrade; held off to keep Stage 11 scoped.
+- **No realtime channel.** The bell badge doesn't update live. As of Stage 20 §1.5, [useNotifications](../src/hooks/useNotifications.js) also `refetch()`es on `visibilitychange` → `visible` (the tab-return moment), so a session left open all day refreshes the bell whenever the user switches back to the tab — not just on a full reload/remount. Full realtime via Supabase channels (`postgres_changes` on `notifications` filtered by `user_id`) remains the clean upgrade for true live push; still held off (FABLE §1.5 judged the tab-return refetch closes most of the gap for ~free).
 
 ---
 
@@ -584,7 +586,7 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 
 **Bucket settings:**
 - Public: ON (anonymous fetch allowed).
-- File size limit: 5 MB. Per-step photos are realistically ~100–500 KB; 5 MB covers pre-resize buffer for users who upload directly off a phone camera.
+- File size limit: 5 MB. Per-step photos are realistically ~100–500 KB; 5 MB covers the buffer for users who upload directly off a phone camera (as of Stage 20 §1.3 those are downscaled client-side before upload — see the resize note under "Upload strategy" below).
 - Allowed MIME types: `image/jpeg`, `image/png`, `image/webp`. Locks out HEIC / TIFF / SVG / animated formats that the browser would handle inconsistently.
 
 **Policies (dashboard, per-bucket):**
@@ -600,6 +602,7 @@ If revisited, the lever order is: (1) enable Supabase's HaveIBeenPwned check (fr
 **Upload strategy — Option A (defer to save), not Option B (temp + rewrite):**
 - CreateRecipe holds the file as a local `File` object with a blob URL preview. On Save, the recipe + steps insert runs first; only then does a second pass upload each pending `File` to `recipe-steps/<recipe_id>/<step_id>.<ext>` and UPDATE the matching step's `photo_path`.
 - Option B (upload to `_pending/<temp_uuid>.jpg` immediately, then `move()` to the final path on save) was rejected — it leaves orphan files for every abandoned create flow and needs a lifecycle / cleanup job that doesn't exist yet. A's only cost is a slightly heavier Save click on slow connections; B's cost is operational debt.
+- **Client-side resize (Stage 20 §1.3):** each pending step `File` runs through [resizeImage.js](../src/lib/resizeImage.js) (≤1200px long edge) before the upload, same as the cover-image and comment-photo paths. The `<ext>` in the stored path is derived from the resized result's `.type` (`image/jpeg` when shrunk, the original type on passthrough), which supersedes the earlier `step.photoFile.name` extension sniff — a resized Blob has no filename.
 
 **Partial-failure posture:** the photo-upload pass uses `Promise.allSettled` so a single failed upload doesn't roll back the recipe + step inserts that already committed. Failures toast the user with "Recipe saved, but N photos failed — edit to retry." The recipe is intact; the user can recover by re-editing.
 

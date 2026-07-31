@@ -495,6 +495,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Preview shows immediately** — picking a file replaces the dashed tile with the chosen image (blob URL, no upload yet)
 - [ ] **Remove (✕) clears the slot** — click ✕ on a previewed photo; slot returns to the dashed "Add photo" state
 - [ ] **Save uploads pending files** — Save Recipe with N pending step photos; Supabase Storage dashboard shows N new objects under `recipe-steps/<recipe_id>/`
+- [ ] **Large uploads are downscaled (Stage 20 §1.3)** — Save a recipe with a multi-MB phone-camera cover image *and* a large step photo; the resulting objects (`recipe-images/<user_id>/` and `recipe-steps/<recipe_id>/`) are ≤1200px on the long edge, re-encoded to JPEG (name ends `.jpg`), and a fraction of the source bytes. An already-small image (≤1200px long edge) passes through untouched — original format/extension preserved.
 - [ ] **photo_path patched per row** — after save, `SELECT id, step_number, photo_path FROM steps WHERE recipe_id = '<new-id>'` shows the path on each row that uploaded a photo, NULL on the rest
 - [ ] **Partial failure tolerated** — temporarily revoke Storage write permission (or unplug network mid-upload) on one of multiple pending uploads; recipe saves successfully, toast surfaces "N photos failed to upload", DB has the rest patched correctly
 
@@ -886,6 +887,18 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Fresh session re-warns** — close the tab / clear sessionStorage, reopen the dismissed recipe → the banner returns
 - [ ] **Screen reader** — the banner is `role="alert"` and is announced on load without focusing it
 - [ ] **Not in print/PDF** — Print or Download PDF from a warned recipe → the banner does not appear in the output (`.no-print`)
+
+---
+
+## Notification refresh checklist (Stage 20 §1.5)
+
+> Verifies [useNotifications](../src/hooks/useNotifications.js) refetches on tab-return so a long-open session doesn't show a stale bell. Needs migration 012 applied and two accounts: a **follower** (with `notify_on_new_recipe = TRUE`) signed in in this tab, and an **author** the follower follows. Realtime is deferred by design — the bell does *not* update while the tab stays focused; the refresh is the tab-return moment.
+
+- [ ] **Stale-while-focused (baseline)** — as the follower, note the bell's unread count. In a *separate* browser/profile, publish a new public recipe as the author. Back in the follower tab *without leaving it*, the bell does **not** change — confirms there's no live channel (expected).
+- [ ] **Refresh on tab-return** — switch to another browser tab (or another app so the tab is hidden), then switch back. The bell now reflects the new notification — `visibilitychange → visible` fired the refetch, no full reload needed.
+- [ ] **No refetch on leave** — switching *away* from the tab does not fire a query (only `visible` transitions do); harmless either way, but confirms the guard.
+- [ ] **Anonymous no-op** — signed out, switching tabs does nothing (the effect early-returns when `userId` is null) and logs no errors.
+- [ ] **Listener cleanup** — sign out (or navigate such that the App unmounts the hook's owner); no "setState on unmounted" warnings, and toggling tab visibility afterward triggers no stray notification queries (listener removed on cleanup).
 
 ---
 
