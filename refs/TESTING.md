@@ -890,6 +890,18 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Notification refresh checklist (Stage 20 §1.5)
+
+> Verifies [useNotifications](../src/hooks/useNotifications.js) refetches on tab-return so a long-open session doesn't show a stale bell. Needs migration 012 applied and two accounts: a **follower** (with `notify_on_new_recipe = TRUE`) signed in in this tab, and an **author** the follower follows. Realtime is deferred by design — the bell does *not* update while the tab stays focused; the refresh is the tab-return moment.
+
+- [ ] **Stale-while-focused (baseline)** — as the follower, note the bell's unread count. In a *separate* browser/profile, publish a new public recipe as the author. Back in the follower tab *without leaving it*, the bell does **not** change — confirms there's no live channel (expected).
+- [ ] **Refresh on tab-return** — switch to another browser tab (or another app so the tab is hidden), then switch back. The bell now reflects the new notification — `visibilitychange → visible` fired the refetch, no full reload needed.
+- [ ] **No refetch on leave** — switching *away* from the tab does not fire a query (only `visible` transitions do); harmless either way, but confirms the guard.
+- [ ] **Anonymous no-op** — signed out, switching tabs does nothing (the effect early-returns when `userId` is null) and logs no errors.
+- [ ] **Listener cleanup** — sign out (or navigate such that the App unmounts the hook's owner); no "setState on unmounted" warnings, and toggling tab visibility afterward triggers no stray notification queries (listener removed on cleanup).
+
+---
+
 ## Automated tests (Vitest)
 
 Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase, no mocks. Run the suite with:

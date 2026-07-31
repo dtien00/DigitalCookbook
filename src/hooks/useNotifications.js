@@ -74,6 +74,22 @@ export function useNotifications(userId) {
         return () => { active = false }
     }, [userId, refetch])
 
+    // Stage 20 §1.5 — refresh on tab-return. The fetch above runs once per
+    // mount, so a session left open all day otherwise shows a permanently
+    // stale bell. `visibilitychange` fires when the user switches back to the
+    // tab — the moment they'd actually glance at the bell — so refetch then.
+    // Only `visible` transitions trigger it (hidden ones are the leaving
+    // moment, no point querying). Full Supabase realtime stays deferred; this
+    // closes most of the gap for ~free (FABLE §1.5).
+    useEffect(() => {
+        if (!userId) return
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') refetch()
+        }
+        document.addEventListener('visibilitychange', onVisibility)
+        return () => document.removeEventListener('visibilitychange', onVisibility)
+    }, [userId, refetch])
+
     const unreadCount = notifications.reduce((n, row) => n + (row.read_at ? 0 : 1), 0)
 
     const markRead = useCallback(async (id) => {
