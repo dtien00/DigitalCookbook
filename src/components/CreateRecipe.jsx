@@ -7,6 +7,7 @@ import { ingredientsToRows, rowsToIngredients, stripLeadingEmptySection } from '
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
+import { resizeImage } from '../lib/resizeImage'
 import UnitCombobox from './UnitCombobox'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
@@ -183,13 +184,22 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     }
 
     const uploadImage = async (file) => {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        // Stage 20 §1.3 — downscale before upload, reusing resizeImage.js (the
+        // same client-side ~1200px cap already used for comment + step photos).
+        // resizeImage returns a JPEG Blob when it shrinks, or the original File
+        // untouched when it's already within maxEdge / can't be decoded — so the
+        // extension and contentType come from the result's `.type`, since a
+        // resized Blob carries no filename to split.
+        const resized = await resizeImage(file)
+        const ext = resized.type === 'image/png' ? 'png'
+            : resized.type === 'image/webp' ? 'webp'
+            : 'jpg'
+        const fileName = `${crypto.randomUUID()}.${ext}`
         const filePath = `${userId}/${fileName}`
 
         const { error: uploadError } = await supabase.storage
             .from('recipe-images')
-            .upload(filePath, file)
+            .upload(filePath, resized, { contentType: resized.type || 'image/jpeg' })
 
         if (uploadError) throw uploadError
 
@@ -611,12 +621,18 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 const inserted = insertedSteps[i]
                 if (!inserted) continue
                 photoUpdatePromises.push((async () => {
-                    const ext = (step.photoFile.name.split('.').pop() || 'jpg').toLowerCase()
-                    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg'
-                    const path = `${recipeId}/${inserted.id}.${safeExt}`
+                    // Stage 20 §1.3 — downscale before upload (same resizeImage
+                    // cap as comment photos). The result is a JPEG Blob when
+                    // resized, else the original File; derive ext + contentType
+                    // from the result's `.type` rather than the picked filename.
+                    const resized = await resizeImage(step.photoFile)
+                    const ext = resized.type === 'image/png' ? 'png'
+                        : resized.type === 'image/webp' ? 'webp'
+                        : 'jpg'
+                    const path = `${recipeId}/${inserted.id}.${ext}`
                     const { error: uploadError } = await supabase.storage
                         .from('recipe-steps')
-                        .upload(path, step.photoFile, { upsert: true, contentType: step.photoFile.type })
+                        .upload(path, resized, { upsert: true, contentType: resized.type || 'image/jpeg' })
                     if (uploadError) throw uploadError
                     const { error: updateError } = await supabase
                         .from('steps')

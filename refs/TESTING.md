@@ -495,6 +495,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Preview shows immediately** — picking a file replaces the dashed tile with the chosen image (blob URL, no upload yet)
 - [ ] **Remove (✕) clears the slot** — click ✕ on a previewed photo; slot returns to the dashed "Add photo" state
 - [ ] **Save uploads pending files** — Save Recipe with N pending step photos; Supabase Storage dashboard shows N new objects under `recipe-steps/<recipe_id>/`
+- [ ] **Large uploads are downscaled (Stage 20 §1.3)** — Save a recipe with a multi-MB phone-camera cover image *and* a large step photo; the resulting objects (`recipe-images/<user_id>/` and `recipe-steps/<recipe_id>/`) are ≤1200px on the long edge, re-encoded to JPEG (name ends `.jpg`), and a fraction of the source bytes. An already-small image (≤1200px long edge) passes through untouched — original format/extension preserved.
 - [ ] **photo_path patched per row** — after save, `SELECT id, step_number, photo_path FROM steps WHERE recipe_id = '<new-id>'` shows the path on each row that uploaded a photo, NULL on the rest
 - [ ] **Partial failure tolerated** — temporarily revoke Storage write permission (or unplug network mid-upload) on one of multiple pending uploads; recipe saves successfully, toast surfaces "N photos failed to upload", DB has the rest patched correctly
 
