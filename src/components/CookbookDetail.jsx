@@ -29,6 +29,7 @@ export default function CookbookDetail({
     onToggleFavorite,
     likeCount,
     userLiked,
+    fetchCounts,
     onToggleLike,
 }) {
     const { id } = useParams()
@@ -83,7 +84,12 @@ export default function CookbookDetail({
                     console.error('Error fetching cookbook recipes:', error.message)
                     setFetchedRecipes([])
                 } else {
-                    setFetchedRecipes((data || []).map(r => r.recipes).filter(Boolean))
+                    const rows = (data || []).map(r => r.recipes).filter(Boolean)
+                    setFetchedRecipes(rows)
+                    // Embedded rows come from the `recipes` table (no
+                    // `like_count`), so fetch counts for just these ids
+                    // (§1.2 — bounded, not a full-table scan).
+                    fetchCounts?.(rows.map(r => r.id))
                 }
                 setFetchState('idle')
                 return
@@ -112,6 +118,7 @@ export default function CookbookDetail({
                 .map(r => r.recipes)
                 .filter(Boolean)
             setFetchedRecipes(sorted)
+            fetchCounts?.(sorted.map(r => r.id))
             setFetchState('idle')
         }
 

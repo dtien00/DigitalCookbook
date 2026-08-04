@@ -1,82 +1,131 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-// Bulk-fetches all likes once and exposes per-recipe counts + the
-// current user's liked set. Mirrors the useFavorites pattern but
-// surfaces a count (likes are public; bookmarks are private), so a
-// single query feeds both the count Map and the user-liked Set.
+// Split hook (Stage 20 §1.2): the two things this hook exposes have very
+// different natural sizes, so they now have two different sources.
 //
-// At current scale (50 recipes × low single-digit likes each = ~150
-// rows) this is well under any noticeable transfer cost. When the
-// likes table grows past ~5k rows the same hook can be swapped for
-// a Postgres view or a counter-column-with-trigger approach without
-// changing the consumer API.
+//   - Own-likes (the current user's liked Set) scale with ONE user's
+//     enthusiasm. Sourced from a `user_id`-scoped query. Skipped entirely
+//     for anonymous visitors — there's no "you" to have likes.
+//   - Public counts scale with recipes, and every surface already fetches
+//     the recipes it displays. Migration 014's `recipes_with_counts` view
+//     exposes `like_count` on each recipe row, so counts ride along on data
+//     already in flight. The hook holds them in a Map (seeded via
+//     `seedCounts`/`fetchCounts`) so the optimistic toggle and cross-surface
+//     consistency stay in one place without a global store.
+//
+// This deletes the old design's platform-wide `SELECT * FROM likes` that ran
+// on every app mount for every visitor (the only App-level query whose size
+// grew with total usage — see refs/DATABASE_DECISIONS.md "count strategy").
 //
 // API:
-//   const { likeCount, userLiked, toggleLike, loading } = useLikes(userId)
-//   likeCount(recipeId)  -> number      (0 if no likes)
+//   const { likeCount, userLiked, toggleLike, seedCounts, fetchCounts, refetch, loading } = useLikes(userId)
+//   likeCount(recipeId)  -> number      (0 until the recipe's row is seeded)
 //   userLiked(recipeId)  -> boolean     (false when anonymous)
 //   toggleLike(recipeId) -> Promise<void>  (no-op when anonymous; caller
 //                                           should gate to prompt sign-in)
+//   seedCounts(rows)     -> void        (merge like_count from view rows the
+//                                        caller just fetched)
+//   fetchCounts(ids)     -> Promise<void>  (for surfaces whose rows don't
+//                                        carry like_count — embed queries;
+//                                        bounded to the passed ids)
+//   refetch()            -> Promise<void>  (re-sync own-likes + counts for
+//                                        loaded recipes; used by admin reset)
 export function useLikes(userId) {
     const [likeCounts, setLikeCounts] = useState(() => new Map())
     const [userLikedIds, setUserLikedIds] = useState(() => new Set())
     const [loading, setLoading] = useState(true)
 
-    // Re-fetches the entire likes table and rebuilds both derived data
-    // structures. Used by the admin "Reset likes" path on RecipeDetail —
-    // a wholesale refetch is the simplest way to reflect a server-side
-    // DELETE ... WHERE recipe_id = X without threading per-recipe
-    // mutations through the hook's internal state. Returns a Promise so
-    // callers can await it.
-    const refetch = useCallback(async () => {
+    // Mirror the count Map into a ref so `refetch` can read the currently
+    // loaded recipe ids without taking `likeCounts` as a dependency (which
+    // would rebuild refetch — and every prop threaded from it — on every seed).
+    const likeCountsRef = useRef(likeCounts)
+    useEffect(() => { likeCountsRef.current = likeCounts }, [likeCounts])
+
+    // Merge like counts from rows that carry `like_count` (i.e. rows fetched
+    // from `recipes_with_counts`). Returns the previous Map untouched when
+    // nothing changed so callers can seed inside a fetch without forcing a
+    // re-render on every page load.
+    const seedCounts = useCallback((rows) => {
+        if (!rows || rows.length === 0) return
+        setLikeCounts(prev => {
+            let next = null
+            for (const row of rows) {
+                if (!row || row.id == null || row.like_count == null) continue
+                const n = Number(row.like_count)
+                if (prev.get(row.id) === n) continue
+                if (!next) next = new Map(prev)
+                next.set(row.id, n)
+            }
+            return next || prev
+        })
+    }, [])
+
+    // Fetch counts for a bounded set of recipe ids and seed them. For
+    // surfaces whose recipe rows arrive through a PostgREST embed (favorites,
+    // cookbook_recipes) and therefore can't carry the view's `like_count`.
+    const fetchCounts = useCallback(async (ids) => {
+        const unique = [...new Set((ids || []).filter(Boolean))]
+        if (unique.length === 0) return
         const { data, error } = await supabase
-            .from('likes')
-            .select('recipe_id, user_id')
+            .from('recipes_with_counts')
+            .select('id, like_count')
+            .in('id', unique)
         if (error) {
-            console.error('Failed to fetch likes:', error.message)
+            console.error('Failed to fetch like counts:', error.message)
             return
         }
-        const counts = new Map()
-        const own = new Set()
-        for (const { recipe_id, user_id } of data) {
-            counts.set(recipe_id, (counts.get(recipe_id) ?? 0) + 1)
-            if (userId && user_id === userId) own.add(recipe_id)
-        }
-        setLikeCounts(counts)
-        setUserLikedIds(own)
-    }, [userId])
+        seedCounts(data)
+    }, [seedCounts])
 
+    // Own-likes only. Scoped to the caller; no query at all when anonymous.
     useEffect(() => {
         let active = true
         setLoading(true)
 
+        if (!userId) {
+            setUserLikedIds(new Set())
+            setLoading(false)
+            return
+        }
+
         ;(async () => {
             const { data, error } = await supabase
                 .from('likes')
-                .select('recipe_id, user_id')
+                .select('recipe_id')
+                .eq('user_id', userId)
 
             if (!active) return
 
             if (error) {
-                console.error('Failed to fetch likes:', error.message)
-                setLikeCounts(new Map())
+                console.error('Failed to fetch your likes:', error.message)
                 setUserLikedIds(new Set())
             } else {
-                const counts = new Map()
-                const own = new Set()
-                for (const { recipe_id, user_id } of data) {
-                    counts.set(recipe_id, (counts.get(recipe_id) ?? 0) + 1)
-                    if (userId && user_id === userId) own.add(recipe_id)
-                }
-                setLikeCounts(counts)
-                setUserLikedIds(own)
+                setUserLikedIds(new Set(data.map(r => r.recipe_id)))
             }
             setLoading(false)
         })()
 
         return () => { active = false }
     }, [userId])
+
+    // Re-sync to server truth. Used by the admin "Reset likes" path, which
+    // deletes every like for a recipe server-side: refetching own-likes drops
+    // it from the liked Set, and refetching counts for the loaded recipes
+    // (bounded to what's in memory, not the whole table) brings its count to 0.
+    const refetch = useCallback(async () => {
+        if (userId) {
+            const { data, error } = await supabase
+                .from('likes')
+                .select('recipe_id')
+                .eq('user_id', userId)
+            if (error) console.error('Failed to fetch your likes:', error.message)
+            else setUserLikedIds(new Set(data.map(r => r.recipe_id)))
+        } else {
+            setUserLikedIds(new Set())
+        }
+        await fetchCounts([...likeCountsRef.current.keys()])
+    }, [userId, fetchCounts])
 
     const likeCount = useCallback(
         (recipeId) => likeCounts.get(recipeId) ?? 0,
@@ -141,5 +190,5 @@ export function useLikes(userId) {
         }
     }, [userId, userLikedIds, likeCounts])
 
-    return { likeCount, userLiked, toggleLike, refetch, loading }
+    return { likeCount, userLiked, toggleLike, seedCounts, fetchCounts, refetch, loading }
 }
