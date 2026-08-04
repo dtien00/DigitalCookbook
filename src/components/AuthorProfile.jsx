@@ -25,6 +25,7 @@ export default function AuthorProfile({
     onToggleFavorite,
     likeCount,
     userLiked,
+    seedCounts,
     onToggleLike,
     isFollowing,
     getNotifyPref,
@@ -71,7 +72,8 @@ export default function AuthorProfile({
                     .eq('id', id)
                     .maybeSingle(),
                 supabase
-                    .from('recipes')
+                    // View → rows carry `like_count` to seed useLikes (§1.2).
+                    .from('recipes_with_counts')
                     .select('*')
                     .eq('author_id', id)
                     .order('created_at', { ascending: false }),
@@ -89,6 +91,7 @@ export default function AuthorProfile({
 
             setProfile(profileData)
             setRecipes(recipeData || [])
+            seedCounts?.(recipeData || [])
             setFetchState('idle')
         }
 

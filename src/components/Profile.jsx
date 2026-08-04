@@ -18,6 +18,7 @@ export default function Profile({
     onToggleFavorite,
     likeCount,
     userLiked,
+    seedCounts,
     onToggleLike,
     backdrop,
     onChooseBackdrop,
@@ -94,14 +95,20 @@ export default function Profile({
     }
 
     async function getUserRecipes() {
+        // View, not base table, so rows carry `like_count` to seed the shared
+        // useLikes count Map (Stage 20 §1.2 — counts no longer come from a
+        // platform-wide scan).
         const { data, error } = await supabase
-            .from('recipes')
+            .from('recipes_with_counts')
             .select('*')
             .eq('author_id', session.user.id)
             .order('created_at', { ascending: false })
 
         if (error) console.error('Error fetching user recipes:', error.message)
-        else setUserRecipes(data || [])
+        else {
+            setUserRecipes(data || [])
+            seedCounts?.(data || [])
+        }
     }
 
     async function updateProfile(e) {

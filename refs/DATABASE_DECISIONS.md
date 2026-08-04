@@ -175,7 +175,7 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 - The original policy only verified that the request came from a *logged-in* user — it didn't verify the `user_id` column matched the authenticated user. A crafted client could `INSERT INTO likes (user_id, recipe_id) VALUES ('<other-user-uuid>', '<recipe-uuid>')` to like a recipe on someone else's behalf. The new policy closes that gap.
 - The DELETE policy (`USING (auth.uid() = user_id)`) and SELECT policy (`USING (true)` — likes are public information) were already correct and don't change.
 
-**Decision (count strategy):** Bulk-fetch all likes once into a client-side `Map<recipe_id, count>` rather than a Postgres view or a counter column with triggers.
+**Decision (count strategy — original, Stage 4):** Bulk-fetch all likes once into a client-side `Map<recipe_id, count>` rather than a Postgres view or a counter column with triggers.
 
 **Why:**
 - **Scale.** At 50 recipes × low single-digit likes each = ~150 rows total. A single `SELECT recipe_id, user_id FROM likes` returns in <100ms and gives us both the per-recipe count *and* the current user's liked set (one query, two derived data structures).
@@ -184,6 +184,12 @@ Each entry captures a decision, the reason behind it, and the tradeoff accepted.
 **Tradeoffs:**
 - **Privacy.** Bulk-fetching includes every like row's `user_id`. The migration-001 public SELECT policy on `likes` explicitly allows this — likes are designed as public information. If a future requirement wants likes to be private (e.g., "anonymous likes"), the SELECT policy needs to flip to own-only + a separate aggregate view for counts.
 - **created_at column added but unused** in this stage. Defensive — when Stage 7's "trending" / "recently liked" features land, the timestamp is already there. The cost of an `IF NOT EXISTS` column add now is negligible.
+
+**Update (Stage 20 §1.2 — the split shipped):** The bulk-fetch is retired. It was the only App-level query whose size grew with *total platform usage* — every visitor, including anonymous ones, downloaded every like row on mount. The "reversibility" promise above was cashed in exactly as written, and split in two along the natural size boundary:
+- **Counts** now come from the `recipes_with_counts` view (migration 014, see its own entry below), which every surface already fetches its recipe rows through. `useLikes` no longer queries counts at all — it keeps the `Map<recipe_id, count>` (so the optimistic toggle and cross-surface consistency stay in one place, no global store) but the Map is *seeded* from view rows via `seedCounts(rows)` / `fetchCounts(ids)` rather than a table scan. The consumer API (`likeCount(id)` etc.) is byte-identical — no card, button, or view changed its rendering.
+- **Own-likes** now come from `SELECT recipe_id FROM likes WHERE user_id = auth.uid()` — bounded by one user's enthusiasm, and skipped entirely for anonymous visitors.
+- **Net query cost went *down*:** the grid already had to hit the view for popularity sort; making it the always-source folded the separate likes scan into a query that was already happening. Surfaces whose recipe rows arrive through an embed (`favorites`, `cookbook_recipes` — can't carry the view's `like_count`) pay one bounded `WHERE id IN (…)` count query on mount instead.
+- **Client-only change** — no migration, no RLS change. Migration 014's view already existed and already carried the right security posture.
 
 ## Profiles INSERT policy (migration 006)
 
@@ -434,6 +440,8 @@ COALESCE(
 ## `recipes_with_counts` view for popularity-sort (migration 014, Stage 13 v2)
 
 **Decision:** Add a read-only Postgres view that joins `recipes` to an aggregated `likes` subquery and exposes `like_count`. Use it as the table source in `fetchRecipes` when the home grid's sort mode is popularity-based.
+
+**Widened role (Stage 20 §1.2):** The view is now the *default* recipe source for every count-displaying surface, not just the popularity sort — the home grid always queries it, and RecipeDetail's deep-link fetch, Profile, AuthorProfile, and FollowingPhonebook read through it too. This is what lets `useLikes` retire its platform-wide likes scan (see "count strategy" above): `like_count` rides along on rows the surfaces already fetch. Embed surfaces that *can't* select the view through a FK (`favorites`→recipes in MyBookmarks, `cookbook_recipes`→recipes in CookbookDetail) instead call the hook's `fetchCounts(ids)`, a bounded `SELECT id, like_count FROM recipes_with_counts WHERE id IN (…)`.
 
 **Why:**
 - **Server has to order the page.** Stage 4's bulk-fetch (a `Map<recipe_id, count>` built client-side) was enough for *rendering* counts on already-paginated rows, but the server can't order by something the client computes. Popularity-sort needs the count in SQL.
