@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { scaleQuantity } from '../lib/scaleQuantity'
 import { copyText } from '../lib/copyText'
 import { recipesInList } from '../lib/shoppingListCore'
+import { encodeList, decodeList, payloadHash, MAX_SHARE_PAYLOAD } from '../lib/shareList'
 
 // Stage N+2a — the cumulative shopping list page (`/shopping-list`). The
 // persistent list (localStorage-backed via useShoppingList) lives at App level
@@ -16,6 +17,14 @@ import { recipesInList } from '../lib/shoppingListCore'
 // dialog) and the per-row ✕ removes one item — both fire an Undo toast and drop
 // onto a persistent "Recently removed" tray so an accidental delete is always
 // recoverable.
+//
+// Share (Stage N+2a, PR #94): the Copy / Print actions collapse into a `Share ▾`
+// dropdown (the Sort-picker idiom) that also offers "Copy shareable link" and,
+// on capable devices, native `Share via…`. The link encodes the whole list into
+// the URL hash (../lib/shareList) so a recipient opens `/shopping-list#list=…`
+// pre-populated. Arriving with such a hash shows an Add/Discard confirm banner
+// (never a silent merge); Add folds the items in under one "Shared list"
+// provenance chip via the same addRecipe path, so it's idempotent and undoable.
 //
 // No auth: shopping happens out-of-app, so the list belongs to the device, not
 // an account. The route is reachable by anonymous and signed-in users alike.
@@ -75,6 +84,7 @@ function undoToast(message, onUndo) {
 }
 
 const pill = 'inline-flex items-center gap-1.5 px-3 py-2.5 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors'
+const menuItem = 'flex w-full items-center gap-2 px-4 py-2.5 text-sm text-left text-ink hover:bg-tan/40 transition-colors'
 
 export default function ShoppingList({
     items,
@@ -84,11 +94,63 @@ export default function ShoppingList({
     onRestore,
     onDismiss,
     onClear,
+    onImport,
 }) {
     const navigate = useNavigate()
+    const location = useLocation()
     const [checked, setChecked] = useState(() => new Set())
     const [showRemoved, setShowRemoved] = useState(false)
     const now = Date.now()
+
+    // Share menu (Sort-picker idiom): outside-click + Escape close it.
+    const [shareOpen, setShareOpen] = useState(false)
+    const shareMenuRef = useRef(null)
+    const canWebShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+
+    useEffect(() => {
+        if (!shareOpen) return
+        const onDoc = (e) => {
+            if (shareMenuRef.current && !shareMenuRef.current.contains(e.target)) setShareOpen(false)
+        }
+        const onKey = (e) => { if (e.key === 'Escape') setShareOpen(false) }
+        document.addEventListener('mousedown', onDoc)
+        document.addEventListener('keydown', onKey)
+        return () => {
+            document.removeEventListener('mousedown', onDoc)
+            document.removeEventListener('keydown', onKey)
+        }
+    }, [shareOpen])
+
+    // Import-a-shared-list flow. A `#list=<encoded>` hash means someone shared
+    // their list with us; stage it behind an Add/Discard banner rather than
+    // silently merging it into our own. Strip the hash once handled so a refresh
+    // (or Back/Forward) can't re-import.
+    const [pendingImport, setPendingImport] = useState(null)
+
+    const stripImportHash = () => {
+        try {
+            window.history.replaceState(
+                window.history.state, '',
+                window.location.pathname + window.location.search,
+            )
+        } catch { /* history unavailable — harmless */ }
+    }
+
+    useEffect(() => {
+        const m = (location.hash || '').match(/^#list=(.+)$/)
+        if (!m) return
+        const decoded = decodeList(m[1])
+        if (decoded === null) {
+            toast('That shared link looks incomplete')
+            stripImportHash()
+            return
+        }
+        if (decoded.length === 0) {
+            stripImportHash()
+            return
+        }
+        setPendingImport({ items: decoded, encoded: m[1] })
+    }, [location.hash])
 
     // N+2c (PR #64) — provenance chip bar. Hovering or focusing a recipe chip
     // previews which rows it contributed; clicking pins that highlight so it
@@ -134,14 +196,18 @@ export default function ShoppingList({
         undoToast(`Removed ${r.recipeTitle || 'recipe'}${detail}`, () => onRestore(entry.id))
     }
 
-    const handleCopy = async () => {
-        if (items.length === 0) {
-            toast('Your shopping list is empty')
-            return
-        }
-        const payload = 'Shopping list\n' + items.map(formatLine).join('\n')
+    // Plaintext payload — the same header + `- qty unit name (notes)` rows the
+    // clipboard export has always produced.
+    const buildPlaintext = () => 'Shopping list\n' + items.map(formatLine).join('\n')
+    const shareUrl = (encoded) => `${window.location.origin}/shopping-list#list=${encoded}`
+    const textWithLink = (url) => `${buildPlaintext()}\nOpen & check off: ${url}`
+
+    // The Share menu only renders when items.length > 0, so these handlers never
+    // hit the empty-list case.
+    const handleCopyText = async () => {
+        setShareOpen(false)
         try {
-            await copyText(payload)
+            await copyText(buildPlaintext())
             const noun = items.length === 1 ? 'item' : 'items'
             toast.success(`Copied ${items.length} ${noun} to clipboard`)
         } catch (error) {
@@ -149,7 +215,67 @@ export default function ShoppingList({
         }
     }
 
-    const handlePrint = () => window.print()
+    const handleCopyLink = async () => {
+        setShareOpen(false)
+        const encoded = encodeList(items)
+        // Too long for a URL → degrade to copy-as-text rather than a broken link.
+        if (encoded.length > MAX_SHARE_PAYLOAD) {
+            try {
+                await copyText(buildPlaintext())
+                toast('List too long to link — copied as text instead')
+            } catch (error) {
+                toast.error('Could not copy list: ' + error.message)
+            }
+            return
+        }
+        try {
+            await copyText(textWithLink(shareUrl(encoded)))
+            toast.success('Shareable link copied')
+        } catch (error) {
+            toast.error('Could not copy link: ' + error.message)
+        }
+    }
+
+    const handleWebShare = async () => {
+        setShareOpen(false)
+        const encoded = encodeList(items)
+        const withinBudget = encoded.length <= MAX_SHARE_PAYLOAD
+        // Link is embedded in the text (readable in any app + tappable on web),
+        // so we don't also pass `url` — that would duplicate it on some targets.
+        const text = withinBudget ? textWithLink(shareUrl(encoded)) : buildPlaintext()
+        try {
+            await navigator.share({ title: 'Shopping list', text })
+        } catch (error) {
+            if (error && error.name === 'AbortError') return // user dismissed the sheet
+            toast.error('Could not share: ' + error.message)
+        }
+    }
+
+    const handlePrint = () => {
+        setShareOpen(false)
+        window.print()
+    }
+
+    const handleImportAdd = () => {
+        if (!pendingImport || typeof onImport !== 'function') {
+            setPendingImport(null)
+            stripImportHash()
+            return
+        }
+        // Synthetic, payload-stable recipeId so re-opening the same link REPLACES
+        // its contribution (addRecipe's replace-on-recipeId) instead of summing.
+        const recipeId = 'shared:' + payloadHash(pendingImport.encoded)
+        onImport(recipeId, 'Shared list', pendingImport.items)
+        const n = pendingImport.items.length
+        toast.success(`Added ${n} shared item${n === 1 ? '' : 's'} to your list`)
+        setPendingImport(null)
+        stripImportHash()
+    }
+
+    const handleImportDiscard = () => {
+        setPendingImport(null)
+        stripImportHash()
+    }
 
     const handleClear = () => {
         if (items.length === 0) return
@@ -178,6 +304,30 @@ export default function ShoppingList({
                 )}
             </header>
 
+            {pendingImport && (
+                <div className="no-print mb-6 rounded-lg border border-rust/40 bg-tan-soft px-4 py-3" role="status">
+                    <p className="text-ink font-serif">
+                        A shared list has {pendingImport.items.length} item{pendingImport.items.length === 1 ? '' : 's'}.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={handleImportAdd}
+                            className="px-4 py-2 bg-rust hover:bg-rust-dark text-paper text-sm font-medium rounded-md transition-colors"
+                        >
+                            Add to my list
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleImportDiscard}
+                            className="px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink text-sm font-medium rounded-md transition-colors"
+                        >
+                            Discard
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {items.length === 0 && recentlyRemoved.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-2xl text-tan mb-4">✦</p>
@@ -191,21 +341,35 @@ export default function ShoppingList({
                     {items.length > 0 && (
                         <>
                             <div className="no-print flex flex-wrap gap-2 mb-6">
-                                <button type="button" onClick={handleCopy} className={pill} aria-label="Copy shopping list to clipboard">
-                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                    </svg>
-                                    <span>Copy to clipboard</span>
-                                </button>
-                                <button type="button" onClick={handlePrint} className={pill} aria-label="Print shopping list">
-                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <polyline points="6 9 6 2 18 2 18 9" />
-                                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                                        <rect x="6" y="14" width="12" height="8" />
-                                    </svg>
-                                    <span>Print</span>
-                                </button>
+                                <div className="relative" ref={shareMenuRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShareOpen(o => !o)}
+                                        aria-haspopup="menu"
+                                        aria-expanded={shareOpen}
+                                        className={pill}
+                                    >
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <circle cx="18" cy="5" r="3" />
+                                            <circle cx="6" cy="12" r="3" />
+                                            <circle cx="18" cy="19" r="3" />
+                                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                                        </svg>
+                                        <span>Share</span>
+                                        <span className={`inline-block text-xs transition-transform ${shareOpen ? 'rotate-180' : ''}`} aria-hidden="true">▾</span>
+                                    </button>
+                                    {shareOpen && (
+                                        <div role="menu" className="absolute left-0 top-full mt-2 z-20 w-56 bg-paper rounded-xl shadow-lg border border-paper-shade overflow-hidden">
+                                            <button type="button" role="menuitem" onClick={handleCopyText} className={menuItem}>Copy list text</button>
+                                            <button type="button" role="menuitem" onClick={handleCopyLink} className={menuItem}>Copy shareable link</button>
+                                            {canWebShare && (
+                                                <button type="button" role="menuitem" onClick={handleWebShare} className={menuItem}>Share via…</button>
+                                            )}
+                                            <button type="button" role="menuitem" onClick={handlePrint} className={menuItem}>Print</button>
+                                        </div>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={handleClear}
