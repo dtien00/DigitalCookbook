@@ -27,6 +27,20 @@ describe('scaleQuantity', () => {
             expect(scaleQuantity(2, 1 / 3)).toBe('⅔') // 0.666… rounds to 0.67
         })
 
+        it('substitutes each of the four eighths (keyed on the 2-dp-rounded decimal)', () => {
+            // Regression: eighths used to fall through to a decimal string — 0.125
+            // rendered as "0.13" in the reader/preview. The keys are the rounded
+            // values (0.125 → 0.13) to match toFixed(2), same as thirds (0.33/0.67).
+            expect(scaleQuantity(0.125, 1)).toBe('⅛')
+            expect(scaleQuantity(0.375, 1)).toBe('⅜')
+            expect(scaleQuantity(0.625, 1)).toBe('⅝')
+            expect(scaleQuantity(0.875, 1)).toBe('⅞')
+        })
+
+        it('joins a whole part to an eighth fraction', () => {
+            expect(scaleQuantity(1.125, 1)).toBe('1 ⅛') // 1.125 → whole 1 + 0.13
+        })
+
         it('shows a bare fraction when the whole part is zero', () => {
             expect(scaleQuantity(0.5, 1)).toBe('½')
         })
