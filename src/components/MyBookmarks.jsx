@@ -19,6 +19,7 @@ export default function MyBookmarks({
     onToggleFavorite,
     likeCount,
     userLiked,
+    fetchCounts,
     onToggleLike,
 }) {
     const [recipes, setRecipes] = useState([])
@@ -41,7 +42,11 @@ export default function MyBookmarks({
                 // was deleted between favorite-insert and now (FK cascade
                 // would normally clean it up, but the join may briefly return
                 // null during the window).
-                setRecipes(data?.map(d => d.recipe).filter(Boolean) || [])
+                const rows = data?.map(d => d.recipe).filter(Boolean) || []
+                setRecipes(rows)
+                // Bookmarked rows arrive via the favorites→recipes embed (no
+                // `like_count`), so fetch counts for just these ids (§1.2).
+                fetchCounts?.(rows.map(r => r.id))
             } catch (error) {
                 console.error('Error fetching bookmarks:', error.message)
                 if (active) setRecipes([])

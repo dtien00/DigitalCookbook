@@ -42,6 +42,7 @@ export default function FollowingPhonebook({
     onToggleFavorite,
     likeCount,
     userLiked,
+    seedCounts,
     onToggleLike,
 }) {
     const navigate = useNavigate()
@@ -136,7 +137,8 @@ export default function FollowingPhonebook({
         let cancelled = false
         setRecipesLoading(true)
         supabase
-            .from('recipes')
+            // View → rows carry `like_count` to seed useLikes (§1.2).
+            .from('recipes_with_counts')
             .select('*')
             .eq('author_id', selectedId)
             .order('created_at', { ascending: false })
@@ -147,6 +149,7 @@ export default function FollowingPhonebook({
                     setRecipes([])
                 } else {
                     setRecipes(data || [])
+                    seedCounts?.(data || [])
                 }
                 setRecipesLoading(false)
             })

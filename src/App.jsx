@@ -213,7 +213,7 @@ function App() {
     }, [sortOpen])
 
     const { isFavorited, toggleFavorite, refetch: refetchFavorites } = useFavorites(session?.user.id)
-    const { likeCount, userLiked, toggleLike, refetch: refetchLikes } = useLikes(session?.user.id)
+    const { likeCount, userLiked, toggleLike, seedCounts, fetchCounts, refetch: refetchLikes } = useLikes(session?.user.id)
     const { isAdmin, loading: adminLoading } = useAdmin(session?.user.id)
     // First-run onboarding tour (Stage M). Column-only gate — shows for
     // signed-in users who've never dismissed it. Rendered only on the home
@@ -378,15 +378,18 @@ function App() {
             const from = page * PAGE_SIZE
             const to = from + PAGE_SIZE - 1
 
-            // Sort config → table source + composed `.order()` clauses.
+            // Sort config → composed `.order()` clauses.
             //
-            // Source selection: if `likes.on`, query the
-            // `recipes_with_counts` view (migration 014) which exposes
-            // `like_count` for ordering. Otherwise query `recipes` directly.
-            // The view uses security_invoker so the recipes RLS still
-            // filters; embedded relations resolve through the view because
-            // PostgREST detects the inherited FKs (recipes.id →
-            // ingredients.recipe_id, recipes.author_id → profiles.id).
+            // Source: always the `recipes_with_counts` view (migration 014).
+            // It exposes `like_count` on every row, which serves both the
+            // popularity sort (when `likes.on`) AND the per-card like counts
+            // — the latter used to come from useLikes' now-removed full-table
+            // scan (Stage 20 §1.2). `seedCounts(newRows)` below feeds those
+            // counts into the hook's Map. The view uses security_invoker so
+            // the recipes RLS still filters; embedded relations resolve
+            // through the view because PostgREST detects the inherited FKs
+            // (recipes.id → ingredients.recipe_id, recipes.author_id →
+            // profiles.id).
             //
             // Ordering composition (priority order):
             //   1. likes  (if on) — primary when both are on, since
@@ -405,10 +408,8 @@ function App() {
             // count). Used to size the column tier so layout doesn't reflow
             // as more pages load. Embed `ingredients(name)` so the
             // fridge-basket filter (Stage 10) can token-match without N+1.
-            const source = config.likes.on ? 'recipes_with_counts' : 'recipes'
-
             let query = supabase
-                .from(source)
+                .from('recipes_with_counts')
                 .select('*, ingredients(name), author:profiles!author_id(id, username, full_name, avatar_url)', { count: 'exact' })
 
             if (config.likes.on) {
@@ -428,6 +429,7 @@ function App() {
             if (error) throw error
             const newRows = data || []
             setRecipes(prev => append ? [...prev, ...newRows] : newRows)
+            seedCounts(newRows)
             setHasMore(newRows.length === PAGE_SIZE)
             if (typeof count === 'number') setTotalCount(count)
             pageRef.current = page
@@ -551,7 +553,7 @@ function App() {
     const recipeDetailProps = {
         session, recipes, isAdmin,
         excludedAllergens,
-        isFavorited, likeCount, userLiked,
+        isFavorited, likeCount, userLiked, seedCounts,
         refetchLikes, refetchFavorites,
         onEditRecipe: handleEditRecipe,
         onRecipeDeleted: handleRecipeDeleted,
@@ -646,6 +648,7 @@ function App() {
                                 onToggleFavorite={handleBookmarkClick}
                                 likeCount={likeCount}
                                 userLiked={userLiked}
+                                seedCounts={seedCounts}
                                 onToggleLike={handleLikeClick}
                                 backdrop={backdrop}
                                 onChooseBackdrop={chooseBackdrop}
@@ -671,6 +674,7 @@ function App() {
                                 onToggleFavorite={handleBookmarkClick}
                                 likeCount={likeCount}
                                 userLiked={userLiked}
+                                seedCounts={seedCounts}
                                 onToggleLike={handleLikeClick}
                             />
                             : <Navigate to="/" replace />
@@ -685,6 +689,7 @@ function App() {
                             onToggleFavorite={handleBookmarkClick}
                             likeCount={likeCount}
                             userLiked={userLiked}
+                            seedCounts={seedCounts}
                             onToggleLike={handleLikeClick}
                             isFollowing={isFollowing}
                             getNotifyPref={getNotifyPref}
@@ -712,6 +717,7 @@ function App() {
                             onToggleFavorite={handleBookmarkClick}
                             likeCount={likeCount}
                             userLiked={userLiked}
+                            fetchCounts={fetchCounts}
                             onToggleLike={handleLikeClick}
                         />
                     }
@@ -728,6 +734,7 @@ function App() {
                                 onToggleFavorite={handleBookmarkClick}
                                 likeCount={likeCount}
                                 userLiked={userLiked}
+                                fetchCounts={fetchCounts}
                                 onToggleLike={handleLikeClick}
                             />
                             : <Navigate to="/" replace />
@@ -1640,7 +1647,7 @@ function HomeView({
 function RecipeDetailRoute({
     session, recipes, isAdmin,
     excludedAllergens,
-    isFavorited, likeCount, userLiked,
+    isFavorited, likeCount, userLiked, seedCounts,
     refetchLikes, refetchFavorites,
     onEditRecipe, onRecipeDeleted, onBookmarkClick, onLikeClick, onRequireAuth,
     cookbooks, isRecipeInCookbook, addRecipeToCookbook, removeRecipeFromCookbook, createCookbook,
@@ -1684,7 +1691,10 @@ function RecipeDetailRoute({
         let cancelled = false
         setFetchState('loading')
         supabase
-            .from('recipes')
+            // View, not the base table, so a deep-linked recipe (not in the
+            // grid cache) still carries `like_count` for the hook to seed —
+            // the count no longer comes from a platform-wide scan (§1.2).
+            .from('recipes_with_counts')
             .select('*, author:profiles!author_id(id, username, full_name, avatar_url)')
             .eq('id', id)
             .maybeSingle()
@@ -1696,6 +1706,7 @@ function RecipeDetailRoute({
                 } else {
                     setFetchState('idle')
                     setFetchedRecipe(data)
+                    seedCounts([data])
                 }
             })
         return () => { cancelled = true }

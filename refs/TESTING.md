@@ -142,6 +142,16 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Like state per-user** — A likes a recipe; B logs in, the heart shows outline for B (the count is shared but the fill state is per-user)
 - [ ] **Counts and bookmarks are independent** — liking does NOT bookmark, and vice versa; both can be active simultaneously
 
+### useLikes split (Stage 20 §1.2)
+
+> The full-table likes fetch is gone; counts are now seeded from `recipes_with_counts` rows and own-likes come from a `user_id`-scoped query. These checks catch the ways that split could regress. No migration needed — the view has shipped since Stage 13.
+
+- [ ] **Counts show on every surface, not just the home grid** — like counts are correct on RecipeDetail, Author profile (`/profile/:id`), Following directory, a Cookbook's recipes, My Bookmarks, and your own Profile "My Recipes". A recipe with likes must NOT show 0 on any of these.
+- [ ] **Deep-linked recipe shows its count** — paste `/recipe/<uuid>` into a fresh tab (recipe not yet loaded in the grid); the count is correct (proves the deep-link fetch reads the view, not the base table).
+- [ ] **Anonymous browse still shows counts** — incognito window: counts render on cards and RecipeDetail, hearts are outline. In the Network tab there should be **no** `likes` request at all on load (own-likes query is skipped when signed out; counts ride on the recipe/view rows).
+- [ ] **Optimistic toggle survives reload** — like a recipe (count ticks up instantly), hard-reload; the filled heart + incremented count persist (own-likes query rehydrates the fill, the view rehydrates the count).
+- [ ] **Admin "Reset likes" drops the count to 0 live** — as admin, reset a recipe's likes on RecipeDetail; the count clears without a manual reload (the hook's `refetch` re-syncs own-likes + re-seeds counts for loaded recipes).
+
 ## Sort metrics checklist
 
 > Verifies the Stage 13 v2 custom sort picker. Requires migration 014 applied in Supabase (`supabase_migration_014_recipe_like_counts_view.sql` — run via Dashboard → SQL Editor). Use `test-large@example.com` (34 recipes, varied like counts) for the most meaningful ordering signal.
