@@ -602,6 +602,7 @@ function App() {
                             onRestore={restoreShoppingRemoved}
                             onDismiss={dismissShoppingRemoved}
                             onClear={clearShoppingList}
+                            onImport={addToShoppingList}
                         />
                     }
                 />

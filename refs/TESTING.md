@@ -410,7 +410,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Persistence across reload + routes** — add items, refresh / navigate away and back → list survives (localStorage)
 - [ ] **Anonymous works** — logged out, the whole flow functions (no auth gate)
 - [ ] **Deep link** — paste `/shopping-list` into a fresh tab → page resolves (SPA rewrite), shows persisted items
-- [ ] **Mobile (≤ 640px)** — header + Copy/Print/Clear row fit; long item names wrap; full-row tap targets
+- [ ] **Mobile (≤ 640px)** — header + Share/Clear row fit; long item names wrap; full-row tap targets
 
 **N+2c provenance — data model (PR #63) behaviors testable now (no new UI yet):**
 - [ ] **Re-send replaces, not stacks** — send a recipe to the list, reopen the same recipe, send again → the shared quantities stay the same (no doubling). *(N+2a summed re-sends; N+2c replaces a recipe's prior contribution.)*
@@ -433,6 +433,23 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Persistence + cap** — the tray survives reload (`localStorage` key `cookbook.shoppingList.removed`), is capped at the last 10, and **Clear all** empties it
 - [ ] **Re-send prunes** — delete a recipe, then re-send it from its page → the stale tray entry auto-drops (no double-restore)
 - [ ] **Mobile (≤ 640px)** — chip `✕`, toast Undo, and tray restore/dismiss are all tappable
+
+**Share + import (PR #94):**
+- [ ] **Share menu** — the action row shows a single `Share ▾` pill (Copy / Print collapsed into it) + a standalone **Clear all**; opening it lists **Copy list text**, **Copy shareable link**, **Copy link as markdown**, **Print**, and (on devices with `navigator.share`, i.e. most phones) **Share via…**; outside-click and Escape close it
+- [ ] **Copy list text** — copies the plaintext list **with** an `Open & check off: …/shopping-list#list=<encoded>` line appended; toast "Copied N items and a link". Paste into a plain-text target and confirm the header, one `- ` row per item, and the trailing link line all survive.
+- [ ] **Copy shareable link** — copies the **bare URL and nothing else**; toast "Link copied". Paste directly into a browser address bar — it must work with no hand-editing. If the paste contains list rows, this row regressed.
+- [ ] **Share via… (mobile)** — opens the OS share sheet with the list text + link; dismissing the sheet shows no error toast
+- [ ] **Import banner (confirm gate)** — open a copied link in another browser/profile → a `role="status"` banner "A shared list has N items." with **Add to my list** / **Discard**; the list is *not* silently merged
+- [ ] **Add merges** — Add folds the shared items in under one **"Shared list"** provenance chip; an ingredient that overlaps an existing row sums (e.g. rice 2 + 1 = 3 cups); toast "Added N shared items to your list"
+- [ ] **Hash stripped** — after Add *or* Discard the `#list=…` is removed from the URL (a refresh won't re-import)
+- [ ] **Idempotent re-open** — opening the *same* link twice and Add-ing both times does **not** double-count (the `shared:<hash>` source replaces, matching re-send semantics)
+- [ ] **Malformed link** — a truncated/garbled `#list=…` shows a quiet "That shared link looks incomplete" toast, no banner, no bad import
+- [ ] **Overflow behavior (differs per row, deliberately)** — build a list past ~2000 encoded chars, then: **Copy list text** copies the list **without** a link and toasts "… list too long to include a link"; **Copy shareable link** copies **nothing** and toasts the error "List too long to share as a link — use Copy list text". The link row must never silently hand back plaintext.
+- [ ] **Copy link as markdown** — copies exactly `[Shopping list — N items](<url>)` on one line, nothing else. Paste into Slack, Discord or a GitHub comment box: it renders as a titled clickable link. Paste into Notepad: it shows literally with brackets — that is correct, not a bug.
+- [ ] **Markdown row stays plain** — paste it into a rich target (Gmail/Docs). It must arrive as literal `[…](…)` text, NOT a rendered link. A rendered link here means a `text/html` flavour leaked onto this row and defeated the point of choosing markdown.
+- [ ] **Rich hyperlink flavour** — paste either copy row into a **rich-text** target (Gmail compose, Google Docs, Slack, Notion): the URL renders as a clickable link titled **“Shopping list — N items”**, not a raw base64 string. N must match the visible item count.
+- [ ] **Plain flavour unchanged** — paste the same copy into a **plain-text** target (Notepad, SMS, the browser address bar): *Copy shareable link* still yields the bare one-line URL, and *Copy list text* still yields the header + rows + `Open & check off: <url>`. The rich flavour must never leak into a plain paste.
+- [ ] **HTML escaping** — add an ingredient whose name or note contains `&`, `<` or `"` (e.g. `salt & pepper`, note `<flaky>`), copy, and paste into a rich target: the characters render literally. Nothing should appear bold/italic/missing, which would mean markup executed.
 
 ---
 
