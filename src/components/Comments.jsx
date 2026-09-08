@@ -32,7 +32,13 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024
 //   userId           — current user's id, or null for anonymous viewers
 //   onRequireAuth()  — invoked when an anonymous user attempts to comment
 
-export default function Comments({ recipeId, userId, isAdmin = false, onRequireAuth, submitReport }) {
+export default function Comments({ recipeId, userId, isAdmin = false, mfa, onRequireAuth, submitReport }) {
+    // Migration 027 requires AAL2 for the admin-override DELETE policy, so
+    // an admin whose session hasn't completed an MFA challenge can no longer
+    // moderate others' comments. Mirror that in the UI rather than offering
+    // a button the database will refuse — RecipeDetail's moderation block is
+    // where they elevate. Own-comment deletes are unaffected either way.
+    const canModerate = isAdmin && !!mfa?.isAal2
     const {
         comments,
         addComment,
@@ -41,7 +47,7 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
         commentLikeCount,
         userLikedComment,
         toggleCommentLike,
-    } = useComments(recipeId, userId, isAdmin)
+    } = useComments(recipeId, userId, canModerate)
     const [draft, setDraft] = useState('')
     // Submit sub-phases drive button label: idle | uploading | posting.
     // Uploading covers the storage round-trip; posting covers the insert.
@@ -52,6 +58,19 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
     const fileInputRef = useRef(null)
     // Lightbox state lifted to Comments so any CommentItem can open one.
     const [lightboxUrl, setLightboxUrl] = useState(null)
+
+    // deleteComment rolls its own optimistic state back; this only reports
+    // why nothing happened. 'denied' means RLS matched zero rows — with
+    // migration 027 the likeliest cause is an admin session that dropped
+    // back to AAL1 (a new tab, a refreshed token) between render and click.
+    async function handleDelete(commentId) {
+        const result = await deleteComment(commentId)
+        if (result?.ok === false && result.reason === 'denied') {
+            toast.error('That comment could not be deleted — your session may need re-verifying.')
+        } else if (result?.ok === false && result.reason === 'error') {
+            toast.error('Could not delete comment: ' + result.message)
+        }
+    }
 
     // Sort by (likes desc, created_at desc): comments with likes float to the
     // top in count order; everything at zero stays in newest-first order, which
@@ -235,9 +254,9 @@ export default function Comments({ recipeId, userId, isAdmin = false, onRequireA
                                 key={c.id}
                                 comment={c}
                                 isOwn={isOwn}
-                                canDelete={isOwn || isAdmin}
-                                deleteLabel={isAdmin && !isOwn ? 'Delete (admin)' : 'Delete'}
-                                onDelete={() => deleteComment(c.id)}
+                                canDelete={isOwn || canModerate}
+                                deleteLabel={canModerate && !isOwn ? 'Delete (admin)' : 'Delete'}
+                                onDelete={() => handleDelete(c.id)}
                                 canReport={!isOwn && submitReport}
                                 userId={userId}
                                 onRequireAuth={onRequireAuth}

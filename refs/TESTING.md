@@ -912,6 +912,37 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Admin AAL2 enforcement checklist (migration 027, `aal-hardening`)
+
+**Gated on migration 027 being applied.** Before it lands, every box below behaves as it did prior to this change (admin actions succeed at AAL1).
+
+Requires an admin account with a verified TOTP factor. "AAL1 session" = sign in with email + password and do **not** complete the MFA challenge. "AAL2 session" = complete the challenge from RecipeDetail's Admin moderation block or the Profile Security tab.
+
+**Destructive paths must refuse at AAL1**
+- [ ] AAL1 admin, someone else's recipe → the Admin moderation block shows the MFA challenge, not the Delete button (unchanged from Stage 16)
+- [ ] AAL1 admin, someone else's comment → **"Delete (admin)" is not offered**. Only the author's own comments show a Delete control.
+- [ ] AAL1 admin, own comment → Delete still works. Owner paths are unaffected by migration 027.
+- [ ] AAL2 admin, someone else's comment → "Delete (admin)" appears and removes the comment; refresh confirms it stayed deleted.
+
+**The silent-failure guard** (the reason `deleteComment` gained `.select('id')`)
+- [ ] Elevate to AAL2, open a recipe with another user's comment, then let the session drop back to AAL1 (sign out and back in without challenging, in a second tab) and click "Delete (admin)" from the stale render → the comment reappears and a toast reads "…your session may need re-verifying." It must **not** silently vanish and then return on refresh.
+
+**RPC-layer enforcement — bypass the UI entirely.** This is the check that proves the gate is server-side. From the browser console on an AAL1 admin session:
+- [ ] `await supabase.rpc('admin_delete_user', { target_id: '<some other user id>' })` → returns an error containing `requires a verified MFA session (aal2)`. Before migration 027 this succeeded.
+- [ ] `await supabase.from('comments').delete().eq('id','<another user's comment id>').select('id')` → returns `data: []` (policy denied, zero rows), not a deleted row.
+- [ ] Repeat both on an AAL2 session → both succeed.
+
+**Non-destructive paths must stay usable at AAL1**
+- [ ] AAL1 admin can still open `/admin/reports` and read the queue (the page's own Stage 16 MFA gate still applies to the UI; the underlying SELECT policy is unchanged)
+- [ ] AAL1 admin can still change a report's status — `"Admins can update any report"` was deliberately left at `is_admin()` only
+- [ ] AAL1 admin can still view private recipes (migration 009 visibility policies unchanged)
+
+**`bootstrap_admin()` is gone**
+- [ ] `await supabase.rpc('bootstrap_admin')` → errors with "Could not find the function" / 404. It must not exist for any caller.
+- [ ] Confirm in SQL Editor: `select proname from pg_proc where proname = 'bootstrap_admin';` returns zero rows.
+
+---
+
 ## Automated tests (Vitest)
 
 Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase, no mocks. Run the suite with:

@@ -971,6 +971,7 @@ export default function RecipeDetail({
                         recipeId={recipe.id}
                         userId={userId}
                         isAdmin={isAdmin}
+                        mfa={mfa}
                         onRequireAuth={onRequireAuth}
                         submitReport={submitReport}
                     />
