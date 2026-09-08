@@ -89,7 +89,7 @@ export function useLikes(userId) {
             return
         }
 
-        ;(async () => {
+        (async () => {
             const { data, error } = await supabase
                 .from('likes')
                 .select('recipe_id')
