@@ -445,6 +445,9 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Idempotent re-open** — opening the *same* link twice and Add-ing both times does **not** double-count (the `shared:<hash>` source replaces, matching re-send semantics)
 - [ ] **Malformed link** — a truncated/garbled `#list=…` shows a quiet "That shared link looks incomplete" toast, no banner, no bad import
 - [ ] **Overflow behavior (differs per row, deliberately)** — build a list past ~2000 encoded chars, then: **Copy list text** copies the list **without** a link and toasts "… list too long to include a link"; **Copy shareable link** copies **nothing** and toasts the error "List too long to share as a link — use Copy list text". The link row must never silently hand back plaintext.
+- [ ] **Rich hyperlink flavour** — paste either copy row into a **rich-text** target (Gmail compose, Google Docs, Slack, Notion): the URL renders as a clickable link titled **“Shopping list — N items”**, not a raw base64 string. N must match the visible item count.
+- [ ] **Plain flavour unchanged** — paste the same copy into a **plain-text** target (Notepad, SMS, the browser address bar): *Copy shareable link* still yields the bare one-line URL, and *Copy list text* still yields the header + rows + `Open & check off: <url>`. The rich flavour must never leak into a plain paste.
+- [ ] **HTML escaping** — add an ingredient whose name or note contains `&`, `<` or `"` (e.g. `salt & pepper`, note `<flaky>`), copy, and paste into a rich target: the characters render literally. Nothing should appear bold/italic/missing, which would mean markup executed.
 
 ---
 

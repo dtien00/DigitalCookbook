@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { scaleQuantity } from '../lib/scaleQuantity'
-import { copyText } from '../lib/copyText'
+import { copyRich, escapeHtml } from '../lib/copyText'
 import { recipesInList } from '../lib/shoppingListCore'
 import { encodeList, decodeList, payloadHash, MAX_SHARE_PAYLOAD } from '../lib/shareList'
 
@@ -206,6 +206,20 @@ export default function ShoppingList({
     const shareUrl = (encoded) => `${window.location.origin}/shopping-list#list=${encoded}`
     const textWithLink = (url) => `${buildPlaintext()}\nOpen & check off: ${url}`
 
+    // Uniform anchor text for every hyperlink this page hands out, so a shared
+    // link reads the same wherever it lands. Deliberately item-count only — the
+    // list contents are already in the payload (or one tap away), and a long
+    // ingredient list makes a poor link label.
+    const linkLabel = () =>
+        `Shopping list — ${items.length} item${items.length === 1 ? '' : 's'}`
+
+    // text/html flavour of a share link: an <a> whose anchor text is linkLabel()
+    // and whose href is the same URL the plain flavour carries. Rich targets
+    // (mail, Docs, Slack) render a titled link instead of a base64 wall; plain
+    // targets never see this.
+    const linkHtml = (url) =>
+        `<a href="${escapeHtml(url)}">${escapeHtml(linkLabel())}</a>`
+
     // The Share menu only renders when items.length > 0, so these handlers never
     // hit the empty-list case.
     //
@@ -223,8 +237,15 @@ export default function ShoppingList({
         // Over budget → copy the list alone rather than a truncated link.
         const withinBudget = encoded.length <= MAX_SHARE_PAYLOAD
         const payload = withinBudget ? textWithLink(shareUrl(encoded)) : buildPlaintext()
+        // Rich flavour: the same rows, with the trailing URL as a titled anchor.
+        // <br> rather than <pre> so it flows into a mail body like typed text.
+        const rowsHtml = ['Shopping list', ...items.map(formatLine)]
+            .map(escapeHtml).join('<br>')
+        const html = withinBudget
+            ? `${rowsHtml}<br>Open &amp; check off: ${linkHtml(shareUrl(encoded))}`
+            : rowsHtml
         try {
-            await copyText(payload)
+            await copyRich(html, payload)
             const noun = items.length === 1 ? 'item' : 'items'
             if (withinBudget) {
                 toast.success(`Copied ${items.length} ${noun} and a link`)
@@ -247,8 +268,11 @@ export default function ShoppingList({
             toast.error('List too long to share as a link — use Copy list text')
             return
         }
+        const url = shareUrl(encoded)
         try {
-            await copyText(shareUrl(encoded))
+            // Plain flavour stays the bare URL so an address-bar paste still
+            // works with no hand-editing; the anchor is the rich-target bonus.
+            await copyRich(linkHtml(url), url)
             toast.success('Link copied')
         } catch (error) {
             toast.error('Could not copy link: ' + error.message)
