@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { scaleQuantity } from '../lib/scaleQuantity'
-import { copyRich, escapeHtml } from '../lib/copyText'
+import { copyText, copyRich, escapeHtml } from '../lib/copyText'
 import { recipesInList } from '../lib/shoppingListCore'
 import { encodeList, decodeList, payloadHash, MAX_SHARE_PAYLOAD } from '../lib/shareList'
 
@@ -23,7 +23,10 @@ import { encodeList, decodeList, payloadHash, MAX_SHARE_PAYLOAD } from '../lib/s
 // on capable devices, native `Share via…`. Each row copies exactly what its
 // label says — "Copy list text" takes the list with the link appended, "Copy
 // shareable link" takes the bare URL so it can go straight into an address bar,
-// and `Share via…` sends list + link because a messaging recipient wants both.
+// "Copy link as markdown" takes `[title](url)` for the plain-text channels that
+// render it (Slack, Discord, GitHub, Notion), and `Share via…` sends list +
+// link because a messaging recipient wants both. The two non-markdown copies
+// also carry a `text/html` flavour so rich targets get a titled anchor.
 // The link encodes the whole list into
 // the URL hash (../lib/shareList) so a recipient opens `/shopping-list#list=…`
 // pre-populated. Arriving with such a hash shows an Add/Discard confirm banner
@@ -279,6 +282,32 @@ export default function ShoppingList({
         }
     }
 
+    // Markdown link — the one way to get a *titled* link out of a PLAIN-text
+    // channel. Slack, Discord, GitHub, Reddit and Notion render `[text](url)`
+    // on paste; everywhere else it shows literally, brackets and all, which is
+    // why this is its own row rather than the default for the link above.
+    //
+    // Deliberately plain-text only (copyText, not copyRich): someone who picks
+    // "as markdown" wants the markdown source. Attaching a text/html anchor
+    // would make rich targets silently render it instead, defeating the choice.
+    //
+    // No escaping needed — linkLabel() is generated, not user text, and the
+    // base64url alphabet contains no parens or brackets to break the syntax.
+    const handleCopyMarkdown = async () => {
+        setShareOpen(false)
+        const encoded = encodeList(items)
+        if (encoded.length > MAX_SHARE_PAYLOAD) {
+            toast.error('List too long to share as a link — use Copy list text')
+            return
+        }
+        try {
+            await copyText(`[${linkLabel()}](${shareUrl(encoded)})`)
+            toast.success('Markdown link copied')
+        } catch (error) {
+            toast.error('Could not copy link: ' + error.message)
+        }
+    }
+
     const handleWebShare = async () => {
         setShareOpen(false)
         const encoded = encodeList(items)
@@ -406,6 +435,7 @@ export default function ShoppingList({
                                         <div role="menu" className="absolute left-0 top-full mt-2 z-20 w-56 bg-paper rounded-xl shadow-lg border border-paper-shade overflow-hidden">
                                             <button type="button" role="menuitem" onClick={handleCopyText} className={menuItem}>Copy list text</button>
                                             <button type="button" role="menuitem" onClick={handleCopyLink} className={menuItem}>Copy shareable link</button>
+                                            <button type="button" role="menuitem" onClick={handleCopyMarkdown} className={menuItem}>Copy link as markdown</button>
                                             {canWebShare && (
                                                 <button type="button" role="menuitem" onClick={handleWebShare} className={menuItem}>Share via…</button>
                                             )}
