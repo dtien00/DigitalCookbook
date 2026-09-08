@@ -20,7 +20,11 @@ import { encodeList, decodeList, payloadHash, MAX_SHARE_PAYLOAD } from '../lib/s
 //
 // Share (Stage N+2a, PR #94): the Copy / Print actions collapse into a `Share ▾`
 // dropdown (the Sort-picker idiom) that also offers "Copy shareable link" and,
-// on capable devices, native `Share via…`. The link encodes the whole list into
+// on capable devices, native `Share via…`. Each row copies exactly what its
+// label says — "Copy list text" takes the list with the link appended, "Copy
+// shareable link" takes the bare URL so it can go straight into an address bar,
+// and `Share via…` sends list + link because a messaging recipient wants both.
+// The link encodes the whole list into
 // the URL hash (../lib/shareList) so a recipient opens `/shopping-list#list=…`
 // pre-populated. Arriving with such a hash shows an Add/Discard confirm banner
 // (never a silent merge); Add folds the items in under one "Shared list"
@@ -204,12 +208,29 @@ export default function ShoppingList({
 
     // The Share menu only renders when items.length > 0, so these handlers never
     // hit the empty-list case.
+    //
+    // Payload split: each menu row copies exactly what its label says.
+    //   Copy list text   → the list, with the link appended (it's ~1 line and
+    //                      always useful, so it rides along implicitly)
+    //   Copy shareable link → the bare URL, nothing else, so it can be pasted
+    //                      straight into an address bar without hand-selecting
+    //                      it out of a fifteen-line blob
+    //   Share via…       → list + link, unchanged (native sheet = messaging,
+    //                      where the readable list is the point)
     const handleCopyText = async () => {
         setShareOpen(false)
+        const encoded = encodeList(items)
+        // Over budget → copy the list alone rather than a truncated link.
+        const withinBudget = encoded.length <= MAX_SHARE_PAYLOAD
+        const payload = withinBudget ? textWithLink(shareUrl(encoded)) : buildPlaintext()
         try {
-            await copyText(buildPlaintext())
+            await copyText(payload)
             const noun = items.length === 1 ? 'item' : 'items'
-            toast.success(`Copied ${items.length} ${noun} to clipboard`)
+            if (withinBudget) {
+                toast.success(`Copied ${items.length} ${noun} and a link`)
+            } else {
+                toast.success(`Copied ${items.length} ${noun} — list too long to include a link`)
+            }
         } catch (error) {
             toast.error('Could not copy list: ' + error.message)
         }
@@ -218,19 +239,17 @@ export default function ShoppingList({
     const handleCopyLink = async () => {
         setShareOpen(false)
         const encoded = encodeList(items)
-        // Too long for a URL → degrade to copy-as-text rather than a broken link.
+        // No silent fallback to plaintext here: this row promises a link, and
+        // quietly handing back a wall of text instead is the label/behavior
+        // mismatch this split exists to remove. Say so and name the row that
+        // does work.
         if (encoded.length > MAX_SHARE_PAYLOAD) {
-            try {
-                await copyText(buildPlaintext())
-                toast('List too long to link — copied as text instead')
-            } catch (error) {
-                toast.error('Could not copy list: ' + error.message)
-            }
+            toast.error('List too long to share as a link — use Copy list text')
             return
         }
         try {
-            await copyText(textWithLink(shareUrl(encoded)))
-            toast.success('Shareable link copied')
+            await copyText(shareUrl(encoded))
+            toast.success('Link copied')
         } catch (error) {
             toast.error('Could not copy link: ' + error.message)
         }

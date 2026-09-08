@@ -436,15 +436,15 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 **Share + import (PR #94):**
 - [ ] **Share menu** — the action row shows a single `Share ▾` pill (Copy / Print collapsed into it) + a standalone **Clear all**; opening it lists **Copy list text**, **Copy shareable link**, **Print**, and (on devices with `navigator.share`, i.e. most phones) **Share via…**; outside-click and Escape close it
-- [ ] **Copy list text** — same plaintext payload as before ("Copied N items to clipboard" toast)
-- [ ] **Copy shareable link** — copies the plaintext list **plus** an `Open & check off: …/shopping-list#list=<encoded>` line; "Shareable link copied" toast. Confirm the payload is in the **hash** (`#`), not a query param
+- [ ] **Copy list text** — copies the plaintext list **with** an `Open & check off: …/shopping-list#list=<encoded>` line appended; toast "Copied N items and a link". Paste into a plain-text target and confirm the header, one `- ` row per item, and the trailing link line all survive.
+- [ ] **Copy shareable link** — copies the **bare URL and nothing else**; toast "Link copied". Paste directly into a browser address bar — it must work with no hand-editing. If the paste contains list rows, this row regressed.
 - [ ] **Share via… (mobile)** — opens the OS share sheet with the list text + link; dismissing the sheet shows no error toast
 - [ ] **Import banner (confirm gate)** — open a copied link in another browser/profile → a `role="status"` banner "A shared list has N items." with **Add to my list** / **Discard**; the list is *not* silently merged
 - [ ] **Add merges** — Add folds the shared items in under one **"Shared list"** provenance chip; an ingredient that overlaps an existing row sums (e.g. rice 2 + 1 = 3 cups); toast "Added N shared items to your list"
 - [ ] **Hash stripped** — after Add *or* Discard the `#list=…` is removed from the URL (a refresh won't re-import)
 - [ ] **Idempotent re-open** — opening the *same* link twice and Add-ing both times does **not** double-count (the `shared:<hash>` source replaces, matching re-send semantics)
 - [ ] **Malformed link** — a truncated/garbled `#list=…` shows a quiet "That shared link looks incomplete" toast, no banner, no bad import
-- [ ] **Overflow fallback** — a very long list (past ~2000 encoded chars) makes **Copy shareable link** fall back to copy-as-text with a "List too long to link — copied as text instead" toast rather than a broken URL
+- [ ] **Overflow behavior (differs per row, deliberately)** — build a list past ~2000 encoded chars, then: **Copy list text** copies the list **without** a link and toasts "… list too long to include a link"; **Copy shareable link** copies **nothing** and toasts the error "List too long to share as a link — use Copy list text". The link row must never silently hand back plaintext.
 
 ---
 
