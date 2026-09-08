@@ -16,6 +16,19 @@ dist-ssr/
 .env.*.local
 credentials.env
 
+# Private keys & certificates — no file of these types exists today; these
+# rules exist so that adding one later can't be committed by reflex.
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+
+# Local database dumps / snapshots
+*.sqlite
+*.sqlite3
+*.db
+
 # Logs
 logs/
 *.log
