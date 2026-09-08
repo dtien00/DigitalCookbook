@@ -703,6 +703,31 @@ The `ui-addons` author-only drag-reorder on RecipeDetail persists the new order 
 
 ---
 
+## AAL2 required for destructive admin actions (migration 027, `aal-hardening`)
+
+**Decision:** the five admin-override DELETE policies and the `admin_delete_user` RPC now require the caller's session to be at **AAL2** — a completed MFA challenge — in addition to `public.is_admin()`. A new `public.is_aal2()` helper reads the `aal` claim Supabase puts in the session JWT.
+
+**Why this was needed.** Stage 16 item 2 shipped admin MFA, but the gate lived entirely in React: `AdminReports.jsx` and `RecipeDetail.jsx`'s moderation block render their controls on `mfa.isAal2` (see `src/hooks/useMfa.js`). PostgREST exposes every policy and RPC directly, so an admin session at AAL1 — a fresh password login, factor enrolled but not yet challenged — could still issue the destructive calls by hand with the public anon key. The UI gate was UX; this makes it a control. Grepping `supabase_migration/` for `aal` before this change returned nothing.
+
+**AAL is a session property, not a user property.** Enrolling a TOTP factor leaves the session at `aal1` with `nextLevel: 'aal2'`; only `mfa.challenge()` + `verify()` mints a token carrying `aal2`. That distinction is already encoded client-side in `useMfa`'s `needsChallenge`.
+
+**`is_aal2()` is deliberately NOT `SECURITY DEFINER`** — unlike `is_admin()`, which reads `profiles`, it touches no table and only inspects the request's own JWT, so it needs no elevated privilege.
+
+**Two escape hatches, both intentional:**
+- `auth.jwt() IS NULL` returns true. A null JWT means the statement did not arrive through PostgREST — SQL Editor, `psql`, a migration — and those are already privileged. Failing closed there would make the migration unable to be exercised by its own author.
+- `role = service_role` returns true. service_role bypasses RLS wholesale, so making the RPC stricter than the policies behind it would be theatre.
+- The `coalesce(..., 'aal1')` on the claim is load-bearing, not cosmetic: `null <> 'aal2'` evaluates to `NULL`, not `TRUE`, so an absent claim would otherwise slip past the guard.
+
+**Scope is destructive-only.** Admin SELECT policies (migration 009 visibility, 017 report reads) and `"Admins can update any report"` (017) are unchanged. Reading the moderation queue is the routine workflow, and demanding a TOTP code to look at it is the friction that gets MFA switched off; report status is reversible and reports have no DELETE policy at all. Confidentiality exposure was judged a different risk class from destruction.
+
+**Owner paths are untouched.** RLS OR's permissive policies for the same action, so tightening the admin-override DELETE policies leaves "users can delete their own content" working exactly as before — only the delete-someone-else's branch now demands AAL2.
+
+**Client consequence — silent-failure trap.** An RLS-denied DELETE returns success with zero rows, not an error. `useComments.deleteComment` previously checked only `error`, so an AAL1 admin would have seen the comment vanish optimistically while the row survived, reappearing on refresh. The delete now appends `.select('id')` and treats an empty result as a denial (rollback plus a toast), and `Comments.jsx` gates the admin-override affordance on `mfa.isAal2` so the button isn't offered when the database will refuse it.
+
+**`bootstrap_admin()` dropped.** Migration 027 also records the drop performed by hand on 2026-09-08. It was `SECURITY DEFINER`, granted to `authenticated`, and gated only on an email allowlist still holding the literal `admin@example.com` placeholder that migrations 008 and 010 both ship. Its sole purpose was bypassing the `profiles_prevent_self_admin_grant` trigger, making it the one path from `authenticated` to `is_admin = TRUE`; nothing in `src/` ever called it. The drop is restated in the migration so a fresh clone replaying 008 and 010 in order does not recreate the hole. Granting admin is now a manual `UPDATE` from the SQL Editor, gated on dashboard access rather than on an email string.
+
+---
+
 ## Future considerations (not yet decided)
 
 These come up repeatedly in roadmap planning. Capturing here so the decision is conscious when it happens:
