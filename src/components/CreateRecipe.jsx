@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
-import { parseQuantity, quantityToDisplay } from '../lib/parseQuantity'
-import { parseDurationToMs, formatMs } from '../lib/parseDuration'
+import { parseQuantity, quantityToDisplay, appendFraction, FRACTION_GLYPHS } from '../lib/parseQuantity'
+import { parseDurationToMs, formatMs, previewDuration } from '../lib/parseDuration'
 import { ingredientsToRows, rowsToIngredients, stripLeadingEmptySection } from '../lib/ingredientSections'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
 import { resizeImage } from '../lib/resizeImage'
-import UnitCombobox from './UnitCombobox'
+import UnitPickerSheet from './UnitPickerSheet'
+import StepDurationSheet from './StepDurationSheet'
+import { useIsPhone } from '../hooks/useIsPhone'
+import { isCommitEnter, isComposingKeyEvent } from '../lib/imeComposition'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
 
@@ -59,6 +62,18 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [rows, setRows] = useState([emptySectionRow(), emptyIngredientRow()])
     // Active column order for the ingredient triplet (see LAYOUT_PRESETS).
     const [ingredientLayout, setIngredientLayout] = useState(LAYOUT_PRESETS[0])
+    // Phone width swaps the unit combobox for a tap-first sheet and reveals the
+    // Qty fraction chips; see src/hooks/useIsPhone.js for why this is a JS
+    // media query rather than CSS visibility.
+    const isPhone = useIsPhone()
+    // Row index whose unit sheet is open (null = closed). One sheet at a time.
+    const [unitSheetRow, setUnitSheetRow] = useState(null)
+    // Step index whose timer sheet is open (null = closed).
+    const [durationSheetStep, setDurationSheetStep] = useState(null)
+    // Row index whose Qty field has focus, so its fraction chips show. Cleared
+    // on a delay so a chip tap lands before the row unmounts them.
+    const [qtyFocusRow, setQtyFocusRow] = useState(null)
+    const qtyBlurTimer = useRef(null)
     // Map of `${rowIndex}:${field}` -> input element, for keyboard focus moves.
     const inputRefs = useRef({})
     // Field key to focus on the next render (e.g. after Enter adds a new row).
@@ -289,7 +304,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // combobox and routes its Enter through onCommit instead (so a highlighted
     // suggestion gets selected first). preventDefault stops the form submitting.
     const handleIngredientKeyDown = (index, field, e) => {
-        if (e.key !== 'Enter') return
+        // isCommitEnter, not `e.key === 'Enter'`: on a phone the Next key is
+        // also the key an IME uses to accept what it is composing. Stealing
+        // that one and moving focus mid-composition is what filled the Unit
+        // field backwards ("noopselbAT"); see src/lib/imeComposition.js.
+        if (!isCommitEnter(e)) return
         e.preventDefault()
         commitIngredientField(index, field)
     }
@@ -299,7 +318,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // follows, in which case focus just moves there. Never advances into
     // another section's name input.
     const handleSectionKeyDown = (index, e) => {
-        if (e.key !== 'Enter') return
+        if (!isCommitEnter(e)) return
         e.preventDefault()
         if (index === rows.length - 1) addIngredient()
         else if (rows[index + 1].type === 'section') insertIngredientAt(index + 1)
@@ -324,7 +343,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // within an instruction, so unlike the single-line ingredient inputs this
     // never repurposes the bare key.
     const handleStepKeyDown = (index, e) => {
-        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
+        if (!isCommitEnter(e) || !(e.metaKey || e.ctrlKey)) return
         e.preventDefault()
         if (index === steps.length - 1) addStep()
         else focusStep(index + 1)
@@ -374,6 +393,70 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const handleRowFieldChange = (index, field, value) => {
         setRows(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
     }
+
+    // --- phone-only ingredient affordances ---------------------------------
+
+    // Qty fraction chips follow focus. The blur is deferred because tapping a
+    // chip blurs the input first — unmounting the chips synchronously would
+    // remove the button out from under the tap.
+    const handleQtyFocus = (index) => {
+        if (qtyBlurTimer.current) clearTimeout(qtyBlurTimer.current)
+        setQtyFocusRow(index)
+    }
+
+    const handleQtyBlur = () => {
+        qtyBlurTimer.current = setTimeout(() => setQtyFocusRow(null), 150)
+    }
+
+    // Tap a fraction glyph: apply it to that row's Qty and keep focus in the
+    // field so the author can carry on typing (and the chips stay up).
+    const applyFraction = (index, glyph) => {
+        if (qtyBlurTimer.current) clearTimeout(qtyBlurTimer.current)
+        setRows(prev => prev.map((r, i) => (
+            i === index ? { ...r, quantity: appendFraction(r.quantity, glyph) } : r
+        )))
+        inputRefs.current[`${index}:quantity`]?.focus()
+    }
+
+    // Commit a unit chosen from the sheet, close it, and carry on down the row
+    // exactly as confirming the old combobox did — so Enter-through-the-row
+    // fast entry survives the switch to a modal.
+    const handleUnitSheetSelect = (index, unit) => {
+        handleRowFieldChange(index, 'unit', unit)
+        setUnitSheetRow(null)
+        commitIngredientField(index, 'unit')
+    }
+
+    // Dismissing without choosing must not advance — put focus back on the
+    // trigger so the keyboard user is where they left off.
+    const closeUnitSheet = (index) => {
+        setUnitSheetRow(null)
+        inputRefs.current[`${index}:unit`]?.focus()
+    }
+
+    // The trigger is a button, so Space/Enter already activate it. ArrowDown
+    // opens too (the combobox idiom this replaced), and the IME guard keeps a
+    // composing Enter from opening the sheet mid-word.
+    const handleUnitTriggerKeyDown = (index, e) => {
+        if (isComposingKeyEvent(e)) return
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setUnitSheetRow(index)
+        }
+    }
+
+    // Commit a duration chosen on the dial (or typed in the sheet) back into the
+    // step's raw string, then close. The sheet hands us an already-formatted
+    // clock string, so the inline field and the sheet always agree.
+    const handleDurationCommit = (index, durationInput) => {
+        handleStepDurationChange(index, durationInput)
+        setDurationSheetStep(null)
+    }
+
+    // Drop the pending chip-hide timer if the editor unmounts mid-entry.
+    useEffect(() => () => {
+        if (qtyBlurTimer.current) clearTimeout(qtyBlurTimer.current)
+    }, [])
 
     const handleStepChange = (index, value) => {
         const newSteps = [...steps]
@@ -888,14 +971,19 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                     <section className="form-section">
                         <div className="form-section-head">
                             <h3>Ingredients</h3>
-                            <button
-                                type="button"
-                                onClick={cycleLayout}
-                                className="column-layout-toggle"
-                                title="Change the column order of each ingredient row"
-                            >
-                                ⇄ {ingredientLayout.map(f => FIELD_LABELS[f]).join(' · ')}
-                            </button>
+                            {/* The three presets assume one line; the phone layout
+                                stacks Name over Qty+Unit, so the toggle has nothing
+                                meaningful to cycle there. */}
+                            {!isPhone && (
+                                <button
+                                    type="button"
+                                    onClick={cycleLayout}
+                                    className="column-layout-toggle"
+                                    title="Change the column order of each ingredient row"
+                                >
+                                    ⇄ {ingredientLayout.map(f => FIELD_LABELS[f]).join(' · ')}
+                                </button>
+                            )}
                         </div>
                         <div ref={rowSort.listRef}>
                             {rows.map((row, index) => {
@@ -948,15 +1036,25 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                             {grip}
                                             {ingredientLayout.map(field => {
                                                 if (field === 'unit') {
+                                                    // One control at every width — the sheet replaced
+                                                    // the old <UnitCombobox> on desktop too, so
+                                                    // authoring a recipe is the same act on a phone
+                                                    // and a laptop. Enter opens it, matching the
+                                                    // combobox's old Enter-to-open-the-list.
                                                     return (
-                                                        <UnitCombobox
+                                                        <button
                                                             key="unit"
-                                                            value={row.unit}
-                                                            placeholder="Unit (e.g. cups)"
-                                                            inputRef={el => { inputRefs.current[`${index}:unit`] = el }}
-                                                            onChange={v => handleRowFieldChange(index, 'unit', v)}
-                                                            onCommit={() => commitIngredientField(index, 'unit')}
-                                                        />
+                                                            type="button"
+                                                            ref={el => { inputRefs.current[`${index}:unit`] = el }}
+                                                            onClick={() => setUnitSheetRow(index)}
+                                                            onKeyDown={e => handleUnitTriggerKeyDown(index, e)}
+                                                            className={`unit-trigger${row.unit ? '' : ' is-empty'}`}
+                                                            aria-haspopup="dialog"
+                                                            aria-expanded={unitSheetRow === index}
+                                                        >
+                                                            <span className="unit-trigger-label">{row.unit || 'Unit'}</span>
+                                                            <span aria-hidden="true">▾</span>
+                                                        </button>
                                                     )
                                                 }
                                                 const isQty = field === 'quantity'
@@ -964,9 +1062,25 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                                     <input
                                                         key={field}
                                                         className={isQty ? 'ingredient-qty' : undefined}
-                                                        placeholder={isQty ? 'Qty (e.g. 1 1/2)' : 'Name'}
+                                                        // On a phone the long hint is what blew the
+                                                        // row past the viewport: `min-width: auto`
+                                                        // made its 199px min-content width beat the
+                                                        // 120px flex basis. The fraction chips below
+                                                        // teach the same thing by example.
+                                                        placeholder={isQty ? (isPhone ? 'Qty' : 'Qty (e.g. 1 1/2)') : 'Name'}
                                                         type="text"
-                                                        inputMode={isQty ? 'text' : undefined}
+                                                        // decimal gives phones a number pad instead
+                                                        // of QWERTY; fractions come from the chips,
+                                                        // so nothing is lost. Desktop keeps text.
+                                                        inputMode={isQty ? (isPhone ? 'decimal' : 'text') : undefined}
+                                                        // Qty is "1 1/2"-style free text, never a
+                                                        // sentence, so auto-capitalise/auto-correct
+                                                        // only corrupt it. Names stay capitalisable.
+                                                        autoCapitalize={isQty ? 'none' : undefined}
+                                                        autoCorrect={isQty ? 'off' : undefined}
+                                                        enterKeyHint="next"
+                                                        onFocus={isQty && isPhone ? () => handleQtyFocus(index) : undefined}
+                                                        onBlur={isQty && isPhone ? handleQtyBlur : undefined}
                                                         value={isQty ? row.quantity : row.name}
                                                         ref={el => { inputRefs.current[`${index}:${field}`] = el }}
                                                         onChange={e => handleRowFieldChange(index, field, e.target.value)}
@@ -986,6 +1100,28 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                                 </button>
                                             )}
                                         </div>
+                                        {/* Phone-only fraction chips: the Qty field runs a
+                                            number pad here, so these are how "1 1/2" gets
+                                            entered. parseQuantity already reads "1½". */}
+                                        {isPhone && qtyFocusRow === index && (
+                                            <div className="qty-fractions" role="group" aria-label="Insert a fraction">
+                                                {FRACTION_GLYPHS.map(glyph => (
+                                                    <button
+                                                        key={glyph}
+                                                        type="button"
+                                                        // onMouseDown/onTouchStart preventDefault keeps
+                                                        // focus in the Qty input so the keyboard and the
+                                                        // chips both stay up across a tap.
+                                                        onMouseDown={e => e.preventDefault()}
+                                                        onClick={() => applyFraction(index, glyph)}
+                                                        className="qty-fraction"
+                                                        aria-label={`Add ${glyph}`}
+                                                    >
+                                                        {glyph}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         <input
                                             placeholder="Notes (optional — e.g. or any neutral oil)"
                                             value={row.notes || ''}
@@ -1061,24 +1197,43 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     </p>
                                 </div>
                                 <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                    <label htmlFor={`step-duration-${index}`} className="text-xs text-gray-600 font-medium whitespace-nowrap inline-flex items-center gap-1">
-                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    {/* The clock paradigm from cooking mode, reused for
+                                        authoring — drag a hand instead of typing. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setDurationSheetStep(index)}
+                                        className="step-duration-dial"
+                                        aria-haspopup="dialog"
+                                        aria-expanded={durationSheetStep === index}
+                                        title="Set the timer on a clock dial"
+                                    >
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                             <circle cx="12" cy="13" r="8" />
                                             <path d="M12 9v4l2 2" />
                                             <path d="M9 2h6" />
                                         </svg>
-                                        Timer
-                                    </label>
+                                        Dial
+                                    </button>
                                     <input
                                         id={`step-duration-${index}`}
                                         type="text"
-                                        inputMode="numeric"
+                                        // text, NOT numeric. A numeric pad has no ":" key, so
+                                        // on a phone the placeholder was asking for a format
+                                        // the keyboard could not produce. The digits and the
+                                        // colon share one layer on both iOS and Gboard.
+                                        inputMode="text"
                                         value={step.durationInput}
                                         onChange={e => handleStepDurationChange(index, e.target.value)}
-                                        placeholder="e.g. 10, 5:30, or 2:00:00 (HH:MM:SS)"
+                                        placeholder={isPhone ? '10 or 5:30' : 'e.g. 10, 5:30, or 2:00:00 (HH:MM:SS)'}
                                         className="w-32 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200"
                                     />
-                                    <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
+                                    {/* Echo what a bare number means, which is the one
+                                        genuinely surprising part of the format. */}
+                                    {previewDuration(step.durationInput) && previewDuration(step.durationInput) !== step.durationInput.trim() ? (
+                                        <span className="text-xs text-gray-500 italic">= {previewDuration(step.durationInput)}</span>
+                                    ) : (
+                                        <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1100,6 +1255,25 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             </div>
             {showImport && (
                 <ImportRecipeModal onClose={() => setShowImport(false)} onApply={applyImport} onApplyBatch={startBatch} />
+            )}
+            {/* One sheet for the whole editor, keyed to the row that opened it —
+                mounted outside the row map so it overlays the form rather than
+                being clipped inside a row. */}
+            {durationSheetStep !== null && steps[durationSheetStep] && (
+                <StepDurationSheet
+                    value={steps[durationSheetStep].durationInput || ''}
+                    onCommit={v => handleDurationCommit(durationSheetStep, v)}
+                    onClose={() => setDurationSheetStep(null)}
+                    autoFocusType={!isPhone}
+                />
+            )}
+            {unitSheetRow !== null && rows[unitSheetRow] && (
+                <UnitPickerSheet
+                    value={rows[unitSheetRow].unit || ''}
+                    onSelect={unit => handleUnitSheetSelect(unitSheetRow, unit)}
+                    onClose={() => closeUnitSheet(unitSheetRow)}
+                    autoFocusFilter={!isPhone}
+                />
             )}
         </div>
     )

@@ -1085,48 +1085,146 @@ html[data-backdrop="digital"] .paper-grain {
   color: #b06452;
 }
 
-/* Unit autocomplete — combobox wrapper hosts the input + suggestion list. */
-.unit-combobox {
-  position: relative;
+/* Unit trigger — the button that opens the unit sheet. Renders at every width
+   (it replaced the old combobox on desktop too, so the control is the same on a
+   phone and a laptop). Reads as an input at rest so the row still scans as
+   three fields, with a chevron telegraphing that it opens something. Height is
+   left to the row's stretch on desktop, and pinned to 44px on phones below. */
+.unit-trigger {
   flex: 1;
-}
-
-.unit-combobox input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #e8dcd2;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-.unit-suggestions {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  max-height: 220px;
-  overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  color: #1e1e24;
   background: #fbf6f1;
   border: 1px solid #e8dcd2;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(30, 30, 36, 0.12);
-}
-
-.unit-suggestion {
-  padding: 7px 10px;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  color: #1e1e24;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.unit-suggestion.is-highlighted {
-  background: #b06452;
-  color: #fbf6f1;
+/* Empty reads as a placeholder, matching the rose-toned placeholder voice. */
+.unit-trigger.is-empty .unit-trigger-label {
+  color: #a2666f;
+  font-style: italic;
+}
+
+.unit-trigger-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fraction chips under the Qty field (phone). The Qty input runs a number pad
+   there, so these are how "1 1/2" is entered at all. */
+.qty-fractions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.qty-fraction {
+  flex: 1;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.05rem;
+  color: #1e1e24;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.qty-fraction:hover,
+.qty-fraction:active {
+  background: #ede0c4;
+  border-color: #b06452;
+}
+
+/* ---- Phone ingredient rows -------------------------------------------------
+   The row had no breakpoint at all: .form-row is a nowrap flex, so at 375px it
+   needed 518px inside a 351px container and pushed Unit (squeezed to 18px) and
+   the remove button clean off-canvas. Below 640px it becomes two lines —
+   Name across the top, Qty + Unit beneath — which also gives the unit control
+   room to be tapped.
+
+   `min-width: 0` is the other half of the fix: flex items default to
+   `min-width: auto`, so the Qty placeholder's min-content width (199px for
+   "Qty (e.g. 1 1/2)") silently beat its own `flex: 0 0 120px` basis. */
+@media (max-width: 640px) {
+  .form-row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-row input,
+  .form-row .unit-trigger {
+    min-width: 0;
+  }
+
+  /* Line 1: grip + Name + remove. Name takes the slack. */
+  .form-row .row-grip {
+    order: 1;
+    flex: 0 0 auto;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .form-row > input:not(.ingredient-qty) {
+    order: 2;
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  .form-row .ingredient-remove {
+    order: 3;
+    flex: 0 0 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  /* Line 2: Qty then Unit. flex-basis 100% on Qty's line start forces the wrap
+     regardless of which column-order preset was last chosen on desktop. */
+  .form-row input.ingredient-qty {
+    order: 4;
+    flex: 0 0 96px;
+    min-height: 44px;
+  }
+
+  .form-row .unit-trigger {
+    order: 5;
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
+
+/* "Dial" trigger beside a step's timer field — opens the clock-dial sheet.
+   Sized to the 44px tap-target floor like the rest of the editor's controls. */
+.step-duration-dial {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  min-height: 44px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b5d52;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.step-duration-dial:hover {
+  background: #fbf6f1;
+  border-color: #b06452;
+  color: #b06452;
 }
 
 /* Add-ingredient button + the keyboard-affordance hint sit on one line. */

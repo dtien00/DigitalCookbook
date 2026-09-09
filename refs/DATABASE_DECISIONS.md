@@ -701,6 +701,20 @@ The `ui-addons` author-only drag-reorder on RecipeDetail persists the new order 
 
 **No RLS changes.** The original *"Authors can manage ingredients/steps"* policies (migration 001, `FOR ALL USING (… auth.uid() = author_id)`) already cover UPDATE, so only the recipe's author can write the new order. Non-authors never see the drag handles client-side, and the policy is the server-side backstop.
 
+## Repairing IME-reversed `ingredients.unit` values (migration 028)
+
+A mobile IME bug (see the Ad-hoc polish entry in [ROADMAP.md](./ROADMAP.md), fixed in [src/lib/imeComposition.js](../src/lib/imeComposition.js)) wrote unit strings into the database backwards — `TBsp` stored as `psBT`, `TAblespoon` as `noopselbAT`. Thirteen rows across two recipes were affected. `supabase_migration_028_repair_reversed_units.sql` rewrites them.
+
+**Data repair, not a schema change.** 028 is the first migration in this project that exists purely to fix rows. It still lives in `supabase_migration/` and runs through the same Dashboard → SQL Editor path as every other one, so the numbered sequence stays the single record of what has been applied to the cloud project.
+
+**The column stays free text — deliberately.** `ingredients.unit` has never validated against `MEASUREMENT_UNITS`; the combobox offers the canonical list but accepts anything, and authors use that (`pouch`, `thumb`, `large spoons`, `Bottle` all exist in live data). So the migration does **not** normalise the column. It rewrites an explicit allowlist of seven exact damaged strings, each of which is the reverse of a canonical unit *and* is not itself a word. Everything else is left untouched.
+
+**Why not a CHECK constraint or an enum.** Both would reject the legitimate free text above and would have to be maintained in lockstep with the client list — a schema change every time a unit is added. The client-side `repairReversedUnit()` in [measurementUnits.js](../src/lib/measurementUnits.js) mirrors the migration's mapping and is unit-tested, which is where the "is this a known unit" knowledge belongs; the database keeps storing what the author typed.
+
+**Palindrome guard.** The repair rule is "not a known unit, but its reverse is". The order matters: `g`, `l` and `c` are their own reverse, so testing the known-unit case *first* is what stops them rewriting themselves. Covered by a spec in `measurementUnits.test.js`.
+
+**Idempotent.** A second run matches nothing (the damaged strings no longer exist) and updates 0 rows.
+
 ---
 
 ## Future considerations (not yet decided)
