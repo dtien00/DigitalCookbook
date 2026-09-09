@@ -117,7 +117,7 @@ export default function DietaryFilterModal({
                                         type="button"
                                         aria-pressed={on}
                                         onClick={() => onToggleAllergen(a.value)}
-                                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                                        className={`inline-flex items-center min-h-[44px] px-4 py-2.5 sm:min-h-0 sm:px-3 sm:py-1.5 rounded-full text-sm font-medium transition-colors ${
                                             on
                                                 ? 'bg-rose-dark text-paper'
                                                 : 'bg-paper-shade text-ink hover:bg-tan/40'
@@ -146,7 +146,7 @@ export default function DietaryFilterModal({
                                         type="button"
                                         aria-pressed={on}
                                         onClick={() => onToggleDietary(d.value)}
-                                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                                        className={`inline-flex items-center min-h-[44px] px-4 py-2.5 sm:min-h-0 sm:px-3 sm:py-1.5 rounded-full text-sm font-medium transition-colors ${
                                             on
                                                 ? 'bg-rust text-paper'
                                                 : 'bg-paper-shade text-ink hover:bg-tan/40'

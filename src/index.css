@@ -2402,3 +2402,33 @@ textarea {
 body.cooking-active .timer-widget {
   bottom: 5.75rem;
 }
+
+/* Home tag-chip strip (phone only — the class is applied from App.jsx solely
+   while the chip row is collapsed, and `sm:overflow-visible` neutralises the
+   sideways scroll from 640px up).
+
+   Collapsing the chip row into one sideways-scrolling line is what keeps the
+   recipe grid on the first screen: twelve chips wrapped across a 335px column
+   run four rows deep. The scrollbar is hidden because the strip is a single
+   chip tall — a 15px gutter under it reads as a stray layout seam rather than
+   an affordance, and phones draw overlay scrollbars anyway. The block padding
+   is headroom for focus rings: `overflow-x: auto` computes `overflow-y` to
+   `auto` as well, so a ring on the top or bottom chip edge would otherwise be
+   clipped. */
+.tag-chip-strip {
+  padding-block: 3px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  /* Chips are their own scroll-snap stops so a flick lands on a whole chip
+     instead of halfway through a word. */
+  scroll-snap-type: x proximity;
+}
+
+.tag-chip-strip > * {
+  scroll-snap-align: start;
+}
+
+.tag-chip-strip::-webkit-scrollbar {
+  display: none;
+}

@@ -1429,17 +1429,39 @@ function HomeView({
                 )}
             </div>
 
-            {/* Filter row — tag chips on the left, fridge basket trigger on
-                the right. Always renders on the home view so the fridge
-                button has a stable home; the chip group inside is hidden
-                when no tags exist on loaded recipes.
+            {/* Filter row — tag chips and the Fridge / Filters / List
+                triggers. Always renders on the home view so the triggers
+                have a stable home; the chip group inside is hidden when no
+                tags exist on loaded recipes.
 
-                Chips and fridge button live in sibling flex cells so the
-                button stays anchored right even when chips wrap to multiple
-                lines (justify-between on the row + chip group flex-grows). */}
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+                sm+: one line. Chips grow into the space on the left
+                (flex-1), the trigger cluster stays anchored right, and
+                chips wrap under themselves without moving the buttons.
+
+                Phone: the two cells stack, triggers on their own full-width
+                row. That is a correctness fix, not a preference — sharing a
+                single flex line, the three triggers claimed ~300px of a
+                335px row and crushed the flex-1 min-w-0 chip cell to ~19px,
+                so every chip overflowed its cell and stacked into one
+                column running underneath the buttons.
+
+                Collapsed chips on phone are a one-line horizontal scroll
+                strip instead of a wrap: twelve wrapped chips cost four
+                stacked rows and pushed the recipe grid off the first
+                screen. Expanded, they wrap as on desktop but cap at 45vh
+                with an inner scroll so the triggers below stay reachable
+                without a long thumb-scroll past sixty-odd chips. */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-6">
                 {availableTags.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 items-center flex-1 min-w-0" role="group" aria-label="Filter by tag">
+                    <div
+                        className={`flex gap-2 items-center w-full sm:flex-1 sm:min-w-0 sm:flex-wrap sm:max-h-none sm:overflow-visible ${
+                            tagsExpanded
+                                ? 'flex-wrap max-h-[45vh] overflow-y-auto'
+                                : 'flex-nowrap overflow-x-auto tag-chip-strip'
+                        }`}
+                        role="group"
+                        aria-label="Filter by tag"
+                    >
                         {visibleTags.map(tag => {
                             const isActive = activeTags.has(tag.toLowerCase())
                             return (
@@ -1448,7 +1470,7 @@ function HomeView({
                                     type="button"
                                     onClick={() => toggleTagFilter(tag)}
                                     aria-pressed={isActive}
-                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                                    className={`flex-shrink-0 inline-flex items-center whitespace-nowrap min-h-[40px] px-3.5 py-2 text-sm sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs font-medium rounded-full transition-colors ${
                                         isActive
                                             ? 'bg-rust text-paper hover:bg-rust-dark'
                                             : 'bg-tan-soft text-ink hover:bg-tan/40'
@@ -1463,7 +1485,7 @@ function HomeView({
                                 type="button"
                                 onClick={() => setTagsExpanded(e => !e)}
                                 aria-expanded={tagsExpanded}
-                                className="px-3 py-1 text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                                className="flex-shrink-0 inline-flex items-center whitespace-nowrap min-h-[40px] px-3.5 py-2 text-sm sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs font-medium rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
                             >
                                 {tagsExpanded
                                     ? 'Show less'
@@ -1472,90 +1494,96 @@ function HomeView({
                         )}
                     </div>
                 ) : (
-                    <div className="flex-1 min-w-0" />
+                    <div className="hidden sm:block sm:flex-1 sm:min-w-0" />
                 )}
-                {/* Fridge basket trigger. Count badge appears when the basket
-                    has items — quiet rust dot in the top-right corner. The
-                    ref is forwarded from App so the modal can restore focus
-                    here on close. */}
-                <button
-                    ref={basketTriggerRef}
-                    type="button"
-                    onClick={onOpenBasket}
-                    aria-label={basket.length === 0
-                        ? 'Open fridge basket'
-                        : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
-                    aria-haspopup="dialog"
-                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
-                >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="5" y="3" width="14" height="18" rx="2" />
-                        <line x1="5" y1="11" x2="19" y2="11" />
-                        <line x1="9" y1="7" x2="9" y2="8" />
-                        <line x1="9" y1="15" x2="9" y2="16" />
-                    </svg>
-                    <span>Fridge</span>
-                    {basket.length > 0 && (
-                        <span
-                            aria-hidden="true"
-                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
-                        >
-                            {basket.length}
-                        </span>
-                    )}
-                </button>
-                {/* Dietary filter trigger (Stage N). Sits beside Fridge — both
-                    narrow the grid. Funnel icon + rust count badge for the
-                    number of active exclusions/requirements. */}
-                <button
-                    ref={filterTriggerRef}
-                    type="button"
-                    onClick={onOpenFilter}
-                    aria-label={dietaryFilterCount === 0
-                        ? 'Open dietary filters'
-                        : `Open dietary filters (${dietaryFilterCount} active)`}
-                    aria-haspopup="dialog"
-                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
-                >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                    </svg>
-                    <span>Filters</span>
-                    {dietaryFilterCount > 0 && (
-                        <span
-                            aria-hidden="true"
-                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
-                        >
-                            {dietaryFilterCount}
-                        </span>
-                    )}
-                </button>
-                {/* Shopping list trigger — mirrors the Fridge button. Navigates
-                    to the cumulative /shopping-list page; rust count badge when
-                    the list has items. Visible to everyone (no-auth feature). */}
-                <button
-                    type="button"
-                    onClick={() => navigate('/shopping-list')}
-                    aria-label={shoppingCount > 0
-                        ? `Open shopping list (${shoppingCount} item${shoppingCount === 1 ? '' : 's'})`
-                        : 'Open shopping list'}
-                    className="relative flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
-                >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="9" cy="21" r="1" />
-                        <circle cx="20" cy="21" r="1" />
-                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-                    </svg>
-                    <span>List</span>
-                    {shoppingCount > 0 && (
-                        <span
-                            aria-hidden="true"
-                            className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
-                        >
-                            {shoppingCount}
-                        </span>
-                    )}
-                </button>
+                {/* Trigger cluster — Fridge / Filters / List all narrow the
+                    grid, so they cluster. On phone they split their own row
+                    into equal thirds; min-w-[96px] lets the row wrap to two
+                    lines below ~340px rather than clipping a label. */}
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3 sm:flex-shrink-0">
+                    {/* Fridge basket trigger. Count badge appears when the basket
+                        has items — quiet rust dot in the top-right corner. The
+                        ref is forwarded from App so the modal can restore focus
+                        here on close. */}
+                    <button
+                        ref={basketTriggerRef}
+                        type="button"
+                        onClick={onOpenBasket}
+                        aria-label={basket.length === 0
+                            ? 'Open fridge basket'
+                            : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
+                        aria-haspopup="dialog"
+                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="5" y="3" width="14" height="18" rx="2" />
+                            <line x1="5" y1="11" x2="19" y2="11" />
+                            <line x1="9" y1="7" x2="9" y2="8" />
+                            <line x1="9" y1="15" x2="9" y2="16" />
+                        </svg>
+                        <span>Fridge</span>
+                        {basket.length > 0 && (
+                            <span
+                                aria-hidden="true"
+                                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                            >
+                                {basket.length}
+                            </span>
+                        )}
+                    </button>
+                    {/* Dietary filter trigger (Stage N). Sits beside Fridge — both
+                        narrow the grid. Funnel icon + rust count badge for the
+                        number of active exclusions/requirements. */}
+                    <button
+                        ref={filterTriggerRef}
+                        type="button"
+                        onClick={onOpenFilter}
+                        aria-label={dietaryFilterCount === 0
+                            ? 'Open dietary filters'
+                            : `Open dietary filters (${dietaryFilterCount} active)`}
+                        aria-haspopup="dialog"
+                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                        </svg>
+                        <span>Filters</span>
+                        {dietaryFilterCount > 0 && (
+                            <span
+                                aria-hidden="true"
+                                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                            >
+                                {dietaryFilterCount}
+                            </span>
+                        )}
+                    </button>
+                    {/* Shopping list trigger — mirrors the Fridge button. Navigates
+                        to the cumulative /shopping-list page; rust count badge when
+                        the list has items. Visible to everyone (no-auth feature). */}
+                    <button
+                        type="button"
+                        onClick={() => navigate('/shopping-list')}
+                        aria-label={shoppingCount > 0
+                            ? `Open shopping list (${shoppingCount} item${shoppingCount === 1 ? '' : 's'})`
+                            : 'Open shopping list'}
+                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="9" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                        </svg>
+                        <span>List</span>
+                        {shoppingCount > 0 && (
+                            <span
+                                aria-hidden="true"
+                                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-rust text-paper text-xs font-semibold flex items-center justify-center"
+                            >
+                                {shoppingCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* Stage N item 4 — persistent, non-silent active-filter indicator.
