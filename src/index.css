@@ -1203,6 +1203,30 @@ html[data-backdrop="digital"] .paper-grain {
   }
 }
 
+/* "Dial" trigger beside a step's timer field — opens the clock-dial sheet.
+   Sized to the 44px tap-target floor like the rest of the editor's controls. */
+.step-duration-dial {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  min-height: 44px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b5d52;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.step-duration-dial:hover {
+  background: #fbf6f1;
+  border-color: #b06452;
+  color: #b06452;
+}
+
 /* Add-ingredient button + the keyboard-affordance hint sit on one line. */
 .ingredient-tools {
   display: flex;

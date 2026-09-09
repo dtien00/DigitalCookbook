@@ -87,3 +87,16 @@ export function stepHandValue(value, hand, direction) {
     const next = value + direction * hand.snap
     return Math.min(hand.max, Math.max(0, next))
 }
+
+// Can the dial show `ms` faithfully, or would seeding it lose information?
+//
+// This is the guard behind <StepDurationSheet> opening on Type rather than
+// Dial. msToHands pins anything at/above 12h to 11:59:55, so seeding the dial
+// with a longer saved duration and then switching back to Type would write that
+// clamp over the author's real value -- a silent truncation of saved data.
+// Zero is "cannot represent" too: an unparseable-but-non-empty entry seeds the
+// dial at zero, which would discard what they typed just as quietly.
+export function dialCanRepresent(ms) {
+    const n = Number(ms)
+    return Number.isFinite(n) && n > 0 && n <= DIAL_MAX_MS
+}

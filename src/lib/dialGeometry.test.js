@@ -1,15 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-    HANDS,
-    DIAL_MAX_MS,
-    clockAngleToXY,
-    xyToClockAngle,
-    valueToClockAngle,
-    clockAngleToValue,
-    handsToMs,
-    msToHands,
-    stepHandValue,
-} from './dialGeometry'
+import { HANDS, DIAL_MAX_MS, clockAngleToXY, xyToClockAngle, valueToClockAngle, clockAngleToValue, handsToMs, msToHands, stepHandValue, dialCanRepresent } from './dialGeometry'
 
 // Pins the angle<->value arithmetic behind <TimerDial>. React-free by design, so
 // the whole surface runs on plain numbers — angles in clock degrees (0 at 12
@@ -134,5 +124,32 @@ describe('stepHandValue', () => {
 describe('DIAL_MAX_MS', () => {
     it('is exactly 11:59:55', () => {
         expect(DIAL_MAX_MS).toBe((11 * 3600 + 59 * 60 + 55) * 1000)
+    })
+})
+
+
+// Regression: <StepDurationSheet> opens on Type instead of Dial whenever the
+// dial cannot represent what the step already holds. Without this, opening the
+// sheet on a step longer than the dial's ceiling and switching to Type wrote
+// the 11:59:55 clamp over the author's real value -- "20:00:00" silently became
+// "11:59:55" without a single edit.
+describe('dialCanRepresent', () => {
+    it('accepts durations the dial can actually show', () => {
+        expect(dialCanRepresent(5 * 60 * 1000)).toBe(true)          // 5:00
+        expect(dialCanRepresent((5 * 3600 + 30) * 1000)).toBe(true) // 5:00:30
+        expect(dialCanRepresent(DIAL_MAX_MS)).toBe(true)            // exactly 11:59:55
+    })
+    it('rejects anything past the ceiling, where msToHands would clamp', () => {
+        expect(dialCanRepresent(DIAL_MAX_MS + 1000)).toBe(false)
+        expect(dialCanRepresent(20 * 3600 * 1000)).toBe(false)      // the 20:00:00 case
+        expect(dialCanRepresent(12 * 3600 * 1000)).toBe(false)
+    })
+    it('rejects zero and null-ish, which would seed the dial empty', () => {
+        for (const bad of [0, null, undefined, NaN, '']) {
+            expect(dialCanRepresent(bad)).toBe(false)
+        }
+    })
+    it('rejects negatives', () => {
+        expect(dialCanRepresent(-1000)).toBe(false)
     })
 })

@@ -739,6 +739,27 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Step timer checklist (inline field + clock dial)
+
+> Verifies the step-timer entry in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) and [StepDurationSheet.jsx](../src/components/StepDurationSheet.jsx). Client-only; no migration. Reach it via "Create Recipe" → the Timer row under any step.
+
+- [ ] **Colon is typeable on a phone** — tap the Timer field and type `5:00:30` → it enters cleanly. *(This was impossible before: the field ran `inputMode="numeric"`, a digits-only pad with no `:` key, while the placeholder asked for exactly this format.)*
+- [ ] **Advertised formats save** — `10`, `5:30`, `5:00:30`, `2:00:00` and `0:45` each save and reappear on re-edit
+- [ ] **Bare number echo** — type `10` → the hint beside the field reads `= 10:00` (a bare number means minutes)
+- [ ] **Nonsense is inert** — type `abc` → no echo, and saving stores no duration rather than erroring
+- [ ] **Dial opens** — the **Dial** pill opens the sheet: centred above 640px, bottom-anchored on a phone
+- [ ] **Seeds from the field** — a step reading `5:30` opens with the hour hand at 12, minute at 1, second at 6, readout `5:30`
+- [ ] **Drag / tap / steppers** — dragging a hand, tapping the face, and the ± steppers all move the readout; the hand selector switches Hours / Minutes / Seconds
+- [ ] **Set timer writes back** — the readout lands in the Timer field as a clock string
+- [ ] **Clear** — offered only when the step already has a timer; clearing empties the field
+- [ ] **Dial ↔ Type carries the value** — switch modes both ways, nothing is lost
+- [ ] **Escape / backdrop / ✕ do not commit** — the field keeps whatever it had
+- [ ] **Over-ceiling values are protected** — a step holding `20:00:00` opens on **Type** (not Dial) with the value intact and a warning that the dial pins to 11:59:55. **Switching to Type must never silently rewrite it to `11:59:55`** — that was a real regression
+- [ ] **Unparseable values are protected** — a step holding `abc` also opens on Type rather than seeding the dial at zero
+- [ ] **Cooking mode still works** — `TimerSetSheet`'s own Dial/Type toggle is unchanged after the shared `ModeTab` extraction; start a timer from a recipe's step and confirm presets, dial, and custom entry all behave
+
+---
+
 ## Ingredient sections checklist (Stage 21)
 
 > Verifies "For the sauce" / "For the dough" grouping across the editor, RecipeDetail, CookingMode, and print/PDF. **Requires migration 024 applied** (`supabase_migration_024_ingredient_sections.sql` — Dashboard → SQL Editor); until then saves fail with a missing-column error. Use any test account; author a recipe with an unsectioned lead ingredient, then two sections of 2–3 ingredients each.
@@ -974,7 +995,7 @@ Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase,
 npm test
 ```
 
-**244 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+**257 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`; the step-timer work added `previewDuration` specs to `parseDuration.test.js` and `dialCanRepresent` specs to `dialGeometry.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
 
 These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
 

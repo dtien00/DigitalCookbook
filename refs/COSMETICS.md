@@ -959,6 +959,22 @@ Selected chips fill rust (`#b06452` on `#fbf6f1` text). Choosing a unit closes t
 
 Because the default path is chips rather than a text field, the IME never engages for a normal unit choice, so the reversed-unit bug ([imeComposition.js](../src/lib/imeComposition.js)) cannot reproduce there — and the filter's own Enter/arrow handling is IME-guarded for when it does.
 
+## Step timer — inline field + clock dial
+
+Each step's optional timer sits under the instruction as a `Timer` label, a short text field, and a **Dial** pill (`.step-duration-dial`, the same paper-shade → rust-on-hover treatment as `.column-layout-toggle`, sized to the 44px floor).
+
+**The field is `inputMode="text"`, not `"numeric"`.** It shipped as `numeric`, which renders a digits-only pad on a phone — with no `:` key — while the placeholder instructed authors to type `5:30` or `2:00:00`. The format was never the problem (`parseDurationToMs` has always read `5:00`, `5:00:30` and `2:00:00`); the keyboard was. Digits and the colon share one layer on both the iOS and Gboard text keyboards, so this costs one layer tap and makes the advertised formats reachable. The placeholder also shortens to `10 or 5:30` at phone width.
+
+Beside the field, a live echo replaces the "optional…" hint whenever what was typed normalises to something different — `10` shows `= 10:00`. That single line defuses the one genuinely surprising rule in the format: a bare number means **minutes**.
+
+## Step timer sheet (the clock paradigm, reused)
+
+The **Dial** pill opens [StepDurationSheet.jsx](../src/components/StepDurationSheet.jsx), which reuses [TimerDial](../src/components/TimerDial.jsx) *unchanged* — the same draggable clock face, hand selector and ± steppers a cook gets mid-recipe from [TimerSetSheet](../src/components/TimerSetSheet.jsx), over the same unit-tested [dialGeometry.js](../src/lib/dialGeometry.js). Only the wrapper differs, because the two sheets do different things with the number: TimerSetSheet **starts** a timer, this one **writes a string into the form** and therefore also offers **Clear** (a step having no timer is the normal case).
+
+The Dial/Type toggle is the shared [ModeTab](../src/components/ModeTab.jsx), extracted from TimerSetSheet so both toggles stay identical — it is the same choice offered on two surfaces, and someone who learns one should recognise the other. Type is also the accessible path: the dial is a pointer control, and the text field is its keyboard and screen-reader equivalent.
+
+**Which mode it opens in is a data-safety decision, not a preference.** Normally the sheet opens on the Dial. But `msToHands` pins anything at or beyond 12h to the dial's 11:59:55 ceiling, so seeding the dial from a longer saved duration and then switching back to Type would write that clamp over the author's real value — `20:00:00` silently becoming `11:59:55` with no edit. A non-empty string that doesn't parse is the same hazard in reverse (the dial seeds at zero and discards it). Both cases open on **Type**, where the value is shown intact, with a rose-dark warning that the dial would pin it. `dialCanRepresent()` in `dialGeometry.js` owns that rule and is unit-tested.
+
 ## Qty fraction chips (phone)
 
 At phone width Qty switches to `inputMode="decimal"` — a number pad rather than QWERTY — and its placeholder shortens from `Qty (e.g. 1 1/2)` to just `Qty`, which alone removes 79px of the old overflow. Fractions come from a `.qty-fractions` row (`½ ⅓ ¼ ⅔ ¾ ⅛`) that appears under the row while Qty has focus: paper-fill chips at 44px minimum, warming to `tan-soft` with a rust border on press.

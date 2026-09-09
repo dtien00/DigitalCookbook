@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseDurationToMs, formatMs } from './parseDuration'
+import {parseDurationToMs, formatMs, previewDuration} from './parseDuration'
 
 describe('parseDurationToMs', () => {
     it('returns null for a non-string', () => {
@@ -72,5 +72,43 @@ describe('round-trip', () => {
         expect(parseDurationToMs(formatMs(1000))).toBe(1000)
         expect(formatMs(parseDurationToMs("10:30"))).toBe("10:30")
         expect(formatMs(parseDurationToMs("0:15:45"))).toBe("15:45")
+    })
+})
+
+// The formats the step-timer field advertises in its placeholder. These parsed
+// correctly all along — what was missing was any way to *type* a colon on a
+// phone, since the field ran inputMode="numeric" (a digits-only pad). Pinned
+// here so the contract the placeholder promises stays true.
+describe('durations the step-timer field advertises', () => {
+    it.each([
+        ['5:00', 5 * 60 * 1000, '5:00'],
+        ['5:00:30', (5 * 3600 + 30) * 1000, '5:00:30'],
+        ['2:00:00', 2 * 3600 * 1000, '2:00:00'],
+        ['0:45', 45 * 1000, '0:45'],
+        ['10', 10 * 60 * 1000, '10:00'],
+    ])('%s parses and round-trips', (input, ms, formatted) => {
+        expect(parseDurationToMs(input)).toBe(ms)
+        expect(formatMs(parseDurationToMs(input))).toBe(formatted)
+    })
+})
+
+describe('previewDuration', () => {
+    it('echoes a bare number back as minutes', () => {
+        // The surprise this readout exists to defuse.
+        expect(previewDuration('10')).toBe('10:00')
+    })
+    it('normalises what was typed', () => {
+        expect(previewDuration('5:00')).toBe('5:00')
+        expect(previewDuration('5:00:30')).toBe('5:00:30')
+        expect(previewDuration('0:45')).toBe('0:45')
+    })
+    it('is empty for empty or unparseable input, so no hint renders', () => {
+        for (const bad of ['', '   ', 'abc', '1:2:3:4', '5.5', '-3', '0', '0:00']) {
+            expect(previewDuration(bad)).toBe('')
+        }
+    })
+    it('is empty for a non-string', () => {
+        expect(previewDuration(null)).toBe('')
+        expect(previewDuration(undefined)).toBe('')
     })
 })

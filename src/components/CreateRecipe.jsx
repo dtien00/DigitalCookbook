@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabaseClient'
 import { parseQuantity, quantityToDisplay, appendFraction, FRACTION_GLYPHS } from '../lib/parseQuantity'
-import { parseDurationToMs, formatMs } from '../lib/parseDuration'
+import { parseDurationToMs, formatMs, previewDuration } from '../lib/parseDuration'
 import { ingredientsToRows, rowsToIngredients, stripLeadingEmptySection } from '../lib/ingredientSections'
 import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
 import { resizeImage } from '../lib/resizeImage'
 import UnitPickerSheet from './UnitPickerSheet'
+import StepDurationSheet from './StepDurationSheet'
 import { useIsPhone } from '../hooks/useIsPhone'
 import { isCommitEnter, isComposingKeyEvent } from '../lib/imeComposition'
 import DragHandleIcon from './DragHandleIcon'
@@ -67,6 +68,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const isPhone = useIsPhone()
     // Row index whose unit sheet is open (null = closed). One sheet at a time.
     const [unitSheetRow, setUnitSheetRow] = useState(null)
+    // Step index whose timer sheet is open (null = closed).
+    const [durationSheetStep, setDurationSheetStep] = useState(null)
     // Row index whose Qty field has focus, so its fraction chips show. Cleared
     // on a delay so a chip tap lands before the row unmounts them.
     const [qtyFocusRow, setQtyFocusRow] = useState(null)
@@ -440,6 +443,14 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             e.preventDefault()
             setUnitSheetRow(index)
         }
+    }
+
+    // Commit a duration chosen on the dial (or typed in the sheet) back into the
+    // step's raw string, then close. The sheet hands us an already-formatted
+    // clock string, so the inline field and the sheet always agree.
+    const handleDurationCommit = (index, durationInput) => {
+        handleStepDurationChange(index, durationInput)
+        setDurationSheetStep(null)
     }
 
     // Drop the pending chip-hide timer if the editor unmounts mid-entry.
@@ -1186,24 +1197,43 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                     </p>
                                 </div>
                                 <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                    <label htmlFor={`step-duration-${index}`} className="text-xs text-gray-600 font-medium whitespace-nowrap inline-flex items-center gap-1">
-                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    {/* The clock paradigm from cooking mode, reused for
+                                        authoring — drag a hand instead of typing. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setDurationSheetStep(index)}
+                                        className="step-duration-dial"
+                                        aria-haspopup="dialog"
+                                        aria-expanded={durationSheetStep === index}
+                                        title="Set the timer on a clock dial"
+                                    >
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                             <circle cx="12" cy="13" r="8" />
                                             <path d="M12 9v4l2 2" />
                                             <path d="M9 2h6" />
                                         </svg>
-                                        Timer
-                                    </label>
+                                        Dial
+                                    </button>
                                     <input
                                         id={`step-duration-${index}`}
                                         type="text"
-                                        inputMode="numeric"
+                                        // text, NOT numeric. A numeric pad has no ":" key, so
+                                        // on a phone the placeholder was asking for a format
+                                        // the keyboard could not produce. The digits and the
+                                        // colon share one layer on both iOS and Gboard.
+                                        inputMode="text"
                                         value={step.durationInput}
                                         onChange={e => handleStepDurationChange(index, e.target.value)}
-                                        placeholder="e.g. 10, 5:30, or 2:00:00 (HH:MM:SS)"
+                                        placeholder={isPhone ? '10 or 5:30' : 'e.g. 10, 5:30, or 2:00:00 (HH:MM:SS)'}
                                         className="w-32 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200"
                                     />
-                                    <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
+                                    {/* Echo what a bare number means, which is the one
+                                        genuinely surprising part of the format. */}
+                                    {previewDuration(step.durationInput) && previewDuration(step.durationInput) !== step.durationInput.trim() ? (
+                                        <span className="text-xs text-gray-500 italic">= {previewDuration(step.durationInput)}</span>
+                                    ) : (
+                                        <span className="text-xs text-gray-500 italic">optional — offers a one-tap timer while cooking</span>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1229,6 +1259,14 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
             {/* One sheet for the whole editor, keyed to the row that opened it —
                 mounted outside the row map so it overlays the form rather than
                 being clipped inside a row. */}
+            {durationSheetStep !== null && steps[durationSheetStep] && (
+                <StepDurationSheet
+                    value={steps[durationSheetStep].durationInput || ''}
+                    onCommit={v => handleDurationCommit(durationSheetStep, v)}
+                    onClose={() => setDurationSheetStep(null)}
+                    autoFocusType={!isPhone}
+                />
+            )}
             {unitSheetRow !== null && rows[unitSheetRow] && (
                 <UnitPickerSheet
                     value={rows[unitSheetRow].unit || ''}
