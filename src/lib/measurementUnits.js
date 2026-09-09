@@ -73,3 +73,45 @@ export function matchUnits(query) {
         .slice(0, MAX_SUGGESTIONS)
         .map(s => s.label)
 }
+
+// Every string the unit field legitimately accepts, lowercased: canonical
+// labels plus their aliases. Built once — the list is static.
+const KNOWN_UNIT_STRINGS = new Set()
+for (const unit of MEASUREMENT_UNITS) {
+    KNOWN_UNIT_STRINGS.add(unit.label.toLowerCase())
+    for (const alias of unit.aliases) KNOWN_UNIT_STRINGS.add(alias.toLowerCase())
+}
+
+// Canonical label for a lowercased unit string ('tbsp' -> 'tablespoon'), or
+// null if it isn't one of ours.
+function canonicalUnit(lower) {
+    for (const unit of MEASUREMENT_UNITS) {
+        if (unit.label.toLowerCase() === lower) return unit.label
+        if (unit.aliases.some(a => a.toLowerCase() === lower)) return unit.label
+    }
+    return null
+}
+
+// Detect (and name the repair for) a unit that was typed backwards.
+//
+// A phone IME bug let characters accumulate at offset 0 of the unit field, so
+// "TBsp" reached the database as "psBT" — see src/lib/imeComposition.js for the
+// mechanism and the fix. This recognises the damage after the fact: a value
+// that is NOT a unit we know, but whose reverse IS, can only have been produced
+// that way. Returns the canonical label to repair it to, or null to leave it
+// alone.
+//
+// The "not already known" test is what makes this safe to run over every row:
+// it means a palindromic unit ('g', 'l', 'c') is never rewritten, and neither
+// is legitimate free text like 'pouch' or 'large spoons' — authors may type
+// anything into this column and only recognisable reversals get touched.
+export function repairReversedUnit(value) {
+    const trimmed = (value || '').trim()
+    if (trimmed === '') return null
+
+    const lower = trimmed.toLowerCase()
+    if (KNOWN_UNIT_STRINGS.has(lower)) return null
+
+    const reversed = [...lower].reverse().join('')
+    return canonicalUnit(reversed)
+}

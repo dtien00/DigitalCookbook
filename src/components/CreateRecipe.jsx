@@ -9,6 +9,7 @@ import { arrayMove } from '../lib/dragSortCore'
 import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
 import { resizeImage } from '../lib/resizeImage'
 import UnitCombobox from './UnitCombobox'
+import { isCommitEnter } from '../lib/imeComposition'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
 
@@ -289,7 +290,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // combobox and routes its Enter through onCommit instead (so a highlighted
     // suggestion gets selected first). preventDefault stops the form submitting.
     const handleIngredientKeyDown = (index, field, e) => {
-        if (e.key !== 'Enter') return
+        // isCommitEnter, not `e.key === 'Enter'`: on a phone the Next key is
+        // also the key an IME uses to accept what it is composing. Stealing
+        // that one and moving focus mid-composition is what filled the Unit
+        // field backwards ("noopselbAT"); see src/lib/imeComposition.js.
+        if (!isCommitEnter(e)) return
         e.preventDefault()
         commitIngredientField(index, field)
     }
@@ -299,7 +304,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // follows, in which case focus just moves there. Never advances into
     // another section's name input.
     const handleSectionKeyDown = (index, e) => {
-        if (e.key !== 'Enter') return
+        if (!isCommitEnter(e)) return
         e.preventDefault()
         if (index === rows.length - 1) addIngredient()
         else if (rows[index + 1].type === 'section') insertIngredientAt(index + 1)
@@ -324,7 +329,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // within an instruction, so unlike the single-line ingredient inputs this
     // never repurposes the bare key.
     const handleStepKeyDown = (index, e) => {
-        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
+        if (!isCommitEnter(e) || !(e.metaKey || e.ctrlKey)) return
         e.preventDefault()
         if (index === steps.length - 1) addStep()
         else focusStep(index + 1)
@@ -967,6 +972,12 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                                         placeholder={isQty ? 'Qty (e.g. 1 1/2)' : 'Name'}
                                                         type="text"
                                                         inputMode={isQty ? 'text' : undefined}
+                                                        // Qty is "1 1/2"-style free text, never a
+                                                        // sentence, so auto-capitalise/auto-correct
+                                                        // only corrupt it. Names stay capitalisable.
+                                                        autoCapitalize={isQty ? 'none' : undefined}
+                                                        autoCorrect={isQty ? 'off' : undefined}
+                                                        enterKeyHint="next"
                                                         value={isQty ? row.quantity : row.name}
                                                         ref={el => { inputRefs.current[`${index}:${field}`] = el }}
                                                         onChange={e => handleRowFieldChange(index, field, e.target.value)}

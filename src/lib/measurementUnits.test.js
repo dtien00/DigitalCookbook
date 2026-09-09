@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {matchUnits, MEASUREMENT_UNITS, MAX_SUGGESTIONS} from './measurementUnits'
+import {matchUnits, repairReversedUnit, MEASUREMENT_UNITS, MAX_SUGGESTIONS} from './measurementUnits'
 
 describe('matchUnits', () => {
     
@@ -46,4 +46,49 @@ describe('MEASUREMENT_UNITS data integrity', () => {
         // Unique: Set size vs array length.
         expect(new Set(labels).size).toBe(labels.length)
     })                             // optional: guards future edits
+})
+
+// Regression net for the mobile IME bug that stored unit strings backwards
+// (see src/lib/imeComposition.js). These are the literal values that reached
+// the ingredients table on the "Braised Eggs" and "Butter Chicken" recipes.
+describe('repairReversedUnit', () => {
+    const OBSERVED = [
+        ['noopselbAT', 'tablespoon'],  // typed "TAblespoon"
+        ['psBT', 'tablespoon'],        // typed "TBsp"
+        ['pST', 'teaspoon'],           // typed "TSp"
+        ['pUC', 'cup'],                // typed "CUp"
+        ['sklaTS', 'stalk'],           // typed "STalks"
+        ['sevoLC', 'clove'],           // typed "CLoves"
+        ['seceIP', 'piece'],           // typed "PIeces"
+    ]
+
+    it.each(OBSERVED)('repairs %s to %s', (stored, expected) => {
+        expect(repairReversedUnit(stored)).toBe(expected)
+    })
+
+    it('leaves canonical labels and aliases alone', () => {
+        for (const ok of ['cup', 'tablespoon', 'tbsp', 'TBSP', 'grams', 'fl oz', 'to taste']) {
+            expect(repairReversedUnit(ok)).toBeNull()
+        }
+    })
+
+    it('never rewrites a palindromic unit', () => {
+        // 'g', 'l' and 'c' are their own reverse — the known-unit check has to
+        // win before the reversal check, or these would rewrite themselves.
+        for (const p of ['g', 'l', 'c']) expect(repairReversedUnit(p)).toBeNull()
+    })
+
+    it('leaves unrecognised free text alone', () => {
+        // The column is deliberately free text; these all exist in the live
+        // data and are not reversals of anything.
+        for (const free of ['pouch', 'thumb', 'large', 'Thumbs', 'spoons', 'large spoons', 'Bottle']) {
+            expect(repairReversedUnit(free)).toBeNull()
+        }
+    })
+
+    it('handles empty and missing values', () => {
+        for (const empty of ['', '   ', null, undefined]) {
+            expect(repairReversedUnit(empty)).toBeNull()
+        }
+    })
 })

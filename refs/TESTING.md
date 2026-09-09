@@ -700,6 +700,19 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Last-column target follows layout** — switch to Qty · Unit · Name; now `Enter` in the Name field (last) adds the new row
 - [ ] **Edit-mode prefill** — edit a recipe with a `0.5`-quantity ingredient; the Qty field shows `½`, and `1.5` shows `1 ½`
 
+### Mobile IME / soft-keyboard sub-checklist
+
+> **Must be run on a real phone** — a desktop browser at phone width does not exercise an IME, and that is the whole point of these. This is the regression net for the bug where advancing Qty → Unit with the keyboard's **Next** key made the Unit field fill up backwards (`TBsp` → stored as `psBT`); see [src/lib/imeComposition.js](../src/lib/imeComposition.js). Android/Gboard is the reproducing case; worth a pass on iOS too.
+
+- [ ] **Next into Unit, then type** — in the last row's Qty field press the keyboard's **Next** key to reach Unit, then type `tablespoon` → characters appear left-to-right and the field reads `tablespoon` (NOT `noopselbat`, and the caret does not sit stuck at the start)
+- [ ] **Next into Qty, then type** — same trip from Name → Qty, type `1 1/2` → reads `1 1/2`, not `2/1 1`. *(Qty shares the same handler; digits happen to commit rather than compose, so this is the case that used to hide the bug rather than one that was safe.)*
+- [ ] **No auto-capitalisation in Qty/Unit** — the first letter typed into either field stays lowercase (the old `TAblespoon` / `CLoves` double-capital was the bug's fingerprint)
+- [ ] **Next still advances** — the Next key continues to move Name → Qty → Unit, and on the last visible column adds a new row; nothing submits the form
+- [ ] **Autocomplete still selectable by touch** — tap a suggestion in the dropdown → it fills the field with the canonical lowercase label and the list closes
+- [ ] **Composing languages** — with a CJK or other composing keyboard installed, type into Name: candidate selection with the on-screen list works and the first Enter commits the candidate instead of jumping to the next field
+- [ ] **Round-trip** — save the recipe, reopen it on RecipeDetail → units render as typed; re-open the editor → the same values prefill
+
+
 ---
 
 ## Ingredient sections checklist (Stage 21)
@@ -937,7 +950,7 @@ Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase,
 npm test
 ```
 
-**178 specs across 11 files** as of Stage 20 §3.1, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+**199 specs across 12 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js` (178 → 199). CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
 
 These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
 

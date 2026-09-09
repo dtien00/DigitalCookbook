@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { matchUnits } from '../lib/measurementUnits'
+import { isComposingKeyEvent } from '../lib/imeComposition'
 
 // Filtered unit picker for the CreateRecipe ingredient rows. Owns its own
 // open / highlight / filter state; the parent only sees value changes and a
@@ -14,6 +15,12 @@ import { matchUnits } from '../lib/measurementUnits'
 //   Tab       native focus move; we just close the list
 // Free text is always allowed — the input is the source of truth, the list is
 // only assistance.
+//
+// Every one of those keys is also an IME key: a soft keyboard walks its
+// candidate list with the arrows, dismisses it with Escape, and commits with
+// Enter. While a composition is in flight we must not touch any of them —
+// hijacking the composing Enter is what stored units backwards on mobile
+// ("TAblespoon" -> "noopselbAT"); see src/lib/imeComposition.js.
 export default function UnitCombobox({ value, onChange, onCommit, inputRef, placeholder }) {
     const [open, setOpen] = useState(false)
     const [highlight, setHighlight] = useState(-1)
@@ -35,6 +42,7 @@ export default function UnitCombobox({ value, onChange, onCommit, inputRef, plac
     }
 
     const handleKeyDown = (e) => {
+        if (isComposingKeyEvent(e)) return
         if (e.key === 'ArrowDown') {
             e.preventDefault()
             if (!open) { setOpen(true); return }
@@ -84,6 +92,14 @@ export default function UnitCombobox({ value, onChange, onCommit, inputRef, plac
                 aria-autocomplete="list"
                 aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
                 autoComplete="off"
+                // Units are lowercase by convention and never sentences, so a
+                // phone keyboard's auto-capitalise/auto-correct only ever does
+                // damage here (it is what made the reversed values read
+                // "TAblespoon" rather than "tablespoon").
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
                 placeholder={placeholder}
                 value={value}
                 onChange={handleChange}
