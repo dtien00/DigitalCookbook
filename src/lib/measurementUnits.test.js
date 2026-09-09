@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {matchUnits, repairReversedUnit, MEASUREMENT_UNITS, MAX_SUGGESTIONS} from './measurementUnits'
+import {matchUnits, repairReversedUnit, MEASUREMENT_UNITS, MAX_SUGGESTIONS, COMMON_UNITS, UNIT_GROUPS, unitsInGroup, isCanonicalUnit} from './measurementUnits'
 
 describe('matchUnits', () => {
     
@@ -89,6 +89,63 @@ describe('repairReversedUnit', () => {
     it('handles empty and missing values', () => {
         for (const empty of ['', '   ', null, undefined]) {
             expect(repairReversedUnit(empty)).toBeNull()
+        }
+    })
+})
+
+
+// The mobile unit sheet renders entirely from these, so a unit with a missing
+// or misspelled group would silently vanish from the picker.
+describe('unit groups (mobile sheet)', () => {
+    it('gives every unit a group the sheet knows how to render', () => {
+        const known = new Set(UNIT_GROUPS.map(g => g.id))
+        const orphans = MEASUREMENT_UNITS.filter(u => !known.has(u.group)).map(u => u.label)
+        expect(orphans).toEqual([])   // names the offender on failure
+    })
+
+    it('renders every unit exactly once across all groups', () => {
+        const rendered = UNIT_GROUPS.flatMap(g => unitsInGroup(g.id))
+        expect(rendered).toHaveLength(MEASUREMENT_UNITS.length)
+        expect(new Set(rendered).size).toBe(MEASUREMENT_UNITS.length)
+    })
+
+    it('unitsInGroup returns labels in declaration order', () => {
+        expect(unitsInGroup('weight')).toEqual(['gram', 'kilogram', 'milligram', 'ounce', 'pound'])
+    })
+
+    it('unitsInGroup returns [] for an unknown group', () => {
+        expect(unitsInGroup('nope')).toEqual([])
+    })
+})
+
+describe('COMMON_UNITS', () => {
+    it('are all real canonical labels', () => {
+        const labels = new Set(MEASUREMENT_UNITS.map(u => u.label))
+        const bogus = COMMON_UNITS.filter(u => !labels.has(u))
+        expect(bogus).toEqual([])
+    })
+    it('fills a 3-wide chip grid exactly', () => {
+        expect(COMMON_UNITS).toHaveLength(9)
+    })
+    it('has no duplicates', () => {
+        expect(new Set(COMMON_UNITS).size).toBe(COMMON_UNITS.length)
+    })
+})
+
+describe('isCanonicalUnit', () => {
+    it('accepts canonical labels, case-insensitively', () => {
+        expect(isCanonicalUnit('cup')).toBe(true)
+        expect(isCanonicalUnit('CUP')).toBe(true)
+        expect(isCanonicalUnit('  tablespoon  ')).toBe(true)
+    })
+    it('rejects aliases - the sheet shows labels, not aliases', () => {
+        // 'tbsp' is a real alias but is not a chip, so the sheet must treat it
+        // as the author's own text rather than silently claiming it is selected.
+        expect(isCanonicalUnit('tbsp')).toBe(false)
+    })
+    it('rejects free text and empties', () => {
+        for (const v of ['pouch', 'large spoons', '', '   ', null, undefined]) {
+            expect(isCanonicalUnit(v)).toBe(false)
         }
     })
 })

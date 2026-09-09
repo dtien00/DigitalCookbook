@@ -924,6 +924,41 @@ A pill button (`.column-layout-toggle`) sits opposite the "Ingredients" heading 
 
 Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0 0 120px` so it doesn't sprawl like Name/Unit. `Enter` on a non-last field advances within the row; on the last field it adds a new row (and focuses it) or jumps to the next row — never submits the form. `Tab` walks the visible order natively. An italic `.ingredient-hint` line beside "Add Ingredient" spells this out, with `<kbd>` chips (`#f2e9e4` fill, `#e8dcd2` border) for `Enter` / `Tab`.
 
+## Phone layout (≤640px) — two-line rows
+
+`.form-row` originally had **no mobile breakpoint at all**. As a `nowrap` flex it needed 518px inside a 351px container at 375px, so the unit combobox was squeezed to **18px and pushed off-canvas** along with the remove button — which is why the autocomplete never appeared on a phone. Below 640px the row now wraps to two lines:
+
+```
+⎛⣿⎞ ⎛ Name …………………………… ⎞ ⎛ × ⎞
+⎛ Qty ⎞ ⎛ Unit ………………………………… ▾ ⎞
+```
+
+Every control is raised to the 44px tap-target floor Stage 9's mobile audit set (the grip was 24px, inputs 42px, `.unit-suggestion` rows ~31px). `min-width: 0` on the flex children is the other half of the fix — flex items default to `min-width: auto`, so the Qty placeholder's 199px min-content width silently beat its own `flex: 0 0 120px` basis.
+
+The **column-order toggle is hidden below 640px**: its three presets assume a single line, and there is nothing meaningful to cycle once Name sits above Qty + Unit.
+
+## Unit picker sheet (phone)
+
+Below 640px the Unit cell is a `.unit-trigger` button — styled as an input at rest (`#fbf6f1` fill, `#e8dcd2` border) with a trailing ▾, and a rose italic label when empty so it reads as a placeholder. Tapping it opens [UnitPickerSheet.jsx](../src/components/UnitPickerSheet.jsx), which reuses [TimerSetSheet](../src/components/TimerSetSheet.jsx)'s chrome verbatim so the app has one sheet idiom: `items-end sm:items-center`, `bg-ink/40` backdrop, `bg-paper paper-grain rounded-t-2xl`, sticky header, Escape + backdrop close.
+
+Contents, top to bottom:
+
+- **Yours** — only when the row holds free text that isn't one of our labels (`large spoons`), so reopening the sheet never looks like the value was discarded.
+- **Common** — a 3×3 chip grid of the nine units this cookbook actually uses, ordered by a count over the live `ingredients` table (teaspoon 54, tablespoon 37, cup 36, pound/gram 10, clove 7, ounce 6, stalk 5, piece 3).
+- **Volume / Weight / Count** — every unit, grouped from the `group` field on `MEASUREMENT_UNITS`. Common units deliberately appear twice: the shortcut row is a shortcut, and the groups stay complete so scanning "Volume" finds everything.
+- **+ Type a custom unit** — a disclosure mirroring the timer sheet's "Add a custom time", revealing a text field + Save. `ingredients.unit` is a free-text column and real recipes use it, so free text stays reachable — just not the default path.
+- **Clear unit** — shown only when a unit is set; plenty of ingredients ("2 Star Anise") have none.
+
+Selected chips fill rust (`#b06452` on `#fbf6f1` text), matching the combobox's highlighted option. The common path needs **zero typing**, so the IME never engages and the reversed-unit bug ([imeComposition.js](../src/lib/imeComposition.js)) cannot reproduce there.
+
+**Desktop is unchanged** — it keeps `<UnitCombobox>`, which is keyboard-fast and has room to render. The phone/desktop choice is a JS media query ([useIsPhone.js](../src/hooks/useIsPhone.js)) rather than CSS visibility, because the two are different controls: rendering both and hiding one would leave a phantom tab stop and two elements claiming the same `inputRefs` key.
+
+## Qty fraction chips (phone)
+
+At phone width Qty switches to `inputMode="decimal"` — a number pad rather than QWERTY — and its placeholder shortens from `Qty (e.g. 1 1/2)` to just `Qty`, which alone removes 79px of the old overflow. Fractions come from a `.qty-fractions` row (`½ ⅓ ¼ ⅔ ¾ ⅛`) that appears under the row while Qty has focus: paper-fill chips at 44px minimum, warming to `tan-soft` with a rust border on press.
+
+Tapping reads as the last keystroke of the amount — `1` + `½` → `1½` — and a second tap **corrects** rather than stacks (`1½` + `¼` → `1¼`), since nobody means `1½¼`. `appendFraction()` in [parseQuantity.js](../src/lib/parseQuantity.js) owns that rule and is unit-tested; `parseQuantity` already read `1½`, so nothing downstream changed. The chips also teach by example what the long placeholder used to explain. Blur is deferred 150ms so a chip tap lands before they unmount — the same trick the combobox uses for its suggestion list.
+
 ## Removing a row
 
 A trailing `×` button (`.ingredient-remove`) closes each row inside the `.form-row` flex, sitting last regardless of the active column order. Muted glyph (`#9a8a7d`) on a paper-shade fill at rest; on hover it warms to the rust accent (`#b06452` text + border, `#f2e0da` fill) so deletion reads as the slightly-warmer action. It's hidden when only one row remains (there's always ≥1 ingredient row, so no empty state to design). After a removal, focus lands on the first field of whatever row slid into the freed slot — or the new last row when the tail was removed — so keyboard context survives. The button is a normal Tab stop (between Unit and Notes when present), but the `Enter`-to-advance flow never lands on it, so fast entry is undisturbed.

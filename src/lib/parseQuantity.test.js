@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseQuantity, quantityToDisplay } from './parseQuantity'
+import {parseQuantity, quantityToDisplay, appendFraction, FRACTION_GLYPHS} from './parseQuantity'
 
 describe('parseQuantity', () => {
     it('returns null for null/undefined input', () => {
@@ -85,4 +85,43 @@ describe('round-trip', () => {
         expect(parseQuantity(quantityToDisplay(1.12500000))).toBe(1.125)
     }) // 1.5 → "1 ½" → 1.5  (clean)
     
+})
+
+// Phone fraction chips: tapping a glyph should read as the last keystroke of
+// the amount, and the result must survive parseQuantity unchanged.
+describe('appendFraction', () => {
+    it('starts a bare fraction in an empty field', () => {
+        expect(appendFraction('', '½')).toBe('½')
+        expect(parseQuantity(appendFraction('', '½'))).toBe(0.5)
+    })
+    it('appends to a whole number', () => {
+        expect(appendFraction('1', '½')).toBe('1½')
+        expect(parseQuantity(appendFraction('1', '½'))).toBe(1.5)
+    })
+    it('ignores a trailing space so "1 " does not become "1 ½" twice over', () => {
+        expect(appendFraction('1 ', '½')).toBe('1½')
+    })
+    it('replaces a trailing glyph instead of stacking two', () => {
+        // Nobody means "1½¼" - a second tap is a correction.
+        expect(appendFraction('1½', '¼')).toBe('1¼')
+        expect(parseQuantity(appendFraction('1½', '¼'))).toBe(1.25)
+    })
+    it('replaces a lone glyph', () => {
+        expect(appendFraction('½', '¾')).toBe('¾')
+    })
+    it('handles null/undefined as an empty field', () => {
+        expect(appendFraction(null, '½')).toBe('½')
+        expect(appendFraction(undefined, '½')).toBe('½')
+    })
+
+    it('every offered glyph round-trips through parseQuantity', () => {
+        for (const glyph of FRACTION_GLYPHS) {
+            // Bare, and after a whole number - both must yield a finite number.
+            expect(parseQuantity(appendFraction('', glyph))).toBeGreaterThan(0)
+            expect(parseQuantity(appendFraction('2', glyph))).toBeGreaterThan(2)
+        }
+    })
+    it('offers six glyphs, one row at phone width', () => {
+        expect(FRACTION_GLYPHS).toHaveLength(6)
+    })
 })

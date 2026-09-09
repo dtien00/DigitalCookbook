@@ -712,6 +712,26 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Composing languages** — with a CJK or other composing keyboard installed, type into Name: candidate selection with the on-screen list works and the first Enter commits the candidate instead of jumping to the next field
 - [ ] **Round-trip** — save the recipe, reopen it on RecipeDetail → units render as typed; re-open the editor → the same values prefill
 
+### Tap-first unit sheet + Qty chips (phone ≤640px)
+
+> Verifies the mobile rework of the ingredient row. **Resize a desktop browser below 640px to check layout**, but the IME items above still need a real phone. The row reflow, the sheet, and the chips all flip at the same 640px boundary (`useIsPhone` + the `@media (max-width: 640px)` block in [index.css](../src/index.css)).
+
+- [ ] **Row is two lines** — at 375px: grip + Name + `×` on line 1, Qty + Unit on line 2; **nothing is cut off at the right edge** and the page does not scroll sideways
+- [ ] **Column toggle is hidden** — the `⇄ Name · Qty · Unit` pill does not render below 640px; widen past 640px → it comes back
+- [ ] **Unit is a button, not a text field** — tapping it opens the sheet; tapping does *not* raise the keyboard
+- [ ] **Sheet contents** — Common (9 chips, 3×3), then Volume / Weight / Count; every unit appears, chips are comfortably tappable
+- [ ] **Pick a chip** — sheet closes, the trigger shows the label, and the value saves as that canonical label
+- [ ] **Reopen pre-selects** — open the sheet on a row that already has a unit → that chip is filled rust
+- [ ] **Custom unit** — "+ Type a custom unit" → type `pouch` → Save → trigger reads `pouch`; reopen → it appears under a **Yours** heading with the custom field prefilled
+- [ ] **Clear unit** — offered only when a unit is set; clearing leaves the trigger reading a rose italic `Unit`
+- [ ] **Escape / backdrop / ✕ all close** without changing the value
+- [ ] **Qty raises a number pad** — not the full QWERTY keyboard; placeholder reads just `Qty`
+- [ ] **Fraction chips appear on focus** — `½ ⅓ ¼ ⅔ ¾ ⅛` under the row; they disappear shortly after blur
+- [ ] **Chip appends** — with `1` in Qty, tap `½` → field reads `1½`; save → RecipeDetail shows `1 ½`
+- [ ] **Second chip corrects** — tap `¼` after `½` → `1¼`, not `1½¼`
+- [ ] **Chip tap keeps focus** — the keyboard and the chips both stay up across a tap, so you can keep typing
+- [ ] **Desktop unaffected** — above 640px the Unit cell is still the `<UnitCombobox>` with its dropdown, the row is one line, and Enter still advances Name → Qty → Unit
+
 
 ---
 
@@ -950,7 +970,7 @@ Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase,
 npm test
 ```
 
-**199 specs across 12 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js` (178 → 199). CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+**240 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
 
 These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
 

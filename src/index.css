@@ -1129,6 +1129,132 @@ html[data-backdrop="digital"] .paper-grain {
   color: #fbf6f1;
 }
 
+/* Unit trigger (phone) — the button that opens the tap-first unit sheet in
+   place of the desktop combobox. Reads as an input at rest so the row still
+   scans as three fields, with a chevron telegraphing that it opens something. */
+.unit-trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  min-height: 44px;
+  text-align: left;
+  color: #1e1e24;
+  background: #fbf6f1;
+  border: 1px solid #e8dcd2;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Empty reads as a placeholder, matching the rose-toned placeholder voice. */
+.unit-trigger.is-empty .unit-trigger-label {
+  color: #a2666f;
+  font-style: italic;
+}
+
+.unit-trigger-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fraction chips under the Qty field (phone). The Qty input runs a number pad
+   there, so these are how "1 1/2" is entered at all. */
+.qty-fractions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.qty-fraction {
+  flex: 1;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.05rem;
+  color: #1e1e24;
+  background: #f2e9e4;
+  border: 1px solid #e8dcd2;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.qty-fraction:hover,
+.qty-fraction:active {
+  background: #ede0c4;
+  border-color: #b06452;
+}
+
+/* ---- Phone ingredient rows -------------------------------------------------
+   The row had no breakpoint at all: .form-row is a nowrap flex, so at 375px it
+   needed 518px inside a 351px container and pushed Unit (squeezed to 18px) and
+   the remove button clean off-canvas. Below 640px it becomes two lines —
+   Name across the top, Qty + Unit beneath — which also gives the unit control
+   room to be tapped.
+
+   `min-width: 0` is the other half of the fix: flex items default to
+   `min-width: auto`, so the Qty placeholder's min-content width (199px for
+   "Qty (e.g. 1 1/2)") silently beat its own `flex: 0 0 120px` basis. */
+@media (max-width: 640px) {
+  .form-row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-row input,
+  .form-row .unit-combobox,
+  .form-row .unit-trigger {
+    min-width: 0;
+  }
+
+  /* Line 1: grip + Name + remove. Name takes the slack. */
+  .form-row .row-grip {
+    order: 1;
+    flex: 0 0 auto;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .form-row > input:not(.ingredient-qty) {
+    order: 2;
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  .form-row .ingredient-remove {
+    order: 3;
+    flex: 0 0 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  /* Line 2: Qty then Unit. flex-basis 100% on Qty's line start forces the wrap
+     regardless of which column-order preset was last chosen on desktop. */
+  .form-row input.ingredient-qty {
+    order: 4;
+    flex: 0 0 96px;
+    min-height: 44px;
+  }
+
+  .form-row .unit-combobox,
+  .form-row .unit-trigger {
+    order: 5;
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  /* Tap targets: the suggestion rows were ~31px. Only relevant on a tablet in
+     the 641-768 band or a phone in landscape, where the combobox still shows. */
+  .unit-suggestion {
+    padding: 12px 10px;
+    min-height: 44px;
+  }
+}
+
 /* Add-ingredient button + the keyboard-affordance hint sit on one line. */
 .ingredient-tools {
   display: flex;
