@@ -52,14 +52,18 @@ export const MEASUREMENT_UNITS = [
 
 export const MAX_SUGGESTIONS = 8
 
-// Return up to MAX_SUGGESTIONS unit labels whose label OR an alias contains the
+// Return up to `limit` unit labels whose label OR an alias contains the
 // (case-insensitive) query as a substring. An empty/whitespace query returns
-// the head of the full list so the dropdown can open on focus. Results are
+// the head of the full list so a dropdown can open on focus. Results are
 // ordered so labels matching at the start ("cup" before "fluid ounce" for "c")
 // surface first.
-export function matchUnits(query) {
+//
+// `limit` defaults to MAX_SUGGESTIONS, which is what a compact dropdown wants.
+// The unit sheet passes Infinity: it has room to scroll, and silently hiding
+// the 9th match from someone who is filtering to find a unit would be a bug.
+export function matchUnits(query, limit = MAX_SUGGESTIONS) {
     const q = (query || '').trim().toLowerCase()
-    if (q === '') return MEASUREMENT_UNITS.slice(0, MAX_SUGGESTIONS).map(u => u.label)
+    if (q === '') return MEASUREMENT_UNITS.slice(0, limit).map(u => u.label)
 
     const scored = []
     for (const unit of MEASUREMENT_UNITS) {
@@ -73,7 +77,7 @@ export function matchUnits(query) {
     }
     return scored
         .sort((a, b) => a.rank - b.rank)
-        .slice(0, MAX_SUGGESTIONS)
+        .slice(0, limit)
         .map(s => s.label)
 }
 

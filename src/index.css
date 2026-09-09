@@ -1085,53 +1085,11 @@ html[data-backdrop="digital"] .paper-grain {
   color: #b06452;
 }
 
-/* Unit autocomplete — combobox wrapper hosts the input + suggestion list. */
-.unit-combobox {
-  position: relative;
-  flex: 1;
-}
-
-.unit-combobox input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #e8dcd2;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-.unit-suggestions {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  max-height: 220px;
-  overflow-y: auto;
-  background: #fbf6f1;
-  border: 1px solid #e8dcd2;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(30, 30, 36, 0.12);
-}
-
-.unit-suggestion {
-  padding: 7px 10px;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  color: #1e1e24;
-  cursor: pointer;
-}
-
-.unit-suggestion.is-highlighted {
-  background: #b06452;
-  color: #fbf6f1;
-}
-
-/* Unit trigger (phone) — the button that opens the tap-first unit sheet in
-   place of the desktop combobox. Reads as an input at rest so the row still
-   scans as three fields, with a chevron telegraphing that it opens something. */
+/* Unit trigger — the button that opens the unit sheet. Renders at every width
+   (it replaced the old combobox on desktop too, so the control is the same on a
+   phone and a laptop). Reads as an input at rest so the row still scans as
+   three fields, with a chevron telegraphing that it opens something. Height is
+   left to the row's stretch on desktop, and pinned to 44px on phones below. */
 .unit-trigger {
   flex: 1;
   min-width: 0;
@@ -1140,7 +1098,6 @@ html[data-backdrop="digital"] .paper-grain {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 10px;
-  min-height: 44px;
   text-align: left;
   color: #1e1e24;
   background: #fbf6f1;
@@ -1206,7 +1163,6 @@ html[data-backdrop="digital"] .paper-grain {
   }
 
   .form-row input,
-  .form-row .unit-combobox,
   .form-row .unit-trigger {
     min-width: 0;
   }
@@ -1240,17 +1196,9 @@ html[data-backdrop="digital"] .paper-grain {
     min-height: 44px;
   }
 
-  .form-row .unit-combobox,
   .form-row .unit-trigger {
     order: 5;
     flex: 1 1 auto;
-    min-height: 44px;
-  }
-
-  /* Tap targets: the suggestion rows were ~31px. Only relevant on a tablet in
-     the 641-768 band or a phone in landscape, where the combobox still shows. */
-  .unit-suggestion {
-    padding: 12px 10px;
     min-height: 44px;
   }
 }

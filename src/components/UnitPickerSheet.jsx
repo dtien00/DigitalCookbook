@@ -1,60 +1,129 @@
-import { useEffect, useRef, useState } from 'react'
-import { COMMON_UNITS, UNIT_GROUPS, unitsInGroup, isCanonicalUnit } from '../lib/measurementUnits'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { COMMON_UNITS, UNIT_GROUPS, unitsInGroup, isCanonicalUnit, matchUnits } from '../lib/measurementUnits'
+import { isCommitEnter, isComposingKeyEvent } from '../lib/imeComposition'
 
-// Tap-first unit picker for phone-width ingredient rows.
+// The unit picker for every ingredient row, at every width.
 //
-// Why a sheet instead of the desktop combobox: at 375px the row had no
-// breakpoint, so the combobox collapsed to 18px and its dropdown had nowhere to
-// render — the suggestions were unreachable. Beyond the layout, free-typing a
-// unit on a soft keyboard is what let the IME bug write units backwards (see
-// src/lib/imeComposition.js). Tapping a chip needs no keyboard at all, so the
-// common path can't reproduce that class of bug.
+// It began as a phone-only replacement for the old <UnitCombobox>: at 375px the
+// row had no breakpoint, so the combobox collapsed to 18px and its dropdown had
+// nowhere to render, and free-typing a unit on a soft keyboard is what let the
+// IME bug write units backwards (src/lib/imeComposition.js). It now serves the
+// browser too, so authoring a recipe is the same act on both — one control, one
+// mental model, one place for this behaviour to live.
 //
-// Free text is still reachable, because `ingredients.unit` is deliberately a
-// free-text column (refs/DATABASE_DECISIONS.md) and real recipes use 'pouch',
-// 'thumb', 'large spoons'. It sits behind a disclosure rather than up front —
-// the same shape as TimerSetSheet's "Add a custom time" — so the default path
-// is taps and typing is the deliberate exception. Text typed here is committed
-// explicitly with a Save button rather than being the field itself, so IME
-// damage is visible on screen before it can land in the database.
+// Making it work for a mouse and keyboard, not just a thumb, is what the filter
+// field is for. It replaces the combobox's substring matching (same matchUnits()
+// underneath, uncapped because a sheet can scroll) and doubles as the free-text
+// escape hatch: `ingredients.unit` is deliberately a free-text column and real
+// recipes use 'pouch', 'large spoons', so whatever you type can always be
+// committed as-is.
 //
-// Chrome (backdrop, rounded top, Escape/backdrop close) mirrors TimerSetSheet
-// so the app has one sheet idiom, not two.
-export default function UnitPickerSheet({ value, onSelect, onClose }) {
-    const customInputRef = useRef(null)
-    // A value the author typed themselves (not one of our labels) opens the
-    // custom field already expanded and filled — otherwise reopening the sheet
-    // on such a row would look like the value had been lost.
-    const startsCustom = !!(value || '').trim() && !isCanonicalUnit(value)
-    const [showCustom, setShowCustom] = useState(startsCustom)
-    const [customValue, setCustomValue] = useState(startsCustom ? value : '')
+// The one deliberate difference between widths is autofocus. On desktop the
+// filter takes focus so typing "tbsp" + Enter is as fast as the old combobox.
+// On a phone it does not, because raising the keyboard would bury the chips
+// under it and put us back to typing-first — the thing this control exists to
+// avoid. That is `autoFocusFilter`, and it is the only branch in here.
+//
+// Chrome mirrors TimerSetSheet: bottom sheet on phones, centred card above
+// `sm:`, `bg-ink/40` backdrop, Escape and backdrop close.
+export default function UnitPickerSheet({ value, onSelect, onClose, autoFocusFilter = false }) {
+    const filterRef = useRef(null)
+    const sheetRef = useRef(null)
+    const [filter, setFilter] = useState('')
+    const [highlight, setHighlight] = useState(0)
+
+    const query = filter.trim()
+    // Uncapped: the sheet scrolls, and hiding a match from someone actively
+    // filtering for it would be a bug rather than a tidy dropdown.
+    const matches = useMemo(() => (query === '' ? [] : matchUnits(query, Infinity)), [query])
+    const filtering = query !== ''
+
+    // Offer to keep what was typed whenever it isn't already a unit we know —
+    // this is the free-text path, merged into the filter so there is one text
+    // field rather than a search box plus a separate "custom" box.
+    const offerCustom = filtering && !isCanonicalUnit(query)
+
+    useEffect(() => { setHighlight(0) }, [query])
 
     useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose() }
+        if (autoFocusFilter) filterRef.current?.focus()
+    }, [autoFocusFilter])
+
+    // Escape closes from anywhere in the dialog; a focus trap keeps Tab inside
+    // it, since a modal that leaks focus to the form behind it is a keyboard
+    // dead end.
+    useEffect(() => {
+        const onKey = (e) => {
+            if (e.key === 'Escape') { onClose(); return }
+            if (e.key !== 'Tab') return
+            const focusables = sheetRef.current?.querySelectorAll(
+                'button:not([disabled]), input, [href], select, textarea, [tabindex]:not([tabindex="-1"])'
+            )
+            if (!focusables || focusables.length === 0) return
+            const first = focusables[0]
+            const last = focusables[focusables.length - 1]
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault()
+                last.focus()
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault()
+                first.focus()
+            }
+        }
         document.addEventListener('keydown', onKey)
         return () => document.removeEventListener('keydown', onKey)
     }, [onClose])
 
-    // Focus the custom field when it is revealed by tapping the disclosure, but
-    // not when it starts open from an existing custom value — that would pop the
-    // keyboard over the chips the author probably came here to tap.
-    const revealCustom = () => {
-        setShowCustom(true)
-        setTimeout(() => customInputRef.current?.focus(), 0)
-    }
-
-    const commitCustom = () => {
-        const trimmed = customValue.trim()
-        if (trimmed === '') return
-        onSelect(trimmed)
+    // Keyboard on the filter field. Arrows walk the matches, Enter takes the
+    // highlighted one — or commits the typed text when nothing matches.
+    //
+    // isCommitEnter, not `e.key === 'Enter'`: an IME sends Enter to accept the
+    // text it is still composing, and acting on that one is exactly the bug
+    // that put "psBT" in the database. Same reason the arrows are guarded —
+    // a soft keyboard drives its candidate list with them.
+    const handleFilterKeyDown = (e) => {
+        if (isComposingKeyEvent(e)) return
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlight(h => Math.min(h + 1, matches.length - 1))
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlight(h => Math.max(h - 1, 0))
+        } else if (isCommitEnter(e)) {
+            e.preventDefault()
+            if (matches[highlight]) onSelect(matches[highlight])
+            else if (offerCustom) onSelect(query)
+        }
     }
 
     const selected = (value || '').trim().toLowerCase()
-    const chipClass = (label) =>
+    const chipClass = (label, isHighlighted = false) =>
         'px-3 py-3 min-h-[44px] rounded-lg font-serif text-base transition-colors ' +
         (label.toLowerCase() === selected
             ? 'bg-rust text-paper'
-            : 'bg-paper-shade hover:bg-tan/40 text-ink')
+            : isHighlighted
+                ? 'bg-tan/40 text-ink ring-2 ring-rust/50'
+                : 'bg-paper-shade hover:bg-tan/40 text-ink')
+
+    // A unit the author typed that isn't one of ours, surfaced first so
+    // reopening the sheet on such a row never looks like it was discarded.
+    const ownValue = (value || '').trim() && !isCanonicalUnit(value) ? value.trim() : null
+
+    const chipGrid = (labels, highlightIndex = -1) => (
+        <div className="grid grid-cols-3 gap-2">
+            {labels.map((label, i) => (
+                <button
+                    key={label}
+                    type="button"
+                    onClick={() => onSelect(label)}
+                    onMouseEnter={() => filtering && setHighlight(i)}
+                    className={chipClass(label, i === highlightIndex)}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    )
 
     return (
         <div
@@ -69,99 +138,92 @@ export default function UnitPickerSheet({ value, onSelect, onClose }) {
                 onClick={onClose}
                 className="absolute inset-0 bg-ink/40 cursor-default"
             />
-            <div className="relative w-full sm:max-w-sm max-h-[92vh] overflow-y-auto bg-paper paper-grain rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-paper-shade sticky top-0 bg-paper z-10">
-                    <h2 className="font-display text-lg text-ink m-0">Choose a unit</h2>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Close"
-                        className="w-10 h-10 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
-                    >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M18 6 6 18M6 6l12 12" />
-                        </svg>
-                    </button>
+            <div
+                ref={sheetRef}
+                className="relative w-full sm:max-w-sm max-h-[92vh] overflow-y-auto bg-paper paper-grain rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col"
+            >
+                <div className="sticky top-0 bg-paper z-10 border-b border-paper-shade">
+                    <div className="flex items-center justify-between px-5 py-4">
+                        <h2 className="font-display text-lg text-ink m-0">Choose a unit</h2>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Close"
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-paper-shade hover:bg-tan/40 text-ink transition-colors"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    {/* Filter + free text in one field. Autofocused on desktop so
+                        the keyboard flow matches the combobox it replaced; not on
+                        a phone, where it would bury the chips under the keyboard. */}
+                    <div className="px-5 pb-4">
+                        <input
+                            ref={filterRef}
+                            type="text"
+                            value={filter}
+                            onChange={e => setFilter(e.target.value)}
+                            onKeyDown={handleFilterKeyDown}
+                            placeholder="Filter, or type your own…"
+                            aria-label="Filter units, or type a custom unit"
+                            autoComplete="off"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            enterKeyHint="done"
+                            className="w-full px-3 py-3 min-h-[44px] rounded-lg bg-[#fbf6f1] border border-paper-shade text-ink font-serif text-base focus:outline-none focus:ring-2 focus:ring-rust/50"
+                        />
+                    </div>
                 </div>
 
                 <div className="px-5 py-4">
-                    {/* A unit the author typed that isn't one of ours — shown first
-                        so reopening the sheet never looks like it was discarded. */}
-                    {startsCustom && (
+                    {filtering ? (
                         <>
-                            <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">Yours</p>
-                            <div className="grid grid-cols-3 gap-2 mb-5">
-                                <button type="button" onClick={() => onSelect(value)} className={chipClass(value)}>
-                                    {value}
+                            {matches.length > 0 ? (
+                                <>
+                                    <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">
+                                        {matches.length} match{matches.length === 1 ? '' : 'es'}
+                                    </p>
+                                    {chipGrid(matches, highlight)}
+                                </>
+                            ) : (
+                                <p className="font-serif italic text-sm text-ink/60 m-0">
+                                    No unit matches “{query}”.
+                                </p>
+                            )}
+
+                            {offerCustom && (
+                                <button
+                                    type="button"
+                                    onClick={() => onSelect(query)}
+                                    className="mt-4 w-full px-4 py-3 min-h-[44px] rounded-lg bg-rust hover:bg-rust-dark text-paper font-semibold transition-colors"
+                                >
+                                    Use “{query}” as a custom unit
                                 </button>
-                            </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            {ownValue && (
+                                <>
+                                    <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">Yours</p>
+                                    <div className="mb-5">{chipGrid([ownValue])}</div>
+                                </>
+                            )}
+
+                            <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">Common</p>
+                            {chipGrid(COMMON_UNITS)}
+
+                            {UNIT_GROUPS.map(group => (
+                                <div key={group.id} className="mt-5">
+                                    <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">{group.label}</p>
+                                    {chipGrid(unitsInGroup(group.id))}
+                                </div>
+                            ))}
                         </>
                     )}
-
-                    <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">Common</p>
-                    <div className="grid grid-cols-3 gap-2">
-                        {COMMON_UNITS.map(label => (
-                            <button key={label} type="button" onClick={() => onSelect(label)} className={chipClass(label)}>
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {UNIT_GROUPS.map(group => (
-                        <div key={group.id} className="mt-5">
-                            <p className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2">{group.label}</p>
-                            <div className="grid grid-cols-3 gap-2">
-                                {unitsInGroup(group.id).map(label => (
-                                    <button key={label} type="button" onClick={() => onSelect(label)} className={chipClass(label)}>
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Free-text escape hatch. `ingredients.unit` accepts anything
-                        and real recipes rely on that; it just isn't the default. */}
-                    <div className="mt-6 pt-4 border-t border-paper-shade">
-                        {!showCustom ? (
-                            <button
-                                type="button"
-                                onClick={revealCustom}
-                                className="w-full px-4 py-3 min-h-[44px] rounded-lg bg-paper-shade hover:bg-tan/40 text-ink font-serif text-base transition-colors"
-                            >
-                                + Type a custom unit
-                            </button>
-                        ) : (
-                            <>
-                                <label htmlFor="unit-custom" className="font-display text-xs uppercase tracking-wider text-ink/50 mb-2 block">
-                                    Custom unit
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        id="unit-custom"
-                                        ref={customInputRef}
-                                        type="text"
-                                        value={customValue}
-                                        onChange={e => setCustomValue(e.target.value)}
-                                        placeholder="e.g. pouch"
-                                        autoCapitalize="none"
-                                        autoCorrect="off"
-                                        spellCheck={false}
-                                        enterKeyHint="done"
-                                        className="flex-1 min-w-0 px-3 py-3 min-h-[44px] rounded-lg bg-[#fbf6f1] border border-paper-shade text-ink font-serif text-base focus:outline-none focus:ring-2 focus:ring-rust/50"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={commitCustom}
-                                        disabled={customValue.trim() === ''}
-                                        className="px-5 py-3 min-h-[44px] rounded-lg bg-rust hover:bg-rust-dark text-paper font-semibold transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                        Save
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
 
                     {/* Clearing is a legitimate end state — plenty of ingredients
                         ("2 Star Anise") have no unit at all. */}
@@ -169,7 +231,7 @@ export default function UnitPickerSheet({ value, onSelect, onClose }) {
                         <button
                             type="button"
                             onClick={() => onSelect('')}
-                            className="mt-3 w-full px-4 py-3 min-h-[44px] rounded-lg text-ink/60 hover:text-rose-dark font-serif italic text-sm transition-colors"
+                            className="mt-4 w-full px-4 py-3 min-h-[44px] rounded-lg text-ink/60 hover:text-rose-dark font-serif italic text-sm transition-colors"
                         >
                             Clear unit
                         </button>

@@ -912,9 +912,11 @@ Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40p
 
 Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation/removal, and a column-order toggle. These are all input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
 
-## Unit combobox
+## Unit picker — one control at every width
 
-Each row's Unit cell is a custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](../src/components/UnitCombobox.jsx)) rather than a native `<datalist>` (which can't be palette-themed and matches substrings inconsistently across browsers). The input opens a paper-shade dropdown (`#fbf6f1` surface, `#e8dcd2` border, soft drop shadow, `max-height: 220px` with scroll) listing substring matches from [src/lib/measurementUnits.js](../src/lib/measurementUnits.js) — `matchUnits()` searches the canonical label **and** its aliases, so `tbsp` surfaces `tablespoon`. The highlighted option fills with the rust accent (`#b06452` background, `#fbf6f1` text); hover and ↑/↓ both move the highlight. Free text is always allowed — the list is assistance, not a constraint.
+Each row's Unit cell is a `.unit-trigger` button showing the current value (rose italic `Unit` when empty) with a trailing ▾. It opens [UnitPickerSheet.jsx](../src/components/UnitPickerSheet.jsx) — see the dedicated section below.
+
+> **Superseded:** the original `<UnitCombobox>` (a text input over a paper-shade dropdown of `matchUnits()` results) was **removed** when the sheet took over the browser as well as the phone. Authoring a recipe should be the same act on a laptop and a phone, and keeping two pickers meant two behaviours, two sets of styles, and two places for a bug like the reversed units to hide. The combobox's substring-and-alias matching survives as the sheet's filter field — same `matchUnits()`, just uncapped, since a sheet can scroll where a dropdown could not.
 
 ## Column-order toggle
 
@@ -933,25 +935,29 @@ Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0
 ⎛ Qty ⎞ ⎛ Unit ………………………………… ▾ ⎞
 ```
 
-Every control is raised to the 44px tap-target floor Stage 9's mobile audit set (the grip was 24px, inputs 42px, `.unit-suggestion` rows ~31px). `min-width: 0` on the flex children is the other half of the fix — flex items default to `min-width: auto`, so the Qty placeholder's 199px min-content width silently beat its own `flex: 0 0 120px` basis.
+Every control is raised to the 44px tap-target floor Stage 9's mobile audit set (the grip was 24px, inputs 42px, and the old dropdown's rows ~31px). `min-width: 0` on the flex children is the other half of the fix — flex items default to `min-width: auto`, so the Qty placeholder's 199px min-content width silently beat its own `flex: 0 0 120px` basis.
 
 The **column-order toggle is hidden below 640px**: its three presets assume a single line, and there is nothing meaningful to cycle once Name sits above Qty + Unit.
 
-## Unit picker sheet (phone)
+## Unit picker sheet
 
-Below 640px the Unit cell is a `.unit-trigger` button — styled as an input at rest (`#fbf6f1` fill, `#e8dcd2` border) with a trailing ▾, and a rose italic label when empty so it reads as a placeholder. Tapping it opens [UnitPickerSheet.jsx](../src/components/UnitPickerSheet.jsx), which reuses [TimerSetSheet](../src/components/TimerSetSheet.jsx)'s chrome verbatim so the app has one sheet idiom: `items-end sm:items-center`, `bg-ink/40` backdrop, `bg-paper paper-grain rounded-t-2xl`, sticky header, Escape + backdrop close.
+The `.unit-trigger` button is styled as an input at rest (`#fbf6f1` fill, `#e8dcd2` border) so the row still scans as three fields; its height stretches with the row on desktop and pins to 44px on phones. Tapping it — or pressing Enter/↓ on it — opens the sheet, which reuses [TimerSetSheet](../src/components/TimerSetSheet.jsx)'s chrome verbatim so the app has one sheet idiom: `items-end sm:items-center` (bottom sheet on phones, centred card above `sm:`), `bg-ink/40` backdrop, `bg-paper paper-grain rounded-t-2xl sm:rounded-2xl`, sticky header, Escape + backdrop close, and a Tab focus trap.
 
 Contents, top to bottom:
 
-- **Yours** — only when the row holds free text that isn't one of our labels (`large spoons`), so reopening the sheet never looks like the value was discarded.
+- **Filter field** — sticky under the header. Filters the chips via `matchUnits(query, Infinity)` **and** doubles as the free-text escape hatch, so there is one text field rather than a search box plus a separate custom box. `ingredients.unit` is a free-text column and real recipes use `pouch` / `large spoons`, so whatever is typed can always be committed.
+- **Matches** — while filtering, a flat ranked list replaces the grouped view, with an "N matches" count. ↑/↓ move a `tan/40` + rust-ring highlight; Enter takes it.
+- **Use “…” as a custom unit** — a rust primary button whenever the typed text isn't already one of our labels. Enter commits it when nothing matches.
+- **Yours** — unfiltered only, and only when the row holds free text that isn't one of our labels, so reopening the sheet never looks like the value was discarded.
 - **Common** — a 3×3 chip grid of the nine units this cookbook actually uses, ordered by a count over the live `ingredients` table (teaspoon 54, tablespoon 37, cup 36, pound/gram 10, clove 7, ounce 6, stalk 5, piece 3).
 - **Volume / Weight / Count** — every unit, grouped from the `group` field on `MEASUREMENT_UNITS`. Common units deliberately appear twice: the shortcut row is a shortcut, and the groups stay complete so scanning "Volume" finds everything.
-- **+ Type a custom unit** — a disclosure mirroring the timer sheet's "Add a custom time", revealing a text field + Save. `ingredients.unit` is a free-text column and real recipes use it, so free text stays reachable — just not the default path.
 - **Clear unit** — shown only when a unit is set; plenty of ingredients ("2 Star Anise") have none.
 
-Selected chips fill rust (`#b06452` on `#fbf6f1` text), matching the combobox's highlighted option. The common path needs **zero typing**, so the IME never engages and the reversed-unit bug ([imeComposition.js](../src/lib/imeComposition.js)) cannot reproduce there.
+Selected chips fill rust (`#b06452` on `#fbf6f1` text). Choosing a unit closes the sheet and **advances down the row** exactly as confirming the old combobox did, so Enter-through-the-row fast entry survived the move to a modal; dismissing with Escape/backdrop/✕ instead returns focus to the trigger without advancing.
 
-**Desktop is unchanged** — it keeps `<UnitCombobox>`, which is keyboard-fast and has room to render. The phone/desktop choice is a JS media query ([useIsPhone.js](../src/hooks/useIsPhone.js)) rather than CSS visibility, because the two are different controls: rendering both and hiding one would leave a phantom tab stop and two elements claiming the same `inputRefs` key.
+**The one difference between widths is autofocus.** On desktop the filter takes focus, so typing `tbsp` + Enter is as fast as the combobox it replaced. On a phone it does not — raising the keyboard would bury the chips under it and put authors back to typing-first, the very thing this control exists to avoid. That branch is `autoFocusFilter`, driven by [useIsPhone.js](../src/hooks/useIsPhone.js); a JS media query rather than CSS visibility because the same hook also gates the Qty affordances below, and because rendering both variants and hiding one would leave a phantom tab stop plus two elements claiming the same `inputRefs` key.
+
+Because the default path is chips rather than a text field, the IME never engages for a normal unit choice, so the reversed-unit bug ([imeComposition.js](../src/lib/imeComposition.js)) cannot reproduce there — and the filter's own Enter/arrow handling is IME-guarded for when it does.
 
 ## Qty fraction chips (phone)
 

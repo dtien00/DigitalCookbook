@@ -8,10 +8,9 @@ import { useDragSort } from '../hooks/useDragSort'
 import { arrayMove } from '../lib/dragSortCore'
 import { ALLERGENS, DIETARY } from '../lib/dietaryTags'
 import { resizeImage } from '../lib/resizeImage'
-import UnitCombobox from './UnitCombobox'
 import UnitPickerSheet from './UnitPickerSheet'
 import { useIsPhone } from '../hooks/useIsPhone'
-import { isCommitEnter } from '../lib/imeComposition'
+import { isCommitEnter, isComposingKeyEvent } from '../lib/imeComposition'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
 
@@ -396,8 +395,7 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
 
     // Qty fraction chips follow focus. The blur is deferred because tapping a
     // chip blurs the input first — unmounting the chips synchronously would
-    // remove the button out from under the tap. Same trick as UnitCombobox's
-    // suggestion list.
+    // remove the button out from under the tap.
     const handleQtyFocus = (index) => {
         if (qtyBlurTimer.current) clearTimeout(qtyBlurTimer.current)
         setQtyFocusRow(index)
@@ -417,10 +415,31 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         inputRefs.current[`${index}:quantity`]?.focus()
     }
 
-    // Commit a unit chosen from the phone sheet and close it.
+    // Commit a unit chosen from the sheet, close it, and carry on down the row
+    // exactly as confirming the old combobox did — so Enter-through-the-row
+    // fast entry survives the switch to a modal.
     const handleUnitSheetSelect = (index, unit) => {
         handleRowFieldChange(index, 'unit', unit)
         setUnitSheetRow(null)
+        commitIngredientField(index, 'unit')
+    }
+
+    // Dismissing without choosing must not advance — put focus back on the
+    // trigger so the keyboard user is where they left off.
+    const closeUnitSheet = (index) => {
+        setUnitSheetRow(null)
+        inputRefs.current[`${index}:unit`]?.focus()
+    }
+
+    // The trigger is a button, so Space/Enter already activate it. ArrowDown
+    // opens too (the combobox idiom this replaced), and the IME guard keeps a
+    // composing Enter from opening the sheet mid-word.
+    const handleUnitTriggerKeyDown = (index, e) => {
+        if (isComposingKeyEvent(e)) return
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setUnitSheetRow(index)
+        }
     }
 
     // Drop the pending chip-hide timer if the editor unmounts mid-entry.
@@ -1006,34 +1025,25 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                                             {grip}
                                             {ingredientLayout.map(field => {
                                                 if (field === 'unit') {
-                                                    // Phone: a button opening the tap-first sheet.
-                                                    // The combobox is unusable here — it collapses
-                                                    // to ~18px in this row and its dropdown has
-                                                    // nowhere to render.
-                                                    if (isPhone) {
-                                                        return (
-                                                            <button
-                                                                key="unit"
-                                                                type="button"
-                                                                ref={el => { inputRefs.current[`${index}:unit`] = el }}
-                                                                onClick={() => setUnitSheetRow(index)}
-                                                                className={`unit-trigger${row.unit ? '' : ' is-empty'}`}
-                                                                aria-haspopup="dialog"
-                                                            >
-                                                                <span className="unit-trigger-label">{row.unit || 'Unit'}</span>
-                                                                <span aria-hidden="true">▾</span>
-                                                            </button>
-                                                        )
-                                                    }
+                                                    // One control at every width — the sheet replaced
+                                                    // the old <UnitCombobox> on desktop too, so
+                                                    // authoring a recipe is the same act on a phone
+                                                    // and a laptop. Enter opens it, matching the
+                                                    // combobox's old Enter-to-open-the-list.
                                                     return (
-                                                        <UnitCombobox
+                                                        <button
                                                             key="unit"
-                                                            value={row.unit}
-                                                            placeholder="Unit (e.g. cups)"
-                                                            inputRef={el => { inputRefs.current[`${index}:unit`] = el }}
-                                                            onChange={v => handleRowFieldChange(index, 'unit', v)}
-                                                            onCommit={() => commitIngredientField(index, 'unit')}
-                                                        />
+                                                            type="button"
+                                                            ref={el => { inputRefs.current[`${index}:unit`] = el }}
+                                                            onClick={() => setUnitSheetRow(index)}
+                                                            onKeyDown={e => handleUnitTriggerKeyDown(index, e)}
+                                                            className={`unit-trigger${row.unit ? '' : ' is-empty'}`}
+                                                            aria-haspopup="dialog"
+                                                            aria-expanded={unitSheetRow === index}
+                                                        >
+                                                            <span className="unit-trigger-label">{row.unit || 'Unit'}</span>
+                                                            <span aria-hidden="true">▾</span>
+                                                        </button>
                                                     )
                                                 }
                                                 const isQty = field === 'quantity'
@@ -1223,7 +1233,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 <UnitPickerSheet
                     value={rows[unitSheetRow].unit || ''}
                     onSelect={unit => handleUnitSheetSelect(unitSheetRow, unit)}
-                    onClose={() => setUnitSheetRow(null)}
+                    onClose={() => closeUnitSheet(unitSheetRow)}
+                    autoFocusFilter={!isPhone}
                 />
             )}
         </div>

@@ -685,11 +685,12 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Simple fraction** — `1/2` saves and renders as `½`; `3/4` → `¾`
 - [ ] **Unicode glyph** — pasting `½` into Qty saves to `0.5`
 - [ ] **Empty Qty** — leaving Qty blank still saves (stores `0`, same as before)
-- [ ] **Unit autocomplete opens** — focus a Unit field → dropdown shows the unit list on the paper-shade surface
+- [ ] **Unit sheet opens** — click the Unit trigger (or focus it and press `Enter` / `↓`) → the sheet opens centred, filter field already focused
 - [ ] **Substring match** — type `spo` → `teaspoon` and `tablespoon` appear; type `tbsp` → `tablespoon` appears (alias match)
-- [ ] **Select by mouse** — click a suggestion → it fills the Unit field and the list closes
-- [ ] **Select by keyboard** — `↓` to highlight (rust background), `Enter` selects it and stops (does NOT add a row); a second `Enter` then commits the row
-- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → it saves as typed
+- [ ] **Select by mouse** — click a chip → it fills the Unit trigger and the sheet closes
+- [ ] **Select by keyboard** — `↓`/`↑` move the highlight through the matches, `Enter` takes the highlighted one, and focus advances down the row (as confirming the old combobox did)
+- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → "No unit matches" plus a **Use "knob" as a custom unit** button; `Enter` commits it and it saves as typed
+- [ ] **Escape does not commit** — open the sheet, type something, press `Escape` → sheet closes, the row's unit is unchanged, focus is back on the trigger
 - [ ] **Enter on last column adds a row** — with the default Name · Qty · Unit order, `Enter` in the Unit field of the last row creates a new empty row and focus lands in its first field
 - [ ] **Enter advances within a row** — `Enter` in Name focuses Qty; `Enter` in Qty focuses Unit; no accidental form submit at any point
 - [ ] **Remove a row** — add 3 rows; click the trailing `×` on the middle one → it disappears, the other two remain, and focus moves to the row that took its slot
@@ -719,18 +720,21 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Row is two lines** — at 375px: grip + Name + `×` on line 1, Qty + Unit on line 2; **nothing is cut off at the right edge** and the page does not scroll sideways
 - [ ] **Column toggle is hidden** — the `⇄ Name · Qty · Unit` pill does not render below 640px; widen past 640px → it comes back
 - [ ] **Unit is a button, not a text field** — tapping it opens the sheet; tapping does *not* raise the keyboard
+- [ ] **Filter is NOT autofocused on a phone** — the keyboard stays down and the chips are immediately visible. *(This is the one deliberate difference from desktop, where the filter IS focused.)*
+- [ ] **Sheet is a bottom sheet** — anchored to the bottom edge on a phone, centred card above 640px
 - [ ] **Sheet contents** — Common (9 chips, 3×3), then Volume / Weight / Count; every unit appears, chips are comfortably tappable
 - [ ] **Pick a chip** — sheet closes, the trigger shows the label, and the value saves as that canonical label
 - [ ] **Reopen pre-selects** — open the sheet on a row that already has a unit → that chip is filled rust
-- [ ] **Custom unit** — "+ Type a custom unit" → type `pouch` → Save → trigger reads `pouch`; reopen → it appears under a **Yours** heading with the custom field prefilled
+- [ ] **Custom unit** — type `pouch` in the filter → **Use "pouch" as a custom unit** → trigger reads `pouch`; reopen → it appears under a **Yours** heading
 - [ ] **Clear unit** — offered only when a unit is set; clearing leaves the trigger reading a rose italic `Unit`
-- [ ] **Escape / backdrop / ✕ all close** without changing the value
+- [ ] **Escape / backdrop / ✕ all close** without changing the value, and focus returns to the trigger
 - [ ] **Qty raises a number pad** — not the full QWERTY keyboard; placeholder reads just `Qty`
 - [ ] **Fraction chips appear on focus** — `½ ⅓ ¼ ⅔ ¾ ⅛` under the row; they disappear shortly after blur
 - [ ] **Chip appends** — with `1` in Qty, tap `½` → field reads `1½`; save → RecipeDetail shows `1 ½`
 - [ ] **Second chip corrects** — tap `¼` after `½` → `1¼`, not `1½¼`
 - [ ] **Chip tap keeps focus** — the keyboard and the chips both stay up across a tap, so you can keep typing
-- [ ] **Desktop unaffected** — above 640px the Unit cell is still the `<UnitCombobox>` with its dropdown, the row is one line, and Enter still advances Name → Qty → Unit
+- [ ] **Same control on desktop** — above 640px the Unit cell is the same trigger + sheet (centred, filter autofocused), the row is one line, the Qty fraction chips are absent, and Enter still advances Name → Qty → Unit
+- [ ] **Crossing the breakpoint live** — with the editor open, drag the window across 640px → the row reflows, the Qty chips and column-order toggle appear/disappear, and the sheet's autofocus behaviour follows, all without a reload
 
 
 ---
@@ -970,7 +974,7 @@ Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase,
 npm test
 ```
 
-**240 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+**244 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
 
 These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
 

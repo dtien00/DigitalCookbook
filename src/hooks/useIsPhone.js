@@ -27,10 +27,21 @@ export function useIsPhone() {
     useEffect(() => {
         if (typeof window === 'undefined' || !window.matchMedia) return
         const mq = window.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`)
-        const onChange = (e) => setIsPhone(e.matches)
-        setIsPhone(mq.matches)
-        mq.addEventListener('change', onChange)
-        return () => mq.removeEventListener('change', onChange)
+        // Read the list rather than the event, so both listeners share one path.
+        const sync = () => setIsPhone(mq.matches)
+        sync()
+        mq.addEventListener('change', sync)
+        // `change` is the right API and fires on a real rotate or window drag,
+        // but it was observed not firing under devtools viewport emulation —
+        // leaving the CSS breakpoint flipped while this hook still said desktop,
+        // i.e. the phone layout rendering the desktop control. `resize` is the
+        // cheap backstop: setIsPhone with an unchanged boolean is a no-op in
+        // React, so the common case costs one comparison per resize frame.
+        window.addEventListener('resize', sync)
+        return () => {
+            mq.removeEventListener('change', sync)
+            window.removeEventListener('resize', sync)
+        }
     }, [])
 
     return isPhone

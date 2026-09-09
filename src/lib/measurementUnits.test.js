@@ -33,6 +33,25 @@ describe('matchUnits', () => {
     })  // :50  (a broad query like "s")  ← boundary
 })
 
+describe('matchUnits limit', () => {
+    it('defaults to MAX_SUGGESTIONS so the dropdown stays compact', () => {
+        expect(matchUnits('s')).toHaveLength(MAX_SUGGESTIONS)
+    })
+    it('returns every match when the caller lifts the cap', () => {
+        // The unit sheet scrolls, so it asks for all of them. A broad query
+        // must therefore return more than the dropdown's cap.
+        const all = matchUnits('s', Infinity)
+        expect(all.length).toBeGreaterThan(MAX_SUGGESTIONS)
+        expect(new Set(all).size).toBe(all.length)
+    })
+    it('honours a smaller explicit limit', () => {
+        expect(matchUnits('s', 3)).toHaveLength(3)
+    })
+    it('applies the limit to the empty-query head too', () => {
+        expect(matchUnits('', 4)).toEqual(['teaspoon', 'tablespoon', 'cup', 'fluid ounce'])
+    })
+})
+
 describe('MEASUREMENT_UNITS data integrity', () => {
     it('has unique, non-empty labels', () => {
         const labels = MEASUREMENT_UNITS.map(u => u.label)
