@@ -31,6 +31,11 @@ export default function RecipeCard({
             onClick?.()
         }
     }
+    
+    // Hide only on devices that can hover (so hover can bring them back), and
+    // also reveal on keyboard focus. Buttons that are "on" stay visible.
+    const revealOnHover =
+        '[@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
 
     return (
         <div
@@ -50,14 +55,14 @@ export default function RecipeCard({
                     count={likeCount}
                     onClick={onToggleLike}
                     size="sm"
-                    className="absolute top-3 left-3 z-10"
+                    className={`absolute top-3 left-3 z-10 ${liked ? '' : revealOnHover}`}
                 />
             )}
             {onToggleFavorite && (
                 <BookmarkButton
                     favorited={favorited}
                     onClick={onToggleFavorite}
-                    className="absolute top-3 right-3 z-10"
+                    className={`absolute top-3 left-3 z-10 ${favorited ? '' : revealOnHover}`}
                 />
             )}
             {recipe.is_public === false && (
