@@ -1498,9 +1498,15 @@ function HomeView({
                 )}
                 {/* Trigger cluster — Fridge / Filters / List all narrow the
                     grid, so they cluster. On phone they split their own row
-                    into equal thirds; min-w-[96px] lets the row wrap to two
-                    lines below ~340px rather than clipping a label. */}
-                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3 sm:flex-shrink-0">
+                    into equal thirds, capped at 160px (max-w-40) so they
+                    don't stretch into wide bars between ~540px and sm.
+                    Tighter inner padding on phone (px-2.5 gap-1.5) keeps
+                    all three on one row down to 320px; below that, or with
+                    a wider-rendering font, the label truncates rather than
+                    the row wrapping. Each button's aria-label still carries
+                    the full name. The 8px gap between buttons stays — that's
+                    the adjacent-tap-target minimum. */}
+                <div className="flex items-center gap-2 sm:gap-3 sm:flex-shrink-0">
                     {/* Fridge basket trigger. Count badge appears when the basket
                         has items — quiet rust dot in the top-right corner. The
                         ref is forwarded from App so the modal can restore focus
@@ -1513,15 +1519,15 @@ function HomeView({
                             ? 'Open fridge basket'
                             : `Open fridge basket (${basket.length} ingredient${basket.length === 1 ? '' : 's'})`}
                         aria-haspopup="dialog"
-                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                        className="relative flex-1 min-w-0 max-w-40 justify-center gap-1.5 px-2.5 sm:flex-none sm:max-w-none sm:justify-start sm:gap-2 sm:px-4 inline-flex items-center py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
                     >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="5" y="3" width="14" height="18" rx="2" />
                             <line x1="5" y1="11" x2="19" y2="11" />
                             <line x1="9" y1="7" x2="9" y2="8" />
                             <line x1="9" y1="15" x2="9" y2="16" />
                         </svg>
-                        <span>Fridge</span>
+                        <span className="truncate">Fridge</span>
                         {basket.length > 0 && (
                             <span
                                 aria-hidden="true"
@@ -1542,12 +1548,12 @@ function HomeView({
                             ? 'Open dietary filters'
                             : `Open dietary filters (${dietaryFilterCount} active)`}
                         aria-haspopup="dialog"
-                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                        className="relative flex-1 min-w-0 max-w-40 justify-center gap-1.5 px-2.5 sm:flex-none sm:max-w-none sm:justify-start sm:gap-2 sm:px-4 inline-flex items-center py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
                     >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                         </svg>
-                        <span>Filters</span>
+                        <span className="truncate">Filters</span>
                         {dietaryFilterCount > 0 && (
                             <span
                                 aria-hidden="true"
@@ -1566,14 +1572,14 @@ function HomeView({
                         aria-label={shoppingCount > 0
                             ? `Open shopping list (${shoppingCount} item${shoppingCount === 1 ? '' : 's'})`
                             : 'Open shopping list'}
-                        className="relative flex-1 min-w-[96px] justify-center sm:flex-none sm:min-w-0 sm:justify-start inline-flex items-center gap-2 px-4 py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
+                        className="relative flex-1 min-w-0 max-w-40 justify-center gap-1.5 px-2.5 sm:flex-none sm:max-w-none sm:justify-start sm:gap-2 sm:px-4 inline-flex items-center py-2 bg-paper-shade hover:bg-tan/40 text-ink rounded-full text-sm font-medium transition-colors min-h-[44px]"
                     >
-                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="9" cy="21" r="1" />
                             <circle cx="20" cy="21" r="1" />
                             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                         </svg>
-                        <span>List</span>
+                        <span className="truncate">List</span>
                         {shoppingCount > 0 && (
                             <span
                                 aria-hidden="true"
