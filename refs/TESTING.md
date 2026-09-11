@@ -108,15 +108,16 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **test-medium** — 20 visible, tier 3 (still 4 cols, at the upper bound)
 - [ ] **test-large** — 34 visible, tier 4 (5-col floor)
 - [ ] **test-public** — 6 visible (own only — test-public's public recipes overlap with its own count)
-- [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens
+- [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens, like pill fades in top-left and bookmark top-right (never stacked in one corner)
+- [ ] **Keyboard reveal** — Tab onto a card → like pill + bookmark appear; Tab again lands on each with a visible button
 - [ ] **Search stability** — filters the grid without changing card size
-- [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow
+- [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow; like pill + bookmark visible at rest in opposite top corners (touch has no hover to reveal them)
 - [ ] **Mobile swipe-back (Stage 9)** — on a real phone (touch events don't fire from desktop trackpads), thumb-swipe right from any recipe detail page returns to the home grid; vertical scroll within the recipe still works; pinch-zoom doesn't trigger a navigation
 - [ ] **Mobile swipe-resume (Stage 9)** — after swiping back to the home grid, thumb-swipe left → re-opens the recipe you just left; in a fresh tab (no `lastViewedRecipeId`), the same left-swipe does nothing and the page doesn't visibly slide
 
 ## Bookmarks checklist
 
-- [ ] **Bookmark icon visible on every card** (top-right corner of image, outline state initially)
+- [ ] **Bookmark icon on every card** (top-right corner of image, outline state initially) — on desktop it appears on card hover, and stays visible at rest once saved
 - [ ] **Click bookmark, icon flips to filled (indigo) immediately** — no spinner, no delay (optimistic UI)
 - [ ] **Bookmark click does NOT open the detail view** (e.stopPropagation working)
 - [ ] **Reload page, bookmark state persists** (proves the Supabase write succeeded)
@@ -130,7 +131,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ## Likes checklist
 
-- [ ] **Like pill visible top-left of every card** — heart icon, outline state initially (rose-filled if you've already liked it from a prior session)
+- [ ] **Like pill top-left of every card** — heart icon, outline state initially (rose-filled if you've already liked it from a prior session); on desktop it appears on card hover, and stays visible at rest once you've liked it
 - [ ] **Count rendered only when > 0** — a recipe with zero likes shows just the heart, no `0`
 - [ ] **Click heart, fill flips to rose-500 immediately + count increments** — no spinner (optimistic UI)
 - [ ] **Click again, fill reverts to outline + count decrements** — toggle off works the same way
