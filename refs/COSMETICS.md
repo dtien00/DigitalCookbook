@@ -92,7 +92,7 @@ A grid of 20+ recipes is a recognition exercise, not a reading exercise. The tit
 
 ## Bookmark button
 
-A small circular icon button in the **top-right corner of every card** (`absolute top-3 right-3 z-10`). Always visible, regardless of hover state — bookmarking should be a one-tap action, not a "hover then click" two-step.
+A small circular icon button in the **top-right corner of every card** (`absolute top-3 right-3 z-10`). On touch screens it's always visible, so saving stays a one-tap action; on hover-capable screens it fades in with the card hover unless the recipe is already saved — see [Like + bookmark hover reveal](#like--bookmark-hover-reveal).
 
 - **Visual:** `w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md` — a frosted-glass disc that reads against both image-rich and plain-white card content.
 - **Icon:** Lucide/Heroicons bookmark glyph. Filled `fill-indigo-600 stroke-indigo-600` when saved; outline `fill-none stroke-gray-800` when not. Click triggers a brief `active:scale-95` press + persistent state change.
@@ -101,7 +101,7 @@ A small circular icon button in the **top-right corner of every card** (`absolut
 - **Larger variant** on [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) — `size="lg"` (`w-12 h-12`, larger icon) — placed in the top-right of the header row, balancing the back button.
 
 ### Anonymous behavior
-The bookmark button renders identically for anonymous viewers — *clicking* it opens the Auth view instead of toggling state. The visual affordance is the conversion incentive: "you can save this if you sign in." Hiding the button entirely would remove the prompt to convert; showing it grayed-out would feel like a denied action.
+The bookmark button renders identically for anonymous viewers — *clicking* it opens the Auth view instead of toggling state. The visual affordance is the conversion incentive: "you can save this if you sign in." Hiding the button entirely would remove the prompt to convert; showing it grayed-out would feel like a denied action. (On hover-capable screens the prompt now sits one hover away — anonymous viewers never have a saved state to keep the button pinned.)
 
 ## Like button (heart + count)
 
@@ -120,10 +120,26 @@ Different mental models:
 Pinterest itself distinguishes "save to board" from a quick reaction — we follow the same separation.
 
 ### Anonymous behavior
-The like pill renders for anonymous viewers too, with the count visible (likes are public information). Clicking it opens the Auth view. The count is the social proof that hopefully nudges sign-up; the click being gated behind auth is the conversion point.
+The like pill renders for anonymous viewers too, with the count visible (likes are public information). Clicking it opens the Auth view. The count is the social proof that hopefully nudges sign-up; the click being gated behind auth is the conversion point. On hover-capable screens the pill (and so the count) appears only on card hover — an accepted trade for image-first covers at rest.
 
 ### Detail page placement
 On [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) both buttons sit in the top-right header row (the "← Back to List" button is top-left), at `size="lg"` for finger-target generosity. Like comes first, then bookmark — left-to-right reading order mirrors the cards' top-left/top-right placement.
+
+## Like + bookmark hover reveal
+
+On grid cards the like pill and bookmark stay out of the cover art until the viewer shows interest in that card. Driven from [RecipeCard.jsx](../src/components/RecipeCard.jsx) by one class string, `revealOnHover`, applied to each button:
+
+| Situation | Like pill / bookmark |
+|---|---|
+| Hover-capable screen, at rest | Hidden — `[@media(hover:hover)]:opacity-0` |
+| Card hovered | Fades in — `group-hover:opacity-100`, animated by the buttons' own `transition-all` (150ms) |
+| Card or either button keyboard-focused | Visible — `group-focus-within:opacity-100`, so Tab never lands on an invisible control |
+| Button is "on" (you liked it / saved it) | Always visible — `revealOnHover` is skipped, so the grid still shows what you've saved and liked |
+| Touch screen (`hover: none`) | Always visible, as before |
+
+- **Why the hide is scoped to `(hover: hover)`:** Tailwind v4 wraps every `hover:` / `group-hover:` in `@media (hover: hover)`, so on a phone the reveal can never fire. A bare `opacity-0` would leave both buttons permanently invisible yet still tappable — 44px hot zones in the card's top corners that silently like/bookmark (or open sign-in) when you tap to open the recipe. Scoping the hide to the same media query as the reveal means "hidden" and "can be revealed" never disagree. (`pointer-fine:` is close but tests a different media feature.)
+- **Keep the corners distinct:** like `top-3 left-3`, bookmark `top-3 right-3`, both `z-10`. At equal z-index the later sibling paints on top, so a shared corner hides the like pill entirely under the bookmark.
+- **Known gap:** on cookbook pages the owner-only remove ✕ (top-center, [CookbookDetail.jsx](../src/components/CookbookDetail.jsx)) is a sibling of the card, outside its `group`, so it stays visible and sits alone at rest on desktop.
 
 ## Tags
 

@@ -62,7 +62,7 @@ export default function RecipeCard({
                 <BookmarkButton
                     favorited={favorited}
                     onClick={onToggleFavorite}
-                    className={`absolute top-3 left-3 z-10 ${favorited ? '' : revealOnHover}`}
+                    className={`absolute top-3 right-3 z-10 ${favorited ? '' : revealOnHover}`}
                 />
             )}
             {recipe.is_public === false && (
