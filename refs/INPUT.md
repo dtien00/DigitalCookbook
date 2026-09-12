@@ -173,7 +173,7 @@ existing row. Already scoped as the **recipe forking** deferred idea in
 [ROADMAP.md](./ROADMAP.md) (`forked_from_id` column, `?fork=<id>` param); recorded here
 only because it's an input method by another name. No new scoping needed.
 
-### 2.6 Live voice dictation (Web Speech API) — *reversed 2026-09-11: per-step mic, in progress*
+### 2.6 Live voice dictation (Web Speech API) — *reversed 2026-09-11: built as a per-step mic*
 
 **Original verdict (2026-07-19): probably skip.** A mic button doing in-app speech-to-text
 (`SpeechRecognition`). Browser support is uneven (no Firefox; Chrome routes audio to Google's
@@ -185,10 +185,12 @@ building an input method, check whether the OS already provides it one layer dow
 **Reversed 2026-09-11, at the project owner's request.** The facts above still hold; the
 trade now accepted is a visible, in-form mic in exchange for them, instead of relying on
 authors knowing that their keyboard — or Win+H / macOS Dictation on a desktop, which has no
-soft keyboard — already offers dictation. It's being built as a **microphone button on each
-step** of [CreateRecipe.jsx](../src/components/CreateRecipe.jsx), left of the step's remove
-`×`, appending the transcript to that step's instruction for review before save. Full scope
-in [ROADMAP.md](./ROADMAP.md) → Ad-hoc polish → *Step dictation* (branch `speech-to-text`).
+soft keyboard — already offers dictation. Built (2026-09-12) as a **microphone button on
+each step** of [CreateRecipe.jsx](../src/components/CreateRecipe.jsx), left of the step's
+remove `×`, appending the transcript to that step's instruction for review before save —
+[useSpeechDictation.js](../src/hooks/useSpeechDictation.js) over the pure rules in
+[dictation.js](../src/lib/dictation.js). Full scope in [ROADMAP.md](./ROADMAP.md) → Ad-hoc
+polish → *Step dictation* (branch `speech-to-text`).
 
 **It isn't a funnel transport.** Every other method in §2 feeds whole recipes into
 `recipeImport.js`; this feeds one step's prose into one textarea, so the parser never sees
@@ -256,7 +258,7 @@ ordering:
 | §2.3 Bookmarklet | any open web page | none | no | ~1 day | strong sleeper |
 | §2.4 OCR photo | printed paper | Tesseract.js (lazy) | no | 2–3 days | yes, third |
 | §2.5 Fork/duplicate | own+others' recipes | migration | no | scoped in ROADMAP | ride existing plan |
-| §2.6 Web Speech API | voice, per step | none | no | ~1 day | **reversed 2026-09-11** — per-step mic in progress |
+| §2.6 Web Speech API | voice, per step | none | no | ~1 day | **reversed 2026-09-11** — built as a per-step mic |
 | §2.7 URL / LLM / email | links, handwriting | API route infra | **yes** | large | wait for the wall |
 | §2.8 CSV, Share Target | — | — | — | — | declined |
 
@@ -315,7 +317,7 @@ UI layer by accident).
    paper.
 4. **Gate unchanged:** URL import and everything LLM (§2.7) wait behind the first-API-route
    decision already recorded in ROADMAP; email-in stays declined.
-5. **Outside this sequence:** §2.6's in-app mic, reversed 2026-09-11 and being built as a
+5. **Outside this sequence:** §2.6's in-app mic, reversed 2026-09-11 and built as a
    per-step button on `speech-to-text`. It's a field-level affordance, not a funnel
    transport, so it doesn't compete with the order above.
 

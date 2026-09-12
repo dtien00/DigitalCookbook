@@ -11,6 +11,8 @@ import { resizeImage } from '../lib/resizeImage'
 import UnitPickerSheet from './UnitPickerSheet'
 import StepDurationSheet from './StepDurationSheet'
 import { useIsPhone } from '../hooks/useIsPhone'
+import { useSpeechDictation } from '../hooks/useSpeechDictation'
+import { appendTranscript } from '../lib/dictation'
 import { isCommitEnter, isComposingKeyEvent } from '../lib/imeComposition'
 import DragHandleIcon from './DragHandleIcon'
 import ImportRecipeModal from './ImportRecipeModal'
@@ -70,6 +72,13 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const [unitSheetRow, setUnitSheetRow] = useState(null)
     // Step index whose timer sheet is open (null = closed).
     const [durationSheetStep, setDurationSheetStep] = useState(null)
+    // Per-step dictation — the mic in each step head. One session at a time,
+    // keyed by step index; see src/hooks/useSpeechDictation.js.
+    const dictation = useSpeechDictation()
+    // The screen-reader line for a dictation that landed ("Added to step 2.").
+    // The visible preview is aria-hidden, so assistive tech hears the start
+    // and the result rather than every interim word.
+    const [dictationStatus, setDictationStatus] = useState('')
     // Row index whose Qty field has focus, so its fraction chips show. Cleared
     // on a delay so a chip tap lands before the row unmounts them.
     const [qtyFocusRow, setQtyFocusRow] = useState(null)
@@ -78,6 +87,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     const inputRefs = useRef({})
     // Field key to focus on the next render (e.g. after Enter adds a new row).
     const pendingFocusRef = useRef(null)
+    // Set with pendingFocusRef when the caret should land at the end of the
+    // field — after freshly dictated words — not wherever focus() leaves it.
+    const pendingCaretEndRef = useRef(false)
     // Stage 15 item 1 — each step row carries optional photo state:
     //   photoFile    — File the user just picked (null if untouched)
     //   photoPreview — blob: URL for a new pick, OR public URL for an
@@ -128,7 +140,11 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         if (!pendingFocusRef.current) return
         const el = inputRefs.current[pendingFocusRef.current]
         pendingFocusRef.current = null
-        if (el) el.focus()
+        const caretToEnd = pendingCaretEndRef.current
+        pendingCaretEndRef.current = false
+        if (!el) return
+        el.focus()
+        if (caretToEnd) el.setSelectionRange(el.value.length, el.value.length)
     })
 
     const focusField = (index, field) => {
@@ -170,6 +186,9 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
                 .order('step_number', { ascending: true })
 
             if (stepData?.length > 0) {
+                // The rows are about to be replaced wholesale; a dictation
+                // started on the placeholder step must not land in step 1.
+                dictation.abort()
                 setSteps(stepData.map(s => ({
                     instruction: s.instruction,
                     step_number: s.step_number,
@@ -357,6 +376,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // leave those alone.
     const removeStep = (index) => {
         if (steps.length === 1) return
+        // A live dictation is keyed by index: removing its own step, or any
+        // step above it, would shift a late result into the wrong row. A step
+        // below it can go without interrupting.
+        if (dictation.activeKey !== null && index <= dictation.activeKey) dictation.abort()
         const preview = steps[index].photoPreview
         if (preview && preview.startsWith('blob:')) URL.revokeObjectURL(preview)
         setSteps(steps
@@ -464,6 +487,38 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
         setSteps(newSteps)
     }
 
+    // Land a finished dictation in its step. A functional update, because the
+    // words arrive asynchronously: closing over `steps` from the moment the mic
+    // was tapped would wipe out anything typed while it listened.
+    const commitDictation = (index, text) => {
+        setSteps(prev => prev.map((s, i) => (
+            i === index ? { ...s, instruction: appendTranscript(s.instruction, text) } : s
+        )))
+        setDictationStatus(`Added to step ${index + 1}.`)
+        // On desktop, put the caret after the new words so the author can carry
+        // straight on typing — unless they've already moved to another field.
+        // Never on a phone: focusing the textarea would raise the keyboard over
+        // the form (the same call as the sheets' autoFocusFilter/autoFocusType).
+        const active = document.activeElement
+        const waiting = !active || active === document.body || active.dataset?.dictateStep === String(index)
+        if (!isPhone && waiting) {
+            pendingFocusRef.current = `step:${index}`
+            pendingCaretEndRef.current = true
+        }
+    }
+
+    // The mic is a toggle: tap to listen, tap the listening mic to stop and
+    // keep what was heard. Tapping another step's mic starts over there and
+    // drops the first step's unfinished words.
+    const toggleDictation = (index) => {
+        if (dictation.activeKey === index) {
+            dictation.stop()
+            return
+        }
+        setDictationStatus('')
+        dictation.start(index, text => commitDictation(index, text))
+    }
+
     // Stage 19 Phase 2 — raw timer string per step; parsed to seconds on save.
     const handleStepDurationChange = (index, value) => {
         const newSteps = [...steps]
@@ -492,6 +547,8 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
     // item's pick must not bleed into the next. Flips to private: republishing
     // someone else's prose should be an explicit choice, not a default.
     const applyRecipe = (recipe, warnings = []) => {
+        // Every step is about to be replaced; drop any dictation in flight.
+        dictation.abort()
         setTitle(recipe.title)
         setDescription(recipe.description)
         setServings(recipe.servings || 1)
@@ -583,6 +640,10 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
+        // Save what's in the fields now. Words still being recognized would
+        // arrive after the steps below were read, so drop them rather than
+        // let them land in a form that has already been saved.
+        dictation.abort()
         setLoading(true)
 
         try {
@@ -1141,22 +1202,61 @@ export default function CreateRecipe({ onComplete, userId, recipeToEdit }) {
 
                     <section className="form-section">
                         <h3>Steps</h3>
+                        {/* Dictation's screen-reader channel: when listening starts
+                            and where the words landed, not every interim word
+                            (the visible preview is aria-hidden). */}
+                        <p className="sr-only" role="status">
+                            {dictation.activeKey !== null ? `Listening for step ${dictation.activeKey + 1}.` : dictationStatus}
+                        </p>
                         {steps.map((step, index) => (
                             <div key={index} className="form-group">
                                 <div className="step-head">
                                     <label>Step {index + 1}</label>
-                                    {steps.length > 1 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => removeStep(index)}
-                                            className="ingredient-remove"
-                                            aria-label={`Remove step ${index + 1}`}
-                                            title="Remove this step"
-                                        >
-                                            ×
-                                        </button>
-                                    )}
+                                    {/* Mic, then remove. Wrapped because .step-head
+                                        spaces its children apart — a third child
+                                        would float the mic mid-row. The mic skips
+                                        the remove button's one-step rule: dictating
+                                        the only step is the normal case. */}
+                                    <div className="step-head-actions">
+                                        {dictation.supported && (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleDictation(index)}
+                                                className={dictation.activeKey === index
+                                                    ? 'step-dictate is-listening motion-safe:animate-pulse'
+                                                    : 'step-dictate'}
+                                                data-dictate-step={index}
+                                                aria-pressed={dictation.activeKey === index}
+                                                aria-label={`Dictate step ${index + 1}`}
+                                                title={dictation.activeKey === index
+                                                    ? 'Listening — tap to stop and keep what was heard'
+                                                    : 'Dictate this step. Your browser’s speech service (Google’s in Chrome, Apple’s in Safari) turns what you say into text.'}
+                                            >
+                                                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                    <rect x="9" y="2" width="6" height="12" rx="3" />
+                                                    <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
+                                                    <path d="M12 18v4" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        {steps.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeStep(index)}
+                                                className="ingredient-remove"
+                                                aria-label={`Remove step ${index + 1}`}
+                                                title="Remove this step"
+                                            >
+                                                ×
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
+                                {dictation.activeKey === index && (
+                                    <p className="step-dictation-preview" aria-hidden="true">
+                                        Listening…{dictation.interim ? ` “${dictation.interim}”` : ''}
+                                    </p>
+                                )}
                                 <textarea
                                     value={step.instruction}
                                     ref={el => { inputRefs.current[`step:${index}`] = el }}

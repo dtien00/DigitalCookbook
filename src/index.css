@@ -1051,6 +1051,61 @@ html[data-backdrop="digital"] .paper-grain {
   height: 30px;
 }
 
+/* The step head's right-hand controls: dictation mic, then remove. A wrapper,
+   because .step-head spaces its children apart — a third child would float
+   the mic to the middle of the row. 8px is the adjacent-tap-target gap the
+   hub's filter buttons keep. */
+.step-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Per-step dictation mic. At rest it matches the remove button beside it, so
+   the pair reads as one cluster; hover warms to rust like the Dial pill rather
+   than to remove's pink, which stays delete's alone. */
+.step-dictate {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a8a7d;
+  background: #f7f1ec;
+  border: 1px solid #e8dcd2;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.step-dictate:hover {
+  background: #fbf6f1;
+  border-color: #b06452;
+  color: #b06452;
+}
+
+/* Listening: filled rust. The pulse is `motion-safe:animate-pulse` on the
+   element (TimerWidget's alarm precedent), so a reduced-motion reader gets
+   the fill alone. */
+.step-dictate.is-listening,
+.step-dictate.is-listening:hover {
+  background: #b06452;
+  border-color: #b06452;
+  color: #fbf6f1;
+}
+
+/* What the recognizer is hearing, under the step head while it listens. Rose
+   italic is the editor's "not real yet" voice (cf. the empty Unit trigger);
+   only the final words reach the textarea. */
+.step-dictation-preview {
+  margin: -2px 0 8px;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #a2666f;
+  overflow-wrap: anywhere;
+}
+
 /* Section header with an inline control (e.g. the column-order toggle). */
 .form-section-head {
   display: flex;
@@ -1200,6 +1255,15 @@ html[data-backdrop="digital"] .paper-grain {
     order: 5;
     flex: 1 1 auto;
     min-height: 44px;
+  }
+
+  /* Step head: mic and remove up to the 44px floor. The step remove shipped
+     at 38×30 with no phone rule; beside a mic that gets tapped constantly,
+     and with no undo for a removed step, it needs the full target. */
+  .step-head .ingredient-remove,
+  .step-head .step-dictate {
+    width: 44px;
+    height: 44px;
   }
 }
 

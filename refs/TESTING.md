@@ -761,6 +761,51 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ---
 
+## Step dictation checklist (per-step mic)
+
+> Verifies the mic in each step head of [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) — [useSpeechDictation.js](../src/hooks/useSpeechDictation.js), rules in [dictation.js](../src/lib/dictation.js) (unit-tested). Client-only; no migration. **Needs HTTPS:** test phones on the Vercel preview or the tunnel — over the LAN-IP dev server (`http://192.168…`) the mic is correctly absent. Only real speech exercises the engines: the flow and error paths below were first verified in the in-app browser against a scripted recognizer, not a microphone, so the browser matrix is the part still to walk.
+
+**Browsers**
+- [ ] **Chrome desktop** — a mic on every step; the first tap asks for microphone permission; say a sentence and pause → the words land in that step
+- [ ] **Android Chrome** — the same (the recognizer may beep at start and stop — that's the OS)
+- [ ] **iOS Safari** (Siri/Dictation on) — the same. Also watch whether it stops by itself after a pause; if it keeps listening, tapping the mic must still end it within ~2 s and keep the words
+- [ ] **iOS Safari, Siri & Dictation off** — first tap → "…needs Siri or Dictation turned on." and every mic disappears until reload
+- [ ] **Firefox** — no mic anywhere; step heads look exactly as before
+- [ ] **Brave** — a mic shows; the first tap → "Voice input isn't available in this browser." and every mic disappears until reload
+- [ ] **Chrome / Firefox on iOS** — whatever WebKit exposes decides: a working mic or none, never one that fails on every tap
+
+**Flow**
+- [ ] **Empty step** — dictate "preheat the oven" → `Preheat the oven` (capitalised, no period added)
+- [ ] **Appends, never replaces** — on `Preheat the oven`, dictate "to 350 degrees" → `Preheat the oven to 350 degrees` (one space, no new capital)
+- [ ] **New sentence** — end the step with `.`, dictate again → the new words start with a capital
+- [ ] **Preview** — while listening, `Listening… “…”` shows under the step head in rose italic; the textarea doesn't change until the words are final
+- [ ] **Tap to stop** — tap the listening mic mid-sentence → what was heard so far lands; the mic returns to rest
+- [ ] **Typing while listening** — type into the same step while it listens → the typing survives, and the dictated words land after it
+- [ ] **Caret (desktop)** — after words land, the caret sits at the end of the step — unless you'd already clicked into another field, which keeps focus
+- [ ] **No keyboard (phone)** — after words land on a phone, the keyboard does *not* pop up
+- [ ] **One at a time** — while step 1 listens, tap step 2's mic → step 1's unfinished words are dropped and step 2 listens
+- [ ] **Single step** — a one-step recipe shows the mic alone at the right (no `×`), and dictation works
+
+**Interruptions**
+- [ ] **Remove a step above the listening one** (or the listening one itself) — the session stops and nothing lands anywhere
+- [ ] **Remove a step below it** — listening carries on and the words land in the right step
+- [ ] **Save while listening** — the save uses what's in the fields; the in-flight words are dropped, not added afterwards
+- [ ] **Import / batch advance while listening** — the incoming recipe loads clean, with nothing dictated into it
+- [ ] **Cancel or navigate away while listening** — the browser's recording indicator goes away
+
+**Errors**
+- [ ] **Permission denied** — block the microphone in site settings, tap → "Microphone access is blocked…"; the mic stays, and a second tap replaces the toast rather than stacking another
+- [ ] **Silence** — tap and say nothing → "Didn't catch anything…"; the mic stays
+- [ ] **Offline (Chrome)** — go offline, tap → "Voice input needs an internet connection."; the mic stays and works again once back online
+
+**Layout & access**
+- [ ] **Desktop** — the mic (38×30) sits 8px left of the `×`, both right-aligned on the "Step N" row; hover warms the mic to rust and the `×` to pink
+- [ ] **Phone (375px)** — both buttons 44×44, 8px apart, no sideways scroll
+- [ ] **Reduced motion** — with the OS setting on, the listening mic is filled rust but doesn't pulse
+- [ ] **Screen reader** — starting announces "Listening for step N."; finishing announces "Added to step N." — not every interim word
+
+---
+
 ## Ingredient sections checklist (Stage 21)
 
 > Verifies "For the sauce" / "For the dough" grouping across the editor, RecipeDetail, CookingMode, and print/PDF. **Requires migration 024 applied** (`supabase_migration_024_ingredient_sections.sql` — Dashboard → SQL Editor); until then saves fail with a missing-column error. Use any test account; author a recipe with an unsectioned lead ingredient, then two sections of 2–3 ingredients each.
