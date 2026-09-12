@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {appendTranscript, readResults, recognitionCtorFor, describeDictationError} from './dictation'
+import {appendTranscript, readResults, recognitionCtorFor, describeDictationError, isEmptyStrike, describeEmptySession, QUICK_STOP_MS} from './dictation'
 
 // A SpeechRecognitionResult stand-in: an array-like of alternatives (only the
 // first is read) carrying `isFinal`.
@@ -132,5 +132,35 @@ describe('describeDictationError', () => {
         for (const code of ['not-allowed', 'no-speech', 'network', 'service-not-allowed', 'audio-capture', 'start-failed']) {
             expect(describeDictationError(code).message).toBeTruthy()
         }
+    })
+})
+
+// Opera's failure mode: the constructor exists, but a session never returns
+// words and never raises an error — invisible to describeDictationError.
+describe('isEmptyStrike', () => {
+    it('counts a session the engine ended by itself, however short', () => {
+        expect(isEmptyStrike({stoppedByUser: false, durationMs: 200})).toBe(true)
+    })
+    it('ignores a quick stop by the author — a change of mind', () => {
+        expect(isEmptyStrike({stoppedByUser: true, durationMs: QUICK_STOP_MS - 1})).toBe(false)
+    })
+    it('counts a stop after long enough to have said something', () => {
+        expect(isEmptyStrike({stoppedByUser: true, durationMs: QUICK_STOP_MS})).toBe(true)
+    })
+})
+
+describe('describeEmptySession', () => {
+    it('asks for another try after the first empty session', () => {
+        const outcome = describeEmptySession({emptyStreak: 1})
+        expect(outcome.action).toBe('retry')
+        expect(outcome.message).toMatch(/Didn’t catch anything/)
+    })
+    it('hides the mic after a second in a row before any words', () => {
+        const outcome = describeEmptySession({emptyStreak: 2})
+        expect(outcome.action).toBe('disable')
+        expect(outcome.message).toMatch(/Chrome and Safari/)
+    })
+    it('never hides the mic once the engine has returned words', () => {
+        expect(describeEmptySession({emptyStreak: 5, hasSucceeded: true}).action).toBe('retry')
     })
 })

@@ -96,3 +96,28 @@ export function describeDictationError(code, { online = true, hasSucceeded = fal
     }
     return { action: 'disable', message: 'Voice input isn’t available in this browser.' }
 }
+
+// A stop within this long of starting is a change of mind, not a failed try.
+export const QUICK_STOP_MS = 3000
+
+// Whether a session that ended with no words and no error counts against the
+// engine. Error codes can't catch every broken recognizer: Opera exposes the
+// constructor, but its recognizer never returns a result — and never raises
+// an error to say so. A session the engine ended by itself always counts
+// (Chrome answers silence with a `no-speech` error, so ending with nothing
+// and no reason is the symptom); one the author stopped counts only if it
+// ran long enough for them to have said something.
+export function isEmptyStrike({ stoppedByUser = false, durationMs = 0 } = {}) {
+    return !stoppedByUser || durationMs >= QUICK_STOP_MS
+}
+
+// What to say after an empty session that counted. The first is just "say it
+// again"; a second in a row, before the engine has ever returned a word, means
+// it isn't going to — hide the mic rather than leave one that fails on every
+// tap. `emptyStreak` includes this session.
+export function describeEmptySession({ emptyStreak = 1, hasSucceeded = false } = {}) {
+    if (hasSucceeded || emptyStreak < 2) {
+        return { action: 'retry', message: 'Didn’t catch anything — tap the mic and try again.' }
+    }
+    return { action: 'disable', message: 'Voice input isn’t returning any words in this browser. It works in Chrome and Safari.' }
+}

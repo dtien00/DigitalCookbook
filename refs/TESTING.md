@@ -772,6 +772,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **iOS Safari, Siri & Dictation off** — first tap → "…needs Siri or Dictation turned on." and every mic disappears until reload
 - [ ] **Firefox** — no mic anywhere; step heads look exactly as before
 - [ ] **Brave** — a mic shows; the first tap → "Voice input isn't available in this browser." and every mic disappears until reload
+- [ ] **Opera** — a mic shows, but Opera's recognizer never answers (no words, no error). Talk, then tap to stop → "Didn't catch anything…"; once more → "Voice input isn't returning any words in this browser…" and every mic disappears until reload
 - [ ] **Chrome / Firefox on iOS** — whatever WebKit exposes decides: a working mic or none, never one that fails on every tap
 
 **Flow**
@@ -780,6 +781,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **New sentence** — end the step with `.`, dictate again → the new words start with a capital
 - [ ] **Preview** — while listening, `Listening… “…”` shows under the step head in rose italic; the textarea doesn't change until the words are final
 - [ ] **Tap to stop** — tap the listening mic mid-sentence → what was heard so far lands; the mic returns to rest
+- [ ] **Quick stop** — tap the mic and tap it again within 3 s without speaking → no message, nothing changes (a change of mind isn't a failed try, so it never counts toward hiding the mic)
 - [ ] **Typing while listening** — type into the same step while it listens → the typing survives, and the dictated words land after it
 - [ ] **Caret (desktop)** — after words land, the caret sits at the end of the step — unless you'd already clicked into another field, which keeps focus
 - [ ] **No keyboard (phone)** — after words land on a phone, the keyboard does *not* pop up

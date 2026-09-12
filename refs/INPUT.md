@@ -202,10 +202,12 @@ the *import* box stays the voice path for a whole recipe.
 
 - **Uneven support → availability decided at runtime.** Firefox ships the API disabled by
   default, so the mic isn't rendered. Brave exposes the constructor but has its backend
-  switched off — `start()` fails with `network`, and nothing detects that up front. Safari
+  switched off — `start()` fails with `network`, and nothing detects that up front. Opera
+  exposes it too, but its recognizer never answers at all: no words, no error. Safari
   needs Siri/Dictation turned on (iOS 17+) and has reports of sessions that never end or
   never return text. So the mic hides for the session after a failure the engine never
-  recovered from, and tap-to-stop covers a session that won't end on its own.
+  recovered from — an error code, or two empty sessions in a row before any words — and
+  tap-to-stop covers a session that won't end on its own.
 - **Audio leaves the app.** Chrome's recognizer is server-based (Google's — it won't work
   offline); Safari's uses Apple's speech service. The app owns that as a line in the mic's
   tooltip and never records or stores audio itself.

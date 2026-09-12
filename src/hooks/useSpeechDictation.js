@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { describeDictationError, readResults, recognitionCtorFor } from '../lib/dictation'
+import { describeDictationError, describeEmptySession, isEmptyStrike, readResults, recognitionCtorFor } from '../lib/dictation'
 
 // How long to wait for an engine to wind down after stop() before shutting it
 // down ourselves and keeping what was heard.
@@ -32,13 +32,16 @@ const currentWindow = () => (typeof window === 'undefined' ? null : window)
 export function useSpeechDictation() {
     const [activeKey, setActiveKey] = useState(null)
     const [interim, setInterim] = useState('')
-    // Set once an engine proves it can't dictate here (describeDictationError
-    // says 'disable'); hides every mic for the rest of the page-load.
+    // Set once an engine proves it can't dictate here (an error or a run of
+    // empty sessions says 'disable'); hides every mic for the page-load.
     const [unavailable, setUnavailable] = useState(false)
     const sessionRef = useRef(null)
     // Whether any session has returned words since the page loaded. Once the
     // engine has worked, a later failure is treated as transient.
     const hasSucceededRef = useRef(false)
+    // Empty, error-free sessions in a row since the last one with words — how
+    // a recognizer that fails silently (Opera) gets caught.
+    const emptyStreakRef = useRef(0)
 
     const supported = !unavailable && recognitionCtorFor(currentWindow()) !== null
 
@@ -60,14 +63,22 @@ export function useSpeechDictation() {
         try { session.recognition.abort() } catch { /* already stopped */ }
     }, [detach])
 
-    const fail = useCallback((code) => {
-        const online = typeof navigator === 'undefined' || navigator.onLine !== false
-        const { action, message } = describeDictationError(code, { online, hasSucceeded: hasSucceededRef.current })
+    // Say what happened, and hide every mic when the engine can't dictate here.
+    // `info` is for "try again" moments that aren't really errors.
+    const report = useCallback(({ action, message }, { info = false } = {}) => {
         if (action === 'ignore') return
         if (action === 'disable') setUnavailable(true)
-        if (code === 'no-speech') toast(message, { id: TOAST_ID })
+        if (info && action !== 'disable') toast(message, { id: TOAST_ID })
         else toast.error(message, { id: TOAST_ID })
     }, [])
+
+    const fail = useCallback((code) => {
+        const online = typeof navigator === 'undefined' || navigator.onLine !== false
+        report(
+            describeDictationError(code, { online, hasSucceeded: hasSucceededRef.current }),
+            { info: code === 'no-speech' },
+        )
+    }, [report])
 
     const start = useCallback((key, onText) => {
         abort()
@@ -79,7 +90,16 @@ export function useSpeechDictation() {
         recognition.interimResults = true
         // `lang` stays unset on purpose: it falls back to <html lang="en">,
         // then to the browser's own language.
-        const session = { key, recognition, finalText: '', interimText: '', stopTimer: null }
+        const session = {
+            key,
+            recognition,
+            finalText: '',
+            interimText: '',
+            startedAt: Date.now(),
+            stopRequested: false,
+            errored: false,
+            stopTimer: null,
+        }
 
         // Hand over what was heard and end the session. What the author saw is
         // what they get: an engine that ends without marking its last words
@@ -88,7 +108,22 @@ export function useSpeechDictation() {
             if (sessionRef.current !== session) return
             const text = [session.finalText, session.interimText].filter(Boolean).join(' ')
             detach()
-            if (text) onText(text)
+            if (text) {
+                emptyStreakRef.current = 0
+                onText(text)
+                return
+            }
+            // Nothing heard. An error has already explained itself; a session
+            // that simply ended empty hasn't, and is how a recognizer that
+            // fails silently shows itself (see isEmptyStrike).
+            if (session.errored) return
+            const durationMs = Date.now() - session.startedAt
+            if (!isEmptyStrike({ stoppedByUser: session.stopRequested, durationMs })) return
+            emptyStreakRef.current += 1
+            report(
+                describeEmptySession({ emptyStreak: emptyStreakRef.current, hasSucceeded: hasSucceededRef.current }),
+                { info: true },
+            )
         }
 
         recognition.onresult = (event) => {
@@ -103,6 +138,7 @@ export function useSpeechDictation() {
         // session; this only decides what to say.
         recognition.onerror = (event) => {
             if (sessionRef.current !== session) return
+            session.errored = true
             fail(event.error)
         }
         recognition.onend = () => session.complete()
@@ -117,7 +153,7 @@ export function useSpeechDictation() {
             detach()
             fail('start-failed')
         }
-    }, [abort, detach, fail])
+    }, [abort, detach, fail, report])
 
     // Finish the live session and keep what it heard. The engine normally
     // answers stop() with its final words and then `end`; one that never does
@@ -126,6 +162,7 @@ export function useSpeechDictation() {
     const stop = useCallback(() => {
         const session = sessionRef.current
         if (!session || session.stopTimer) return
+        session.stopRequested = true
         session.stopTimer = setTimeout(() => {
             if (sessionRef.current !== session) return
             session.complete()
