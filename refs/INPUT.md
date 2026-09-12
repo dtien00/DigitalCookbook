@@ -1,11 +1,17 @@
 # Recipe Input Methods — Beyond Typing and Paste
 
-> **Status:** Research only. Nothing here is implemented. This document catalogues every
+> **Status:** Research, partly shipped (see the note below). This document catalogues every
 > plausible way a recipe could *enter* the app besides typing it field-by-field into
 > [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) or pasting text into the Stage 22
 > import modal — what each method demands of the author, what it demands of the codebase,
 > and which are worth building. Written in the spirit of the `/teach` skill: each method
 > names the general pattern underneath so the reasoning transfers beyond this repo.
+>
+> *Done — §2.0's dictation hint and §2.1's file drop / picker shipped as Stage 22 v1.1,
+> and §2.2's batch queue as v1.2, all on `import-file-drop` (PR #83); see
+> [ROADMAP.md](./ROADMAP.md) → Stage 22. Shipped notes mark §2.1, §2.2, and the §3 and §5
+> entries for all three; the research reasoning throughout is kept as written on
+> 2026-07-19, when nothing here was built. Methods without a shipped note remain research.*
 >
 > **Date:** 2026-07-19 · **Companion docs:** [ROADMAP.md](./ROADMAP.md) Stage 22
 > (paste-import, shipped; URL-import deferred v2) · [TESTING.md](./TESTING.md) (import
@@ -87,7 +93,7 @@ shape) already parses. This is the seed of the batch story in §2.2 — the form
 only the multi-recipe transport is missing (today a multi-recipe blob imports the first
 with a warning).
 
-### 2.1 File drop / file picker on the import modal — *build first*
+### 2.1 File drop / file picker on the import modal — *build first* *(done — Stage 22 v1.1)*
 
 **Author does:** drags a `.txt` / `.md` / `.json` file onto the modal (or taps a file
 picker on mobile) instead of open-copy-paste.
@@ -102,7 +108,14 @@ files (notes-app exports, Markdown vaults, old blog drafts). Also the prerequisi
 §2.2.
 *Pattern: transport substitution — change how bytes arrive, not what happens to them.*
 
-### 2.2 Multi-file batch queue — *the actual answer to "volume"*
+*Done — shipped 2026-07-21 as Stage 22 v1.1 on `import-file-drop` (PR #83); see
+[ROADMAP.md](./ROADMAP.md) → Stage 22 → "File drop / picker". Built as described, with
+`file.text()` standing in for `FileReader`: the textarea is the drop zone, a "choose files"
+picker covers the no-drag path, and `recipeImport.js` wasn't touched. One addition — a
+dropped file auto-previews, since a file is a finished document where a half-typed paste
+isn't.*
+
+### 2.2 Multi-file batch queue — *the actual answer to "volume"* *(done — Stage 22 v1.2)*
 
 **Author does:** selects/drops N files (or one JSON array of recipes); the modal becomes a
 queue — parse all, show a list ("12 parsed, 2 with warnings, 1 failed"), then step through
@@ -121,6 +134,15 @@ auto-save-all: the review step is the app's guarantee that a parse error costs o
 never a bad row (see §4, pattern 2).
 *Pattern: batch amortization — pay the fixed cost (open modal, choose source) once, keep
 the variable cost (review) per item.*
+
+*Done — shipped 2026-07-22 as Stage 22 v1.2 on `import-file-drop` (PR #83); see
+[ROADMAP.md](./ROADMAP.md) → Stage 22 → "Multi-file batch queue", and
+[teachings/import-transports.md](./teachings/import-transports.md) "Second encounter" for
+the diff. The open question resolved inside CreateRecipe: the modal only triages (per-file
+✓/✗), and the queue lives in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) rather
+than the modal — its save withholds `onComplete()` until the queue drains, so App.jsx
+never gets involved. Batching is per file: a multi-recipe export still imports only its
+first recipe, with a warning.*
 
 ### 2.3 Bookmarklet clipper — *the CORS loophole*
 
@@ -217,9 +239,9 @@ ordering:
 
 | Method | Reaches | New deps | Server? | Effort | Verdict |
 |---|---|---|---|---|---|
-| §2.0 Keyboard dictation | voice | none | no | docs only | document now |
-| §2.1 File drop | files | none | no | hours | **build first** |
-| §2.2 Batch queue | collections | none | no | 1–2 days | **build second** |
+| §2.0 Keyboard dictation | voice | none | no | docs only | document now *(done — Stage 22 v1.1 modal copy)* |
+| §2.1 File drop | files | none | no | hours | **build first** *(done — Stage 22 v1.1)* |
+| §2.2 Batch queue | collections | none | no | 1–2 days | **build second** *(done — Stage 22 v1.2)* |
 | §2.3 Bookmarklet | any open web page | none | no | ~1 day | strong sleeper |
 | §2.4 OCR photo | printed paper | Tesseract.js (lazy) | no | 2–3 days | yes, third |
 | §2.5 Fork/duplicate | own+others' recipes | migration | no | scoped in ROADMAP | ride existing plan |
@@ -275,9 +297,14 @@ UI layer by accident).
 ## 5. Recommended sequence
 
 1. **Now (docs-only):** add the dictation hint + own-export note to the import modal copy
-   and TESTING.md fixtures (§2.0).
+   and TESTING.md fixtures (§2.0). *Done — Stage 22 v1.1 "Modal-copy hints": the modal
+   intro names the keyboard mic and the own-export round-trip. TESTING.md's half landed as
+   a copy-presence row rather than a dictated-text fixture, so the dictation quirks §2.0
+   lists are still untested.*
 2. **Next build:** file drop (§2.1) → batch queue (§2.2) — together they retire the
-   "tedious at volume" complaint for anyone whose recipes exist digitally.
+   "tedious at volume" complaint for anyone whose recipes exist digitally. *Done — both
+   shipped in that order, as Stage 22 v1.1 and v1.2 on `import-file-drop` (PR #83); see
+   [ROADMAP.md](./ROADMAP.md) → Stage 22.*
 3. **Then:** bookmarklet (§2.3) and OCR (§2.4), in either order — web-without-server, then
    paper.
 4. **Gate unchanged:** URL import and everything LLM (§2.7) wait behind the first-API-route
