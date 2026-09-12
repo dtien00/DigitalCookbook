@@ -173,14 +173,47 @@ existing row. Already scoped as the **recipe forking** deferred idea in
 [ROADMAP.md](./ROADMAP.md) (`forked_from_id` column, `?fork=<id>` param); recorded here
 only because it's an input method by another name. No new scoping needed.
 
-### 2.6 Live voice dictation (Web Speech API) — *probably skip*
+### 2.6 Live voice dictation (Web Speech API) — *reversed 2026-09-11: per-step mic, in progress*
 
-A mic button doing in-app speech-to-text (`SpeechRecognition`). Browser support is uneven
-(no Firefox; Chrome routes audio to Google's servers — a privacy note the app would own),
-and §2.0's keyboard-mic trick already delivers the same outcome on the primary
-(phone-in-kitchen) platform using the OS's better recognizer. Build only if a real user
-reports the keyboard mic failing them. *Pattern lesson: before building an input method,
-check whether the OS already provides it one layer down.*
+**Original verdict (2026-07-19): probably skip.** A mic button doing in-app speech-to-text
+(`SpeechRecognition`). Browser support is uneven (no Firefox; Chrome routes audio to Google's
+servers — a privacy note the app would own), and §2.0's keyboard-mic trick already delivers
+the same outcome on the primary (phone-in-kitchen) platform using the OS's better recognizer.
+Build only if a real user reports the keyboard mic failing them. *Pattern lesson: before
+building an input method, check whether the OS already provides it one layer down.*
+
+**Reversed 2026-09-11, at the project owner's request.** The facts above still hold; the
+trade now accepted is a visible, in-form mic in exchange for them, instead of relying on
+authors knowing that their keyboard — or Win+H / macOS Dictation on a desktop, which has no
+soft keyboard — already offers dictation. It's being built as a **microphone button on each
+step** of [CreateRecipe.jsx](../src/components/CreateRecipe.jsx), left of the step's remove
+`×`, appending the transcript to that step's instruction for review before save. Full scope
+in [ROADMAP.md](./ROADMAP.md) → Ad-hoc polish → *Step dictation* (branch `speech-to-text`).
+
+**It isn't a funnel transport.** Every other method in §2 feeds whole recipes into
+`recipeImport.js`; this feeds one step's prose into one textarea, so the parser never sees
+it. That's why its ROADMAP home is beside the field-level entry work (unit sheet, fraction
+chips, step-timer dial) rather than under Stage 22 — and why §2.0's keyboard dictation into
+the *import* box stays the voice path for a whole recipe.
+
+**What the original verdict got right, and how the build absorbs it:**
+
+- **Uneven support → availability decided at runtime.** Firefox ships the API disabled by
+  default, so the mic isn't rendered. Brave exposes the constructor but has its backend
+  switched off — `start()` fails with `network`, and nothing detects that up front. Safari
+  needs Siri/Dictation turned on (iOS 17+) and has reports of sessions that never end or
+  never return text. So the mic hides for the session after a failure the engine never
+  recovered from, and tap-to-stop covers a session that won't end on its own.
+- **Audio leaves the app.** Chrome's recognizer is server-based (Google's — it won't work
+  offline); Safari's uses Apple's speech service. The app owns that as a line in the mic's
+  tooltip and never records or stores audio itself.
+- **On a phone the keyboard mic is still the more dependable recognizer.** The in-app
+  button's gain there is discoverability, not quality.
+
+*Pattern lesson, amended: check one layer down first — then ask whether authors can see
+what's there. OS dictation is invisible from inside the app; a visible button trades a
+privacy note and uneven support for discoverability. That's a product call rather than a
+technical one, and here it was made deliberately.*
 
 ### 2.7 Behind the server wall — URL import, LLM structuring, email-in
 
@@ -223,7 +256,7 @@ ordering:
 | §2.3 Bookmarklet | any open web page | none | no | ~1 day | strong sleeper |
 | §2.4 OCR photo | printed paper | Tesseract.js (lazy) | no | 2–3 days | yes, third |
 | §2.5 Fork/duplicate | own+others' recipes | migration | no | scoped in ROADMAP | ride existing plan |
-| §2.6 Web Speech API | voice | none | no | ~1 day | skip (OS covers it) |
+| §2.6 Web Speech API | voice, per step | none | no | ~1 day | **reversed 2026-09-11** — per-step mic in progress |
 | §2.7 URL / LLM / email | links, handwriting | API route infra | **yes** | large | wait for the wall |
 | §2.8 CSV, Share Target | — | — | — | — | declined |
 
@@ -282,6 +315,9 @@ UI layer by accident).
    paper.
 4. **Gate unchanged:** URL import and everything LLM (§2.7) wait behind the first-API-route
    decision already recorded in ROADMAP; email-in stays declined.
+5. **Outside this sequence:** §2.6's in-app mic, reversed 2026-09-11 and being built as a
+   per-step button on `speech-to-text`. It's a field-level affordance, not a funnel
+   transport, so it doesn't compete with the order above.
 
 The client-side tier (§2.0–§2.3) is already taught as a design lesson —
 [teachings/import-transports.md](./teachings/import-transports.md) walks the exact seams in
