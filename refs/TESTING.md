@@ -108,15 +108,16 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **test-medium** — 20 visible, tier 3 (still 4 cols, at the upper bound)
 - [ ] **test-large** — 34 visible, tier 4 (5-col floor)
 - [ ] **test-public** — 6 visible (own only — test-public's public recipes overlap with its own count)
-- [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens
+- [ ] **Hover behavior** — image scales, description fades in *above* the title, tag chips animate between, card shadow deepens, like pill fades in top-left and bookmark top-right (never stacked in one corner)
+- [ ] **Keyboard reveal** — Tab onto a card → like pill + bookmark appear; Tab again lands on each with a visible button
 - [ ] **Search stability** — filters the grid without changing card size
-- [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow
+- [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow; like pill + bookmark visible at rest in opposite top corners (touch has no hover to reveal them)
 - [ ] **Mobile swipe-back (Stage 9)** — on a real phone (touch events don't fire from desktop trackpads), thumb-swipe right from any recipe detail page returns to the home grid; vertical scroll within the recipe still works; pinch-zoom doesn't trigger a navigation
 - [ ] **Mobile swipe-resume (Stage 9)** — after swiping back to the home grid, thumb-swipe left → re-opens the recipe you just left; in a fresh tab (no `lastViewedRecipeId`), the same left-swipe does nothing and the page doesn't visibly slide
 
 ## Bookmarks checklist
 
-- [ ] **Bookmark icon visible on every card** (top-right corner of image, outline state initially)
+- [ ] **Bookmark icon on every card** (top-right corner of image, outline state initially) — on desktop it appears on card hover, and stays visible at rest once saved
 - [ ] **Click bookmark, icon flips to filled (indigo) immediately** — no spinner, no delay (optimistic UI)
 - [ ] **Bookmark click does NOT open the detail view** (e.stopPropagation working)
 - [ ] **Reload page, bookmark state persists** (proves the Supabase write succeeded)
@@ -130,7 +131,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 
 ## Likes checklist
 
-- [ ] **Like pill visible top-left of every card** — heart icon, outline state initially (rose-filled if you've already liked it from a prior session)
+- [ ] **Like pill top-left of every card** — heart icon, outline state initially (rose-filled if you've already liked it from a prior session); on desktop it appears on card hover, and stays visible at rest once you've liked it
 - [ ] **Count rendered only when > 0** — a recipe with zero likes shows just the heart, no `0`
 - [ ] **Click heart, fill flips to rose-500 immediately + count increments** — no spinner (optimistic UI)
 - [ ] **Click again, fill reverts to outline + count decrements** — toggle off works the same way
@@ -410,7 +411,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Persistence across reload + routes** — add items, refresh / navigate away and back → list survives (localStorage)
 - [ ] **Anonymous works** — logged out, the whole flow functions (no auth gate)
 - [ ] **Deep link** — paste `/shopping-list` into a fresh tab → page resolves (SPA rewrite), shows persisted items
-- [ ] **Mobile (≤ 640px)** — header + Copy/Print/Clear row fit; long item names wrap; full-row tap targets
+- [ ] **Mobile (≤ 640px)** — header + Share/Clear row fit; long item names wrap; full-row tap targets
 
 **N+2c provenance — data model (PR #63) behaviors testable now (no new UI yet):**
 - [ ] **Re-send replaces, not stacks** — send a recipe to the list, reopen the same recipe, send again → the shared quantities stay the same (no doubling). *(N+2a summed re-sends; N+2c replaces a recipe's prior contribution.)*
@@ -433,6 +434,23 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Persistence + cap** — the tray survives reload (`localStorage` key `cookbook.shoppingList.removed`), is capped at the last 10, and **Clear all** empties it
 - [ ] **Re-send prunes** — delete a recipe, then re-send it from its page → the stale tray entry auto-drops (no double-restore)
 - [ ] **Mobile (≤ 640px)** — chip `✕`, toast Undo, and tray restore/dismiss are all tappable
+
+**Share + import (PR #94):**
+- [ ] **Share menu** — the action row shows a single `Share ▾` pill (Copy / Print collapsed into it) + a standalone **Clear all**; opening it lists **Copy list text**, **Copy shareable link**, **Copy link as markdown**, **Print**, and (on devices with `navigator.share`, i.e. most phones) **Share via…**; outside-click and Escape close it
+- [ ] **Copy list text** — copies the plaintext list **with** an `Open & check off: …/shopping-list#list=<encoded>` line appended; toast "Copied N items and a link". Paste into a plain-text target and confirm the header, one `- ` row per item, and the trailing link line all survive.
+- [ ] **Copy shareable link** — copies the **bare URL and nothing else**; toast "Link copied". Paste directly into a browser address bar — it must work with no hand-editing. If the paste contains list rows, this row regressed.
+- [ ] **Share via… (mobile)** — opens the OS share sheet with the list text + link; dismissing the sheet shows no error toast
+- [ ] **Import banner (confirm gate)** — open a copied link in another browser/profile → a `role="status"` banner "A shared list has N items." with **Add to my list** / **Discard**; the list is *not* silently merged
+- [ ] **Add merges** — Add folds the shared items in under one **"Shared list"** provenance chip; an ingredient that overlaps an existing row sums (e.g. rice 2 + 1 = 3 cups); toast "Added N shared items to your list"
+- [ ] **Hash stripped** — after Add *or* Discard the `#list=…` is removed from the URL (a refresh won't re-import)
+- [ ] **Idempotent re-open** — opening the *same* link twice and Add-ing both times does **not** double-count (the `shared:<hash>` source replaces, matching re-send semantics)
+- [ ] **Malformed link** — a truncated/garbled `#list=…` shows a quiet "That shared link looks incomplete" toast, no banner, no bad import
+- [ ] **Overflow behavior (differs per row, deliberately)** — build a list past ~2000 encoded chars, then: **Copy list text** copies the list **without** a link and toasts "… list too long to include a link"; **Copy shareable link** copies **nothing** and toasts the error "List too long to share as a link — use Copy list text". The link row must never silently hand back plaintext.
+- [ ] **Copy link as markdown** — copies exactly `[Shopping list — N items](<url>)` on one line, nothing else. Paste into Slack, Discord or a GitHub comment box: it renders as a titled clickable link. Paste into Notepad: it shows literally with brackets — that is correct, not a bug.
+- [ ] **Markdown row stays plain** — paste it into a rich target (Gmail/Docs). It must arrive as literal `[…](…)` text, NOT a rendered link. A rendered link here means a `text/html` flavour leaked onto this row and defeated the point of choosing markdown.
+- [ ] **Rich hyperlink flavour** — paste either copy row into a **rich-text** target (Gmail compose, Google Docs, Slack, Notion): the URL renders as a clickable link titled **“Shopping list — N items”**, not a raw base64 string. N must match the visible item count.
+- [ ] **Plain flavour unchanged** — paste the same copy into a **plain-text** target (Notepad, SMS, the browser address bar): *Copy shareable link* still yields the bare one-line URL, and *Copy list text* still yields the header + rows + `Open & check off: <url>`. The rich flavour must never leak into a plain paste.
+- [ ] **HTML escaping** — add an ingredient whose name or note contains `&`, `<` or `"` (e.g. `salt & pepper`, note `<flaky>`), copy, and paste into a rich target: the characters render literally. Nothing should appear bold/italic/missing, which would mean markup executed.
 
 ---
 
@@ -668,11 +686,12 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Simple fraction** — `1/2` saves and renders as `½`; `3/4` → `¾`
 - [ ] **Unicode glyph** — pasting `½` into Qty saves to `0.5`
 - [ ] **Empty Qty** — leaving Qty blank still saves (stores `0`, same as before)
-- [ ] **Unit autocomplete opens** — focus a Unit field → dropdown shows the unit list on the paper-shade surface
+- [ ] **Unit sheet opens** — click the Unit trigger (or focus it and press `Enter` / `↓`) → the sheet opens centred, filter field already focused
 - [ ] **Substring match** — type `spo` → `teaspoon` and `tablespoon` appear; type `tbsp` → `tablespoon` appears (alias match)
-- [ ] **Select by mouse** — click a suggestion → it fills the Unit field and the list closes
-- [ ] **Select by keyboard** — `↓` to highlight (rust background), `Enter` selects it and stops (does NOT add a row); a second `Enter` then commits the row
-- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → it saves as typed
+- [ ] **Select by mouse** — click a chip → it fills the Unit trigger and the sheet closes
+- [ ] **Select by keyboard** — `↓`/`↑` move the highlight through the matches, `Enter` takes the highlighted one, and focus advances down the row (as confirming the old combobox did)
+- [ ] **Free text allowed** — type a unit not in the list (e.g. `knob`) → "No unit matches" plus a **Use "knob" as a custom unit** button; `Enter` commits it and it saves as typed
+- [ ] **Escape does not commit** — open the sheet, type something, press `Escape` → sheet closes, the row's unit is unchanged, focus is back on the trigger
 - [ ] **Enter on last column adds a row** — with the default Name · Qty · Unit order, `Enter` in the Unit field of the last row creates a new empty row and focus lands in its first field
 - [ ] **Enter advances within a row** — `Enter` in Name focuses Qty; `Enter` in Qty focuses Unit; no accidental form submit at any point
 - [ ] **Remove a row** — add 3 rows; click the trailing `×` on the middle one → it disappears, the other two remain, and focus moves to the row that took its slot
@@ -682,6 +701,63 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Column toggle cycles** — the pill by the "Ingredients" heading cycles Name · Qty · Unit → Qty · Unit · Name → Unit · Qty · Name; the inputs reorder and the label tracks the order
 - [ ] **Last-column target follows layout** — switch to Qty · Unit · Name; now `Enter` in the Name field (last) adds the new row
 - [ ] **Edit-mode prefill** — edit a recipe with a `0.5`-quantity ingredient; the Qty field shows `½`, and `1.5` shows `1 ½`
+
+### Mobile IME / soft-keyboard sub-checklist
+
+> **Must be run on a real phone** — a desktop browser at phone width does not exercise an IME, and that is the whole point of these. This is the regression net for the bug where advancing Qty → Unit with the keyboard's **Next** key made the Unit field fill up backwards (`TBsp` → stored as `psBT`); see [src/lib/imeComposition.js](../src/lib/imeComposition.js). Android/Gboard is the reproducing case; worth a pass on iOS too.
+
+- [ ] **Next into Unit, then type** — in the last row's Qty field press the keyboard's **Next** key to reach Unit, then type `tablespoon` → characters appear left-to-right and the field reads `tablespoon` (NOT `noopselbat`, and the caret does not sit stuck at the start)
+- [ ] **Next into Qty, then type** — same trip from Name → Qty, type `1 1/2` → reads `1 1/2`, not `2/1 1`. *(Qty shares the same handler; digits happen to commit rather than compose, so this is the case that used to hide the bug rather than one that was safe.)*
+- [ ] **No auto-capitalisation in Qty/Unit** — the first letter typed into either field stays lowercase (the old `TAblespoon` / `CLoves` double-capital was the bug's fingerprint)
+- [ ] **Next still advances** — the Next key continues to move Name → Qty → Unit, and on the last visible column adds a new row; nothing submits the form
+- [ ] **Autocomplete still selectable by touch** — tap a suggestion in the dropdown → it fills the field with the canonical lowercase label and the list closes
+- [ ] **Composing languages** — with a CJK or other composing keyboard installed, type into Name: candidate selection with the on-screen list works and the first Enter commits the candidate instead of jumping to the next field
+- [ ] **Round-trip** — save the recipe, reopen it on RecipeDetail → units render as typed; re-open the editor → the same values prefill
+
+### Tap-first unit sheet + Qty chips (phone ≤640px)
+
+> Verifies the mobile rework of the ingredient row. **Resize a desktop browser below 640px to check layout**, but the IME items above still need a real phone. The row reflow, the sheet, and the chips all flip at the same 640px boundary (`useIsPhone` + the `@media (max-width: 640px)` block in [index.css](../src/index.css)).
+
+- [ ] **Row is two lines** — at 375px: grip + Name + `×` on line 1, Qty + Unit on line 2; **nothing is cut off at the right edge** and the page does not scroll sideways
+- [ ] **Column toggle is hidden** — the `⇄ Name · Qty · Unit` pill does not render below 640px; widen past 640px → it comes back
+- [ ] **Unit is a button, not a text field** — tapping it opens the sheet; tapping does *not* raise the keyboard
+- [ ] **Filter is NOT autofocused on a phone** — the keyboard stays down and the chips are immediately visible. *(This is the one deliberate difference from desktop, where the filter IS focused.)*
+- [ ] **Sheet is a bottom sheet** — anchored to the bottom edge on a phone, centred card above 640px
+- [ ] **Sheet contents** — Common (9 chips, 3×3), then Volume / Weight / Count; every unit appears, chips are comfortably tappable
+- [ ] **Pick a chip** — sheet closes, the trigger shows the label, and the value saves as that canonical label
+- [ ] **Reopen pre-selects** — open the sheet on a row that already has a unit → that chip is filled rust
+- [ ] **Custom unit** — type `pouch` in the filter → **Use "pouch" as a custom unit** → trigger reads `pouch`; reopen → it appears under a **Yours** heading
+- [ ] **Clear unit** — offered only when a unit is set; clearing leaves the trigger reading a rose italic `Unit`
+- [ ] **Escape / backdrop / ✕ all close** without changing the value, and focus returns to the trigger
+- [ ] **Qty raises a number pad** — not the full QWERTY keyboard; placeholder reads just `Qty`
+- [ ] **Fraction chips appear on focus** — `½ ⅓ ¼ ⅔ ¾ ⅛` under the row; they disappear shortly after blur
+- [ ] **Chip appends** — with `1` in Qty, tap `½` → field reads `1½`; save → RecipeDetail shows `1 ½`
+- [ ] **Second chip corrects** — tap `¼` after `½` → `1¼`, not `1½¼`
+- [ ] **Chip tap keeps focus** — the keyboard and the chips both stay up across a tap, so you can keep typing
+- [ ] **Same control on desktop** — above 640px the Unit cell is the same trigger + sheet (centred, filter autofocused), the row is one line, the Qty fraction chips are absent, and Enter still advances Name → Qty → Unit
+- [ ] **Crossing the breakpoint live** — with the editor open, drag the window across 640px → the row reflows, the Qty chips and column-order toggle appear/disappear, and the sheet's autofocus behaviour follows, all without a reload
+
+
+---
+
+## Step timer checklist (inline field + clock dial)
+
+> Verifies the step-timer entry in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx) and [StepDurationSheet.jsx](../src/components/StepDurationSheet.jsx). Client-only; no migration. Reach it via "Create Recipe" → the Timer row under any step.
+
+- [ ] **Colon is typeable on a phone** — tap the Timer field and type `5:00:30` → it enters cleanly. *(This was impossible before: the field ran `inputMode="numeric"`, a digits-only pad with no `:` key, while the placeholder asked for exactly this format.)*
+- [ ] **Advertised formats save** — `10`, `5:30`, `5:00:30`, `2:00:00` and `0:45` each save and reappear on re-edit
+- [ ] **Bare number echo** — type `10` → the hint beside the field reads `= 10:00` (a bare number means minutes)
+- [ ] **Nonsense is inert** — type `abc` → no echo, and saving stores no duration rather than erroring
+- [ ] **Dial opens** — the **Dial** pill opens the sheet: centred above 640px, bottom-anchored on a phone
+- [ ] **Seeds from the field** — a step reading `5:30` opens with the hour hand at 12, minute at 1, second at 6, readout `5:30`
+- [ ] **Drag / tap / steppers** — dragging a hand, tapping the face, and the ± steppers all move the readout; the hand selector switches Hours / Minutes / Seconds
+- [ ] **Set timer writes back** — the readout lands in the Timer field as a clock string
+- [ ] **Clear** — offered only when the step already has a timer; clearing empties the field
+- [ ] **Dial ↔ Type carries the value** — switch modes both ways, nothing is lost
+- [ ] **Escape / backdrop / ✕ do not commit** — the field keeps whatever it had
+- [ ] **Over-ceiling values are protected** — a step holding `20:00:00` opens on **Type** (not Dial) with the value intact and a warning that the dial pins to 11:59:55. **Switching to Type must never silently rewrite it to `11:59:55`** — that was a real regression
+- [ ] **Unparseable values are protected** — a step holding `abc` also opens on Type rather than seeding the dial at zero
+- [ ] **Cooking mode still works** — `TimerSetSheet`'s own Dial/Type toggle is unchanged after the shared `ModeTab` extraction; start a timer from a recipe's step and confirm presets, dial, and custom entry all behave
 
 ---
 
@@ -951,7 +1027,7 @@ Pure logic in `src/lib/` is unit-tested with Vitest — no browser, no Supabase,
 npm test
 ```
 
-**178 specs across 11 files** as of Stage 20 §3.1, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
+**257 specs across 14 files**, all colocated as `src/lib/<name>.test.js` (the dragSortCore/shoppingListCore convention). Covered: `dragSortCore`, `shoppingListCore`, `ingredientSections`, `dialGeometry`, `recipeImport`, `dietaryTags`, and — added in the Stage 20 §3.1 sweep — `scaleQuantity`, `parseQuantity`, `parseDuration`, `week`, `measurementUnits`. The mobile-IME fix added `imeComposition` plus `repairReversedUnit` specs in `measurementUnits.test.js`; the mobile ingredient rework added `appendFraction` specs to `parseQuantity.test.js` and unit-group / `COMMON_UNITS` / `isCanonicalUnit` specs to `measurementUnits.test.js`; the step-timer work added `previewDuration` specs to `parseDuration.test.js` and `dialCanRepresent` specs to `dialGeometry.test.js`. CI runs `npm test` and fails the build on red. The approach, and how to add specs for a new pure function, is written up in [teachings/testing-pure-functions.md](./teachings/testing-pure-functions.md).
 
 These are *unit* tests of pure functions only — component/hook behavior and end-to-end flows are still exercised by the manual checklists above.
 

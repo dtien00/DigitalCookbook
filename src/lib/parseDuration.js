@@ -47,3 +47,15 @@ export function formatMs(ms) {
     if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`
     return `${m}:${pad(sec)}`
 }
+
+// What a typed duration actually resolves to, as a clock string — for the live
+// readout beside the step-timer field. Empty when the input is empty or
+// unparseable, so the caller can simply not render a hint.
+//
+// The point is the bare-number case: this project reads "10" as ten *minutes*,
+// which is a reasonable default and a genuine surprise the first time. Echoing
+// "10:00" back settles it without a paragraph of help text.
+export function previewDuration(raw) {
+    const ms = parseDurationToMs(raw)
+    return ms ? formatMs(ms) : ''
+}

@@ -91,3 +91,34 @@ export function quantityToDisplay(quantity) {
     // No clean glyph — show the rounded decimal as typed.
     return String(parseFloat(num.toFixed(2)))
 }
+
+
+// ---- phone fraction chips --------------------------------------------------
+
+// The glyphs offered as tap targets under the Qty field at phone width, in the
+// order they appear. A subset of GLYPH_TO_VALUE: six fits one row at 375px, and
+// eighths past 1/8 are vanishingly rare in home cooking. parseQuantity already
+// understands every one of them, so the chips need no parser changes.
+export const FRACTION_GLYPHS = ['½', '⅓', '¼', '⅔', '¾', '⅛']
+
+const GLYPH_SET = new Set(Object.keys(GLYPH_TO_VALUE))
+
+// Apply a tapped fraction glyph to whatever is already in the Qty field.
+//
+// Tapping is meant to feel like the last keystroke of the amount: "1" + ½
+// becomes "1½" (which parseQuantity reads as 1.5), and tapping a second glyph
+// corrects the first rather than concatenating two of them — nobody means
+// "1½¼". Empty field + a glyph is a bare fraction, which is also valid input.
+export function appendFraction(current, glyph) {
+    const str = String(current ?? '').trimEnd()
+    if (str === '') return glyph
+
+    // Replace a trailing glyph rather than stacking onto it.
+    const last = str[str.length - 1]
+    if (GLYPH_SET.has(last)) {
+        const head = str.slice(0, -1).trimEnd()
+        return head === '' ? glyph : head + glyph
+    }
+
+    return str + glyph
+}

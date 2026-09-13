@@ -92,7 +92,7 @@ A grid of 20+ recipes is a recognition exercise, not a reading exercise. The tit
 
 ## Bookmark button
 
-A small circular icon button in the **top-right corner of every card** (`absolute top-3 right-3 z-10`). Always visible, regardless of hover state — bookmarking should be a one-tap action, not a "hover then click" two-step.
+A small circular icon button in the **top-right corner of every card** (`absolute top-3 right-3 z-10`). On touch screens it's always visible, so saving stays a one-tap action; on hover-capable screens it fades in with the card hover unless the recipe is already saved — see [Like + bookmark hover reveal](#like--bookmark-hover-reveal).
 
 - **Visual:** `w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md` — a frosted-glass disc that reads against both image-rich and plain-white card content.
 - **Icon:** Lucide/Heroicons bookmark glyph. Filled `fill-indigo-600 stroke-indigo-600` when saved; outline `fill-none stroke-gray-800` when not. Click triggers a brief `active:scale-95` press + persistent state change.
@@ -101,7 +101,7 @@ A small circular icon button in the **top-right corner of every card** (`absolut
 - **Larger variant** on [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) — `size="lg"` (`w-12 h-12`, larger icon) — placed in the top-right of the header row, balancing the back button.
 
 ### Anonymous behavior
-The bookmark button renders identically for anonymous viewers — *clicking* it opens the Auth view instead of toggling state. The visual affordance is the conversion incentive: "you can save this if you sign in." Hiding the button entirely would remove the prompt to convert; showing it grayed-out would feel like a denied action.
+The bookmark button renders identically for anonymous viewers — *clicking* it opens the Auth view instead of toggling state. The visual affordance is the conversion incentive: "you can save this if you sign in." Hiding the button entirely would remove the prompt to convert; showing it grayed-out would feel like a denied action. (On hover-capable screens the prompt now sits one hover away — anonymous viewers never have a saved state to keep the button pinned.)
 
 ## Like button (heart + count)
 
@@ -120,10 +120,26 @@ Different mental models:
 Pinterest itself distinguishes "save to board" from a quick reaction — we follow the same separation.
 
 ### Anonymous behavior
-The like pill renders for anonymous viewers too, with the count visible (likes are public information). Clicking it opens the Auth view. The count is the social proof that hopefully nudges sign-up; the click being gated behind auth is the conversion point.
+The like pill renders for anonymous viewers too, with the count visible (likes are public information). Clicking it opens the Auth view. The count is the social proof that hopefully nudges sign-up; the click being gated behind auth is the conversion point. On hover-capable screens the pill (and so the count) appears only on card hover — an accepted trade for image-first covers at rest.
 
 ### Detail page placement
 On [RecipeDetail.jsx](../src/components/RecipeDetail.jsx) both buttons sit in the top-right header row (the "← Back to List" button is top-left), at `size="lg"` for finger-target generosity. Like comes first, then bookmark — left-to-right reading order mirrors the cards' top-left/top-right placement.
+
+## Like + bookmark hover reveal
+
+On grid cards the like pill and bookmark stay out of the cover art until the viewer shows interest in that card. Driven from [RecipeCard.jsx](../src/components/RecipeCard.jsx) by one class string, `revealOnHover`, applied to each button:
+
+| Situation | Like pill / bookmark |
+|---|---|
+| Hover-capable screen, at rest | Hidden — `[@media(hover:hover)]:opacity-0` |
+| Card hovered | Fades in — `group-hover:opacity-100`, animated by the buttons' own `transition-all` (150ms) |
+| Card or either button keyboard-focused | Visible — `group-focus-within:opacity-100`, so Tab never lands on an invisible control |
+| Button is "on" (you liked it / saved it) | Always visible — `revealOnHover` is skipped, so the grid still shows what you've saved and liked |
+| Touch screen (`hover: none`) | Always visible, as before |
+
+- **Why the hide is scoped to `(hover: hover)`:** Tailwind v4 wraps every `hover:` / `group-hover:` in `@media (hover: hover)`, so on a phone the reveal can never fire. A bare `opacity-0` would leave both buttons permanently invisible yet still tappable — 44px hot zones in the card's top corners that silently like/bookmark (or open sign-in) when you tap to open the recipe. Scoping the hide to the same media query as the reveal means "hidden" and "can be revealed" never disagree. (`pointer-fine:` is close but tests a different media feature.)
+- **Keep the corners distinct:** like `top-3 left-3`, bookmark `top-3 right-3`, both `z-10`. At equal z-index the later sibling paints on top, so a shared corner hides the like pill entirely under the bookmark.
+- **Known gap:** on cookbook pages the owner-only remove ✕ (top-center, [CookbookDetail.jsx](../src/components/CookbookDetail.jsx)) is a sibling of the card, outside its `group`, so it stays visible and sits alone at rest on desktop.
 
 ## Tags
 
@@ -191,6 +207,18 @@ Clicking the chevron calls `flipDir(key)` and rotates `180deg` when direction is
 **Compound sort priority (when both on):** likes is primary (popularity is the dominant signal when explicitly requested), `created_at` is the secondary tiebreaker. `id DESC` is always appended as the final tiebreaker for deterministic pagination across pages.
 
 **Outside-click and Escape:** a `useEffect` mirrors the existing `menuOpen` pattern — clicks outside `sortMenuRef` and `keydown === 'Escape'` both close the dropdown.
+
+## Home filter row (tag chips + Fridge / Filters / List)
+
+The row under the search bar holds two cells: the tag-chip group on the left and the **Fridge / Filters / List** trigger cluster on the right. All three triggers narrow the grid, so they cluster; the chip cell is `flex-1` so the triggers stay anchored right no matter how many rows the chips wrap into.
+
+**Phone (< sm) stacks the two cells, and that is a bug fix rather than a preference.** Sharing one flex line, the three triggers claimed roughly 300px of a 335px row and crushed the `flex-1 min-w-0` chip cell to about **19px** — narrower than a single chip. Every chip then overflowed its own cell, so the tag row rendered as one long column running *underneath* the trigger buttons. Below `sm` the triggers therefore take their own full-width row and split it into equal thirds (`flex-1 min-w-0`), with two refinements. **Growth is capped at 160px** (`max-w-40`): without it, the stacked band between ~540px and the `sm` breakpoint stretched each pill to ~194px, reading as three wide bars rather than buttons. **Inner spacing tightens on phones** (`px-2.5 gap-1.5`, back to `px-4 gap-2` at `sm`), which is what keeps all three on one row down to 320px — previously a 96px minimum per button forced a two-plus-one wrap there. Because the pills are `flex-1`, the tighter padding is invisible at 375px and up (content stays centred in a wider pill); it only matters when space runs out. Past that point the label truncates (`truncate`, icon `flex-shrink-0`) instead of the row wrapping — the full name stays in each button's `aria-label`. The 8px gap *between* buttons is deliberately not reduced; it's the adjacent-tap-target minimum. From `sm` up everything reverts to the original single line.
+
+**Collapsed chips on phone are a one-line horizontal scroll strip** (`.tag-chip-strip` in [index.css](../src/index.css)), not a wrap. Twelve chips wrapped across a 335px column run four rows deep and push the recipe grid off the first screen; one sideways-scrolling line costs 46px. The strip hides its scrollbar — it is a single chip tall, so a 15px gutter beneath it reads as a stray layout seam rather than an affordance, and phones draw overlay scrollbars anyway — and uses `scroll-snap-type: x proximity` so a flick lands on a whole chip instead of halfway through a word. Its `padding-block: 3px` is headroom for focus rings, since `overflow-x: auto` computes `overflow-y` to `auto` as well and would otherwise clip them.
+
+**Expanded chips on phone wrap as on desktop but cap at `max-h-[45vh]` with an inner scroll.** Without the cap, expanding 68 tags pushed the trigger cluster ~850px down the page — the buttons are below the chips in DOM order, and keeping them there (rather than reordering with `order-*`) is what keeps tab order matching visual order at every width.
+
+**Tap targets.** Chips are `min-h-[40px] px-3.5 py-2 text-sm` on phone, reverting to the compact `px-3 py-1 text-xs` from `sm` up — a filter chip at desktop density is a ~24px target, which is too small to hit reliably with a thumb. The `+N more` / `Show less` toggle carries the same sizing so it doesn't read as a different class of control among the chips it sits with.
 
 ## Button variants
 
@@ -350,6 +378,8 @@ Currently tagged: top action row (Back, Like, Bookmark, Download PDF), servings 
 **Shopping-list provenance chips (Stage N+2c):** the `/shopping-list` page shows a "Recipes in this list" chip row between the action buttons and the items — one `bg-tan-soft text-ink` pill per contributing recipe with a `bg-tan` count badge. Hovering, keyboard-focusing, or tapping a chip highlights that recipe's rows with a 3px `rust` left-stripe + `bg-tan/20` band (the same bookmark-ribbon highlight idiom the Following row uses). The active chip gains `ring-2 ring-rust` and its badge flips to `bg-rust text-paper`. Because touch has no hover, a tap *pins* the highlight (click again to unpin); on desktop, hover previews and click pins. The whole row is `no-print`.
 
 **Shopping-list delete + undo (Stage N+2c, PR #66):** each recipe chip carries a trailing `✕` (its own button, split from the highlight button by a `border-l border-tan/40` inside an `overflow-hidden rounded-md` shell) that removes the recipe **optimistically** — no confirm dialog; the overlap accounting rides in a 6-second Undo toast instead ("Removed X — 1 item removed, 1 shared item reduced", with a `text-rust` **Undo** action on the standard paper-shade toast). Both the chip `✕` and the per-row `✕` drop the removal into a collapsed **"Recently removed (N)"** tray under the list (separated by a `border-t border-paper-shade`; a `▸` chevron rotates 90° on expand). Tray entries reuse the same two-buttons-on-a-pill construction: a `bg-paper-shade` pill showing the item line (or "Recipe · N items") + a muted relative timestamp, then a `↩` restore (`text-rust`) and a `✕` dismiss (`text-ink/30 hover:text-rose-dark`). All `no-print`.
+
+**Shopping-list share menu + import banner (Stage N+2a, PR #94):** the action row's Copy / Print buttons collapse into a single **`Share ▾`** paper-shade pill (reusing the share-nodes glyph + a `▾` chevron that rotates on open) — the **Sort-picker dropdown idiom**: a `w-56 bg-paper rounded-xl shadow-lg border-paper-shade` menu of `hover:bg-tan/40` rows (Copy list text · Copy shareable link · Copy link as markdown · Share via… · Print), closed by outside-click or Escape. **Each row copies exactly what its label says** — *Copy list text* takes the list with the link appended (one extra line, always useful), *Copy shareable link* takes the **bare URL** so it pastes straight into an address bar, and *Share via…* sends list + link because a messaging recipient wants to read the list without tapping. Over budget, *Copy list text* degrades to the list alone with a toast saying why, while *Copy shareable link* refuses outright and names the row that works — silently substituting plaintext for a promised link is the mismatch this split removes. **Both copy rows write two clipboard flavours** (`copyRich` in [copyText.js](../src/lib/copyText.js)): `text/plain` exactly as described above, plus a `text/html` flavour where the URL is an `<a>` titled **“Shopping list — N items”** — one uniform label wherever a link is handed out. Rich targets (mail, Docs, Slack, Notion) render the titled link instead of a base64 wall; plain targets and the address bar still receive the bare URL untouched. User-authored names and notes are `escapeHtml`'d into the HTML flavour. Browsers without `ClipboardItem` fall through to the existing plain-text path, so the rich flavour is purely additive. **Copy link as markdown** is the odd one out and deliberately so: it writes `[Shopping list — N items](url)` as **plain text only**. That is the one way to get a *titled* link through a plain-text channel — Slack, Discord, GitHub, Reddit and Notion render the syntax on paste — but everywhere else it shows literally, brackets and all, which is why it is its own row rather than the default. It gets no `text/html` flavour on purpose: someone choosing “as markdown” wants the markdown source, and an anchor would make rich targets silently render it instead. **Clear all stays a standalone pill** (`text-rose-dark`) — a destructive action shouldn't hide inside a menu. `Share via…` only renders where `navigator.share` exists (phones), so desktop shows the three copy/print rows. Arriving with a `#list=<encoded>` hash raises a confirm banner above the list — a `bg-tan-soft` / `border-rust/40` card (`role="status"`) reading "A shared list has N items." with a rust **Add to my list** and a paper-shade **Discard**; it renders even over the empty state, and never silently merges. All `no-print`.
 
 ## What's kept vs. dropped
 
@@ -910,9 +940,11 @@ Same thresholds as the Stage 9 swipe-back: ≥ 80px horizontal travel with < 40p
 
 Ergonomics pass over the ingredient editor in [CreateRecipe.jsx](../src/components/CreateRecipe.jsx): fractions, a unit autocomplete, keyboard-driven row creation/removal, and a column-order toggle. These are all input/display concerns — the `ingredients.quantity` column stays `NUMERIC` and the `unit` column stays free text.
 
-## Unit combobox
+## Unit picker — one control at every width
 
-Each row's Unit cell is a custom `<UnitCombobox>` ([src/components/UnitCombobox.jsx](../src/components/UnitCombobox.jsx)) rather than a native `<datalist>` (which can't be palette-themed and matches substrings inconsistently across browsers). The input opens a paper-shade dropdown (`#fbf6f1` surface, `#e8dcd2` border, soft drop shadow, `max-height: 220px` with scroll) listing substring matches from [src/lib/measurementUnits.js](../src/lib/measurementUnits.js) — `matchUnits()` searches the canonical label **and** its aliases, so `tbsp` surfaces `tablespoon`. The highlighted option fills with the rust accent (`#b06452` background, `#fbf6f1` text); hover and ↑/↓ both move the highlight. Free text is always allowed — the list is assistance, not a constraint.
+Each row's Unit cell is a `.unit-trigger` button showing the current value (rose italic `Unit` when empty) with a trailing ▾. It opens [UnitPickerSheet.jsx](../src/components/UnitPickerSheet.jsx) — see the dedicated section below.
+
+> **Superseded:** the original `<UnitCombobox>` (a text input over a paper-shade dropdown of `matchUnits()` results) was **removed** when the sheet took over the browser as well as the phone. Authoring a recipe should be the same act on a laptop and a phone, and keeping two pickers meant two behaviours, two sets of styles, and two places for a bug like the reversed units to hide. The combobox's substring-and-alias matching survives as the sheet's filter field — same `matchUnits()`, just uncapped, since a sheet can scroll where a dropdown could not.
 
 ## Column-order toggle
 
@@ -921,6 +953,61 @@ A pill button (`.column-layout-toggle`) sits opposite the "Ingredients" heading 
 ## Keyboard affordances
 
 Qty is `type="text"` (placeholder `Qty (e.g. 1 1/2)`) and given a fixed `flex: 0 0 120px` so it doesn't sprawl like Name/Unit. `Enter` on a non-last field advances within the row; on the last field it adds a new row (and focuses it) or jumps to the next row — never submits the form. `Tab` walks the visible order natively. An italic `.ingredient-hint` line beside "Add Ingredient" spells this out, with `<kbd>` chips (`#f2e9e4` fill, `#e8dcd2` border) for `Enter` / `Tab`.
+
+## Phone layout (≤640px) — two-line rows
+
+`.form-row` originally had **no mobile breakpoint at all**. As a `nowrap` flex it needed 518px inside a 351px container at 375px, so the unit combobox was squeezed to **18px and pushed off-canvas** along with the remove button — which is why the autocomplete never appeared on a phone. Below 640px the row now wraps to two lines:
+
+```
+⎛⣿⎞ ⎛ Name …………………………… ⎞ ⎛ × ⎞
+⎛ Qty ⎞ ⎛ Unit ………………………………… ▾ ⎞
+```
+
+Every control is raised to the 44px tap-target floor Stage 9's mobile audit set (the grip was 24px, inputs 42px, and the old dropdown's rows ~31px). `min-width: 0` on the flex children is the other half of the fix — flex items default to `min-width: auto`, so the Qty placeholder's 199px min-content width silently beat its own `flex: 0 0 120px` basis.
+
+The **column-order toggle is hidden below 640px**: its three presets assume a single line, and there is nothing meaningful to cycle once Name sits above Qty + Unit.
+
+## Unit picker sheet
+
+The `.unit-trigger` button is styled as an input at rest (`#fbf6f1` fill, `#e8dcd2` border) so the row still scans as three fields; its height stretches with the row on desktop and pins to 44px on phones. Tapping it — or pressing Enter/↓ on it — opens the sheet, which reuses [TimerSetSheet](../src/components/TimerSetSheet.jsx)'s chrome verbatim so the app has one sheet idiom: `items-end sm:items-center` (bottom sheet on phones, centred card above `sm:`), `bg-ink/40` backdrop, `bg-paper paper-grain rounded-t-2xl sm:rounded-2xl`, sticky header, Escape + backdrop close, and a Tab focus trap.
+
+Contents, top to bottom:
+
+- **Filter field** — sticky under the header. Filters the chips via `matchUnits(query, Infinity)` **and** doubles as the free-text escape hatch, so there is one text field rather than a search box plus a separate custom box. `ingredients.unit` is a free-text column and real recipes use `pouch` / `large spoons`, so whatever is typed can always be committed.
+- **Matches** — while filtering, a flat ranked list replaces the grouped view, with an "N matches" count. ↑/↓ move a `tan/40` + rust-ring highlight; Enter takes it.
+- **Use “…” as a custom unit** — a rust primary button whenever the typed text isn't already one of our labels. Enter commits it when nothing matches.
+- **Yours** — unfiltered only, and only when the row holds free text that isn't one of our labels, so reopening the sheet never looks like the value was discarded.
+- **Common** — a 3×3 chip grid of the nine units this cookbook actually uses, ordered by a count over the live `ingredients` table (teaspoon 54, tablespoon 37, cup 36, pound/gram 10, clove 7, ounce 6, stalk 5, piece 3).
+- **Volume / Weight / Count** — every unit, grouped from the `group` field on `MEASUREMENT_UNITS`. Common units deliberately appear twice: the shortcut row is a shortcut, and the groups stay complete so scanning "Volume" finds everything.
+- **Clear unit** — shown only when a unit is set; plenty of ingredients ("2 Star Anise") have none.
+
+Selected chips fill rust (`#b06452` on `#fbf6f1` text). Choosing a unit closes the sheet and **advances down the row** exactly as confirming the old combobox did, so Enter-through-the-row fast entry survived the move to a modal; dismissing with Escape/backdrop/✕ instead returns focus to the trigger without advancing.
+
+**The one difference between widths is autofocus.** On desktop the filter takes focus, so typing `tbsp` + Enter is as fast as the combobox it replaced. On a phone it does not — raising the keyboard would bury the chips under it and put authors back to typing-first, the very thing this control exists to avoid. That branch is `autoFocusFilter`, driven by [useIsPhone.js](../src/hooks/useIsPhone.js); a JS media query rather than CSS visibility because the same hook also gates the Qty affordances below, and because rendering both variants and hiding one would leave a phantom tab stop plus two elements claiming the same `inputRefs` key.
+
+Because the default path is chips rather than a text field, the IME never engages for a normal unit choice, so the reversed-unit bug ([imeComposition.js](../src/lib/imeComposition.js)) cannot reproduce there — and the filter's own Enter/arrow handling is IME-guarded for when it does.
+
+## Step timer — inline field + clock dial
+
+Each step's optional timer sits under the instruction as a `Timer` label, a short text field, and a **Dial** pill (`.step-duration-dial`, the same paper-shade → rust-on-hover treatment as `.column-layout-toggle`, sized to the 44px floor).
+
+**The field is `inputMode="text"`, not `"numeric"`.** It shipped as `numeric`, which renders a digits-only pad on a phone — with no `:` key — while the placeholder instructed authors to type `5:30` or `2:00:00`. The format was never the problem (`parseDurationToMs` has always read `5:00`, `5:00:30` and `2:00:00`); the keyboard was. Digits and the colon share one layer on both the iOS and Gboard text keyboards, so this costs one layer tap and makes the advertised formats reachable. The placeholder also shortens to `10 or 5:30` at phone width.
+
+Beside the field, a live echo replaces the "optional…" hint whenever what was typed normalises to something different — `10` shows `= 10:00`. That single line defuses the one genuinely surprising rule in the format: a bare number means **minutes**.
+
+## Step timer sheet (the clock paradigm, reused)
+
+The **Dial** pill opens [StepDurationSheet.jsx](../src/components/StepDurationSheet.jsx), which reuses [TimerDial](../src/components/TimerDial.jsx) *unchanged* — the same draggable clock face, hand selector and ± steppers a cook gets mid-recipe from [TimerSetSheet](../src/components/TimerSetSheet.jsx), over the same unit-tested [dialGeometry.js](../src/lib/dialGeometry.js). Only the wrapper differs, because the two sheets do different things with the number: TimerSetSheet **starts** a timer, this one **writes a string into the form** and therefore also offers **Clear** (a step having no timer is the normal case).
+
+The Dial/Type toggle is the shared [ModeTab](../src/components/ModeTab.jsx), extracted from TimerSetSheet so both toggles stay identical — it is the same choice offered on two surfaces, and someone who learns one should recognise the other. Type is also the accessible path: the dial is a pointer control, and the text field is its keyboard and screen-reader equivalent.
+
+**Which mode it opens in is a data-safety decision, not a preference.** Normally the sheet opens on the Dial. But `msToHands` pins anything at or beyond 12h to the dial's 11:59:55 ceiling, so seeding the dial from a longer saved duration and then switching back to Type would write that clamp over the author's real value — `20:00:00` silently becoming `11:59:55` with no edit. A non-empty string that doesn't parse is the same hazard in reverse (the dial seeds at zero and discards it). Both cases open on **Type**, where the value is shown intact, with a rose-dark warning that the dial would pin it. `dialCanRepresent()` in `dialGeometry.js` owns that rule and is unit-tested.
+
+## Qty fraction chips (phone)
+
+At phone width Qty switches to `inputMode="decimal"` — a number pad rather than QWERTY — and its placeholder shortens from `Qty (e.g. 1 1/2)` to just `Qty`, which alone removes 79px of the old overflow. Fractions come from a `.qty-fractions` row (`½ ⅓ ¼ ⅔ ¾ ⅛`) that appears under the row while Qty has focus: paper-fill chips at 44px minimum, warming to `tan-soft` with a rust border on press.
+
+Tapping reads as the last keystroke of the amount — `1` + `½` → `1½` — and a second tap **corrects** rather than stacks (`1½` + `¼` → `1¼`), since nobody means `1½¼`. `appendFraction()` in [parseQuantity.js](../src/lib/parseQuantity.js) owns that rule and is unit-tested; `parseQuantity` already read `1½`, so nothing downstream changed. The chips also teach by example what the long placeholder used to explain. Blur is deferred 150ms so a chip tap lands before they unmount — the same trick the combobox uses for its suggestion list.
 
 ## Removing a row
 
@@ -952,7 +1039,7 @@ Two chip-multiselect groups sit in the Basic Info section below Tags: **Allergen
 
 A **Filters** trigger (funnel icon + rust count badge) sits in the home action row between **Fridge** and **List** — all three narrow the grid, so they cluster. Same paper-shade pill treatment as the Fridge/List triggers; the badge counts active exclusions + requirements.
 
-[DietaryFilterModal.jsx](../src/components/DietaryFilterModal.jsx) is a near-copy of the Fridge Basket modal shell — `bg-ink/40 backdrop-blur-sm` overlay, `paper-grain bg-paper` panel, `✦` display heading ("Dietary filters") + serif-italic subtitle, `border-paper-shade` header/footer rules, and the full accessibility contract (focus into panel on open, Escape + backdrop close, body-scroll lock, focus-return-to-trigger). Body is two `<fieldset>` groups — **Exclude allergens** and **Require dietary** — each a wrap of rounded-full toggle chips. **Unlike the CreateRecipe chips, these use rustic-palette utility classes** (this is a home surface where `bg-rust`/`bg-rose-dark` compile and paint on `<button>`s): selected exclude-allergen = `bg-rose-dark text-paper` (the warning tone, matching the recipe-detail Delete affordance), selected require-dietary = `bg-rust text-paper` (the affirmative tone), unselected = `bg-paper-shade text-ink hover:bg-tan/40`. Footer mirrors the Fridge modal: a `text-rose-dark` **Clear all** (disabled at zero) opposite a `bg-rust` CTA that reads **Done** at zero and **Apply N filters** once active.
+[DietaryFilterModal.jsx](../src/components/DietaryFilterModal.jsx) is a near-copy of the Fridge Basket modal shell — `bg-ink/40 backdrop-blur-sm` overlay, `paper-grain bg-paper` panel, `✦` display heading ("Dietary filters") + serif-italic subtitle, `border-paper-shade` header/footer rules, and the full accessibility contract (focus into panel on open, Escape + backdrop close, body-scroll lock, focus-return-to-trigger). Body is two `<fieldset>` groups — **Exclude allergens** and **Require dietary** — each a wrap of rounded-full toggle chips. **Unlike the CreateRecipe chips, these use rustic-palette utility classes** (this is a home surface where `bg-rust`/`bg-rose-dark` compile and paint on `<button>`s): selected exclude-allergen = `bg-rose-dark text-paper` (the warning tone, matching the recipe-detail Delete affordance), selected require-dietary = `bg-rust text-paper` (the affirmative tone), unselected = `bg-paper-shade text-ink hover:bg-tan/40`. Footer mirrors the Fridge modal: a `text-rose-dark` **Clear all** (disabled at zero) opposite a `bg-rust` CTA that reads **Done** at zero and **Apply N filters** once active. Chips are `min-h-[44px] px-4 py-2.5` on phone and revert to the compact `px-3 py-1.5` from `sm` up — at desktop density they render 32px tall, under the 44px target the surrounding chrome (close button, footer actions, the trigger pills themselves) already holds to. The taller chips add a couple of rows on a phone, which is free: the modal body is `flex-1 overflow-y-auto` and still fits a 375×812 viewport without scrolling.
 
 When an active filter empties the grid, the home view shows a dedicated empty state — `✦` glyph, "No recipes match your dietary filters", serif-italic "Loosen your allergen exclusions or dietary requirements", and an **Open filters** button — matching the Stage 6 empty-state voice used by the search/basket cases. It's ordered *first* among the empty-state cases (ahead of search and basket) because a safety filter's "nothing here" deserves the most direct fix path.
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { parseDurationToMs, formatMs } from '../lib/parseDuration'
 import TimerDial from './TimerDial'
+import ModeTab from './ModeTab'
 
 // Stage 19 (Cooking Mode Timer) — the quick-set sheet for starting an ad-hoc
 // timer. Opened from the CookingMode header clock button, the RecipeDetail
@@ -16,22 +17,6 @@ import TimerDial from './TimerDial'
 
 const PRESET_MINUTES = [1, 3, 5, 10, 15, 30]
 
-// One segment of the Dial/Type toggle — a pill in the paper family.
-function ModeTab({ on, onClick, label, children }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={on}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 min-h-[36px] rounded-full text-sm font-medium transition-colors ${
-                on ? 'bg-paper text-ink shadow-sm' : 'text-ink/60 hover:text-ink'
-            }`}
-        >
-            {children}
-            {label}
-        </button>
-    )
-}
 
 export default function TimerSetSheet({ open, onClose, onStart }) {
     const [custom, setCustom] = useState('')
