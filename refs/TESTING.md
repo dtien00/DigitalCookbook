@@ -114,6 +114,7 @@ Run through this after any change to the recipe grid, card layout, or hover beha
 - [ ] **Mobile (≤ 640px viewport)** — every tier collapses to 1–2 columns; cards stay legible; titles don't overflow; like pill + bookmark visible at rest in opposite top corners (touch has no hover to reveal them)
 - [ ] **Mobile swipe-back (Stage 9)** — on a real phone (touch events don't fire from desktop trackpads), thumb-swipe right from any recipe detail page returns to the home grid; vertical scroll within the recipe still works; pinch-zoom doesn't trigger a navigation
 - [ ] **Mobile swipe-resume (Stage 9)** — after swiping back to the home grid, thumb-swipe left → re-opens the recipe you just left; in a fresh tab (no `lastViewedRecipeId`), the same left-swipe does nothing and the page doesn't visibly slide
+- [ ] **Tag search is swipe-inert** — with a recipe to resume (open one, go back to the grid), on a phone: flick the tag chip strip left and right, then swipe sideways across the search box. The strip scrolls, but the page never slides and no recipe opens. Tap `+N more` and repeat on the expanded chips. Then swipe left starting on the page title → the recipe still reopens. Chrome on Android: overscrolling either end of the strip shows no back/forward arrow
 
 ## Bookmarks checklist
 
