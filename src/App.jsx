@@ -920,6 +920,23 @@ function HomeView({
         }
     }
 
+    // The tag search regions — the search box and the tag chips — opt out
+    // of the swipe above. A sideways drag there already means something:
+    // the collapsed chip strip scrolls, and the search box scrolls a long
+    // "tag1, tag2" list or drags a text selection. Without this, flicking
+    // through the chips slid the page and reopened the last recipe. Same
+    // fix as RecipeRail on RecipeDetail: stop the region's touches from
+    // bubbling to the root handlers. A swipe that starts elsewhere still
+    // counts even if the finger crosses these regions, because touch
+    // events always target the element the touch started on.
+    const stopTouch = (e) => e.stopPropagation()
+    const swipeExempt = {
+        onTouchStart: stopTouch,
+        onTouchMove: stopTouch,
+        onTouchEnd: stopTouch,
+        onTouchCancel: stopTouch,
+    }
+
     // Search supports two modes:
     //   - tag mode: any comma in the input → split, trim, lowercase the
     //     tokens; recipes must include EVERY token in their tags array
@@ -1300,7 +1317,7 @@ function HomeView({
                 >
                     {densityIcon}
                 </button>
-                <div className="flex-1 min-w-[180px] relative">
+                <div className="flex-1 min-w-[180px] relative" {...swipeExempt}>
                     <input
                         type="text"
                         placeholder="Search recipes — or tag1, tag2 for tag filter…"
@@ -1453,14 +1470,26 @@ function HomeView({
                 without a long thumb-scroll past sixty-odd chips. */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-6">
                 {availableTags.length > 0 ? (
+                    // No effect on back/forward, collapsed or expanded.
+                    // swipeExempt keeps these touches away from the
+                    // swipe-left-to-resume. The two touch utilities do the
+                    // same for the browser's own swipe navigation: the root's
+                    // pan-y is what normally keeps sideways swipes from the
+                    // browser, but a scroll container re-enables sideways
+                    // panning inside itself. overscroll-x-contain stops a
+                    // flick past either end of the collapsed strip from
+                    // carrying on into Chrome's overscroll back/forward, and
+                    // the expanded wrap, which never scrolls sideways, just
+                    // takes pan-y back.
                     <div
                         className={`flex gap-2 items-center w-full sm:flex-1 sm:min-w-0 sm:flex-wrap sm:max-h-none sm:overflow-visible ${
                             tagsExpanded
-                                ? 'flex-wrap max-h-[45vh] overflow-y-auto'
-                                : 'flex-nowrap overflow-x-auto tag-chip-strip'
+                                ? 'flex-wrap max-h-[45vh] overflow-y-auto touch-pan-y'
+                                : 'flex-nowrap overflow-x-auto overscroll-x-contain tag-chip-strip'
                         }`}
                         role="group"
                         aria-label="Filter by tag"
+                        {...swipeExempt}
                     >
                         {visibleTags.map(tag => {
                             const isActive = activeTags.has(tag.toLowerCase())
