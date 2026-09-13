@@ -255,8 +255,10 @@ export function useComments(recipeId, userId, isAdmin = false) {
         [userLikedCommentIds]
     )
 
+    // Returns { ok, reason? } so the caller can distinguish "policy said no"
+    // from "the request failed" and surface the right message.
     const deleteComment = useCallback(async (commentId) => {
-        if (!userId) return
+        if (!userId) return { ok: false, reason: 'anonymous' }
 
         // Snapshot for rollback. (Closure over `comments` is intentional —
         // useCallback's dep array includes it so we always see the latest.)
@@ -269,14 +271,28 @@ export function useComments(recipeId, userId, isAdmin = false) {
             // not by user_id, so the belt-and-suspenders user_id filter
             // would prevent admin moderation. RLS still enforces the
             // correct authorization in both branches.
+            //
+            // `.select('id')` is what makes an RLS refusal observable: a
+            // DELETE that matches no rows because policy denied it returns
+            // success with an empty set, NOT an error. Without this the
+            // optimistic removal above would stick while the row survived
+            // in the database, and a refresh would resurrect the comment.
+            // Migration 027 made that reachable — an admin at AAL1 no
+            // longer satisfies the admin-override policy.
             let query = supabase.from('comments').delete().eq('id', commentId)
             if (!isAdmin) query = query.eq('user_id', userId)
-            const { error } = await query
+            const { data, error } = await query.select('id')
 
             if (error) throw error
+            if (!data || data.length === 0) {
+                setComments(snapshot)
+                return { ok: false, reason: 'denied' }
+            }
+            return { ok: true }
         } catch (e) {
             console.error('Failed to delete comment:', e.message)
             setComments(snapshot)
+            return { ok: false, reason: 'error', message: e.message }
         }
     }, [userId, isAdmin, comments])
 
